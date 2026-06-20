@@ -22,6 +22,15 @@ type AuthService struct {
 	sessionRepo authSessionRepository
 	rdb         *redis.Client
 	captcha     CaptchaVerifier
+	rdbRepo     rdbConfigRepo
+}
+
+type rdbConfigRepo interface {
+	FindByKey(key string) (*rdbConfigValue, error)
+}
+
+type rdbConfigValue struct {
+	Value string
 }
 
 type authUserRepository interface {
@@ -52,13 +61,26 @@ type authSessionRepository interface {
 	FindByUserID(userID uint64) ([]model.Session, error)
 }
 
-func NewAuthService(userRepo authUserRepository, sessionRepo authSessionRepository, rdb *redis.Client, captcha CaptchaVerifier) *AuthService {
+func NewAuthService(userRepo authUserRepository, sessionRepo authSessionRepository, rdb *redis.Client, captcha CaptchaVerifier, cfgRepo rdbConfigRepo) *AuthService {
 	return &AuthService{
 		userRepo:    userRepo,
 		sessionRepo: sessionRepo,
 		rdb:         rdb,
 		captcha:     captcha,
+		rdbRepo:     cfgRepo,
 	}
+}
+
+func (s *AuthService) isCaptchaEnabled() bool {
+	if s.captcha == nil {
+		return false
+	}
+	if s.rdbRepo != nil {
+		if cfg, err := s.rdbRepo.FindByKey("captcha_provider"); err == nil && cfg.Value == "none" {
+			return false
+		}
+	}
+	return true
 }
 
 type RegisterInput struct {
@@ -125,7 +147,7 @@ type DeviceSummary struct {
 }
 
 func (s *AuthService) Register(ctx context.Context, input *RegisterInput, remoteIP string, requestHost string) (*model.User, *errcode.AppError) {
-	if s.captcha != nil {
+	if s.isCaptchaEnabled() {
 		payload := input.Captcha
 		payload.ExpectedAction = "register"
 		if appErr := s.captcha.Verify(ctx, payload, remoteIP, requestHost); appErr != nil {
@@ -158,7 +180,7 @@ func (s *AuthService) Register(ctx context.Context, input *RegisterInput, remote
 }
 
 func (s *AuthService) Login(ctx context.Context, input *LoginInput, ip string, userAgent string, requestHost string) (*LoginResponse, *errcode.AppError) {
-	if s.captcha != nil {
+	if s.isCaptchaEnabled() {
 		payload := input.Captcha
 		payload.ExpectedAction = "login"
 		if appErr := s.captcha.Verify(ctx, payload, ip, requestHost); appErr != nil {

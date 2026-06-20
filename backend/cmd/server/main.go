@@ -75,7 +75,7 @@ func main() {
 	imgproxySvc := service.NewImgproxyService(&cfg.Imgproxy)
 	notificationSvc := service.NewNotificationService(notificationRepo)
 	captchaVerifier := service.NewCaptchaVerifier(cfg.Captcha)
-	authSvc := service.NewAuthService(userRepo, sessionRepo, rdb, captchaVerifier)
+	authSvc := service.NewAuthService(userRepo, sessionRepo, rdb, captchaVerifier, &service.ConfigRepoWrapper{Repo: configRepo})
 	imageSvc := service.NewImageService(db, rdb, imageRepo, imageFileRepo, tokenRepo, uploadQueueRepo, configRepo, imgproxySvc, notificationSvc, &cfg.Storage)
 	userSvc := service.NewUserService(db, auditLogRepo, notificationSvc)
 	adminSvc := service.NewAdminService(db, configRepo, notificationSvc, &cfg.Storage, rdb, imageRepo, imageFileRepo, imageSvc)
