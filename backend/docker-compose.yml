@@ -1,0 +1,106 @@
+version: "3.8"
+
+services:
+  backend:
+    build: .
+    image: summerain:latest
+    container_name: summerain-backend
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    volumes:
+      - image_storage:/data/images
+      - temp_storage:/data/temp
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      imgproxy:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - image-network
+
+  mysql:
+    image: mysql:8.0
+    container_name: summerain-mysql
+    restart: unless-stopped
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/mysql_password
+      MYSQL_DATABASE: image_gallery
+    volumes:
+      - mysql_data:/var/lib/mysql
+    secrets:
+      - mysql_password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - image-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: summerain-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+    networks:
+      - image-network
+
+  imgproxy:
+    image: darthsim/imgproxy:v3.12
+    container_name: summerain-imgproxy
+    restart: unless-stopped
+    environment:
+      - IMGPROXY_BIND=:8080
+      - IMGPROXY_LOCAL_FILESYSTEM_ROOT=/data
+      - IMGPROXY_MAX_SRC_RESOLUTION=50
+      - IMGPROXY_MAX_ANIMATION_FRAMES=100
+      - IMGPROXY_TTL=31536000
+    volumes:
+      - image_storage:/data/images:ro
+      - temp_storage:/data/temp:ro
+      - ./fonts/GoogleSans-ASCII.ttf:/fonts/custom.ttf:ro
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "imgproxy", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - image-network
+
+secrets:
+  mysql_password:
+    file: ./secrets/mysql_password.txt
+
+volumes:
+  mysql_data:
+  redis_data:
+  image_storage:
+  temp_storage:
+
+networks:
+  image-network:
+    driver: bridge

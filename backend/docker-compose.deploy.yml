@@ -1,0 +1,111 @@
+version: "3.8"
+
+services:
+  backend:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile.deploy
+    image: summerain:latest
+    container_name: summerain-backend
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+    env_file:
+      - .env
+    volumes:
+      - image_storage:/data/images
+      - temp_storage:/data/temp
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      imgproxy:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    networks:
+      - internal
+
+  mysql:
+    image: mysql:latest
+    container_name: summerain-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+    networks:
+      - internal
+
+  redis:
+    image: redis:latest
+    container_name: summerain-redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    networks:
+      - internal
+
+  imgproxy:
+    image: darthsim/imgproxy:v3.12
+    container_name: summerain-imgproxy
+    restart: unless-stopped
+    environment:
+      - IMGPROXY_BIND=:8080
+      - IMGPROXY_LOCAL_FILESYSTEM_ROOT=/data
+      - IMGPROXY_MAX_SRC_RESOLUTION=50
+      - IMGPROXY_MAX_ANIMATION_FRAMES=100
+      - IMGPROXY_TTL=31536000
+      - IMGPROXY_KEY=${IMGPROXY_KEY}
+      - IMGPROXY_SALT=${IMGPROXY_SALT}
+    volumes:
+      - image_storage:/data/images:ro
+      - temp_storage:/data/temp:ro
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "imgproxy", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - internal
+
+volumes:
+  mysql_data:
+  redis_data:
+  image_storage:
+  temp_storage:
+
+networks:
+  internal:
+    driver: bridge

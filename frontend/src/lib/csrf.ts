@@ -1,0 +1,8 @@
+import { COOKIE_NAMES } from '@/config/constants'
+
+export function getCsrfToken(): string {
+  const match = document.cookie
+    .split('; ')
+    .find((row) => row.startsWith(`${COOKIE_NAMES.CSRF}=`))
+  return match ? decodeURIComponent(match.split('=')[1]) : ''
+}

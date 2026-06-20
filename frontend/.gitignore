@@ -1,0 +1,26 @@
+﻿# Logs
+logs
+*.log
+npm-debug.log*
+
+# Dependencies
+node_modules
+
+# Build output
+dist
+backend/web
+
+# Dev certs
+*.pem
+
+# Editor
+.vscode
+.idea
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# TS
+*.tsbuildinfo

@@ -1,0 +1,29 @@
+﻿# Dependencies
+frontend/node_modules
+backend/vendor
+
+# Build output
+frontend/dist
+backend/web
+backend/server
+backend/server.exe
+backend/server_linux
+
+# Dev certs
+*.pem
+
+# TS
+*.tsbuildinfo
+
+# Editor
+.vscode
+.idea
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+backend/.env

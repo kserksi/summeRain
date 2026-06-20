@@ -1,0 +1,140 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+    --font-heading: var(--font-sans);
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", Roboto, Helvetica, Arial, sans-serif;
+    --color-sidebar-ring: var(--sidebar-ring);
+    --color-sidebar-border: var(--sidebar-border);
+    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+    --color-sidebar-accent: var(--sidebar-accent);
+    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+    --color-sidebar-primary: var(--sidebar-primary);
+    --color-sidebar-foreground: var(--sidebar-foreground);
+    --color-sidebar: var(--sidebar);
+    --color-chart-5: var(--chart-5);
+    --color-chart-4: var(--chart-4);
+    --color-chart-3: var(--chart-3);
+    --color-chart-2: var(--chart-2);
+    --color-chart-1: var(--chart-1);
+    --color-ring: var(--ring);
+    --color-input: var(--input);
+    --color-border: var(--border);
+    --color-destructive: var(--destructive);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-accent: var(--accent);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-muted: var(--muted);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-secondary: var(--secondary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-primary: var(--primary);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-popover: var(--popover);
+    --color-card-foreground: var(--card-foreground);
+    --color-card: var(--card);
+    --color-foreground: var(--foreground);
+    --color-background: var(--background);
+    --radius-sm: calc(var(--radius) * 0.6);
+    --radius-md: calc(var(--radius) * 0.8);
+    --radius-lg: var(--radius);
+    --radius-xl: calc(var(--radius) * 1.4);
+    --radius-2xl: calc(var(--radius) * 1.8);
+    --radius-3xl: calc(var(--radius) * 2.2);
+    --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+/* 浅色（摩卡） */
+:root {
+    --background: #F1E7DA;
+    --foreground: #33261B;
+    --card: #FFFCF8;
+    --card-foreground: #33261B;
+    --popover: #FFFCF8;
+    --popover-foreground: #33261B;
+    --primary: #6F4E37;
+    --primary-foreground: #FFFFFF;
+    --secondary: #EFE2D2;
+    --secondary-foreground: #33261B;
+    --muted: #EADFCF;
+    --muted-foreground: #6E5C49;
+    --accent: #EFE2D2;
+    --accent-foreground: #573D2B;
+    --destructive: #A8412F;
+    --border: #DAC7AE;
+    --input: #DAC7AE;
+    --ring: #6F4E37;
+    --chart-1: #6F4E37;
+    --chart-2: #A9764F;
+    --chart-3: #B9742A;
+    --chart-4: #5C7A4A;
+    --chart-5: #4A6E92;
+    --radius: 0.875rem;
+    --sidebar: #FFFCF8;
+    --sidebar-foreground: #33261B;
+    --sidebar-primary: #6F4E37;
+    --sidebar-primary-foreground: #FFFFFF;
+    --sidebar-accent: #EFE2D2;
+    --sidebar-accent-foreground: #573D2B;
+    --sidebar-border: #DAC7AE;
+    --sidebar-ring: #6F4E37;
+}
+
+/* 深色（浓缩） */
+.dark {
+    --background: #16100D;
+    --foreground: #F2E7D6;
+    --card: #251B14;
+    --card-foreground: #F2E7D6;
+    --popover: #251B14;
+    --popover-foreground: #F2E7D6;
+    --primary: #D4A57E;
+    --primary-foreground: #16100D;
+    --secondary: #1E1611;
+    --secondary-foreground: #F2E7D6;
+    --muted: #1E1611;
+    --muted-foreground: #C5B59E;
+    --accent: #2A2018;
+    --accent-foreground: #D4A57E;
+    --destructive: #D88A78;
+    --border: #4D3A29;
+    --input: #4D3A29;
+    --ring: #D4A57E;
+    --chart-1: #D4A57E;
+    --chart-2: #C39A72;
+    --chart-3: #E0AC64;
+    --chart-4: #9CBF82;
+    --chart-5: #86A8C9;
+    --sidebar: #1E1611;
+    --sidebar-foreground: #F2E7D6;
+    --sidebar-primary: #D4A57E;
+    --sidebar-primary-foreground: #16100D;
+    --sidebar-accent: #2A2018;
+    --sidebar-accent-foreground: #D4A57E;
+    --sidebar-border: #4D3A29;
+    --sidebar-ring: #D4A57E;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+    }
+  body {
+    @apply bg-background text-foreground;
+    }
+  html {
+    @apply font-sans;
+    }
+}
+
+/* 主题切换：VT 圆形扩散 */
+:root { --cx: 50%; --cy: 50%; }
+::view-transition-old(root) { animation: none; z-index: 1; }
+::view-transition-new(root) { animation: vtReveal .55s ease-out; z-index: 2; }
+@keyframes vtReveal {
+  from { clip-path: circle(0 at var(--cx) var(--cy)); }
+  to { clip-path: circle(150% at var(--cx) var(--cy)); }
+}
