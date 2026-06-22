@@ -11,6 +11,7 @@ import {
   requestUserDeletion,
   cancelUserDeletion,
   updateUserQuota,
+  testR2Connection,
 } from './api'
 
 export function useAdminUsers(page: number, pageSize: number = PAGINATION.DEFAULT_PAGE_SIZE) {
@@ -103,5 +104,16 @@ export function useUpdateQuota() {
       toast.success('配额已更新')
     },
     onError: () => toast.error('操作失败，请重试'),
+  })
+}
+
+export function useTestR2() {
+  return useMutation({
+    mutationFn: testR2Connection,
+    onSuccess: () => toast.success('R2 连接测试成功'),
+    onError: (e: unknown) => {
+      const msg = e instanceof Error ? e.message : '连接测试失败'
+      toast.error(msg)
+    },
   })
 }

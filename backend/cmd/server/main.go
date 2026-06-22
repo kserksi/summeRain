@@ -213,6 +213,27 @@ func main() {
 			imageSvc.ReloadR2()
 			response.Success(c, gin.H{"enabled": imageSvc.IsR2Enabled()})
 		})
+		admin.POST("/r2/test", func(c *gin.Context) {
+			var req struct {
+				Endpoint  string `json:"endpoint"`
+				AccessKey string `json:"access_key"`
+				SecretKey string `json:"secret_key"`
+				Bucket    string `json:"bucket"`
+			}
+			if err := c.ShouldBindJSON(&req); err != nil {
+				response.Error(c, errcode.New(1001, "参数错误", 400))
+				return
+			}
+			if req.Endpoint == "" || req.AccessKey == "" || req.SecretKey == "" || req.Bucket == "" {
+				response.Error(c, errcode.New(1001, "请填写完整 R2 配置", 400))
+				return
+			}
+			if err := service.TestR2Connection(req.Endpoint, req.AccessKey, req.SecretKey, req.Bucket); err != nil {
+				response.Error(c, errcode.New(5001, err.Error(), 400))
+				return
+			}
+			response.Success(c, gin.H{"ok": true})
+		})
 	}
 
 	webRoot, err := filepath.Abs("./web")

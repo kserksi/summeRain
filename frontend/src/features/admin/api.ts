@@ -35,3 +35,7 @@ export function cancelUserDeletion(id: number) {
 export function updateUserQuota(id: number, storageQuota: number) {
   return api.patch<void>(`/admin/users/${id}/quota`, { storage_quota: storageQuota })
 }
+
+export function testR2Connection(params: { endpoint: string; access_key: string; secret_key: string; bucket: string }) {
+  return api.post<{ ok: boolean }>('/admin/r2/test', params)
+}

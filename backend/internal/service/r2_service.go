@@ -224,3 +224,27 @@ func (s *R2Service) Exists(key string) bool {
 	})
 	return err == nil
 }
+
+func TestR2Connection(endpoint, accessKey, secretKey, bucket string) error {
+	cfg, err := awsconfig.LoadDefaultConfig(context.TODO(),
+		awsconfig.WithRegion("auto"),
+		awsconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKey, secretKey, "")),
+	)
+	if err != nil {
+		return fmt.Errorf("加载配置失败: %w", err)
+	}
+
+	client := s3.NewFromConfig(cfg, func(o *s3.Options) {
+		o.BaseEndpoint = &endpoint
+		o.UsePathStyle = true
+	})
+
+	_, err = client.HeadBucket(context.TODO(), &s3.HeadBucketInput{
+		Bucket: &bucket,
+	})
+	if err != nil {
+		return fmt.Errorf("连接测试失败: %w", err)
+	}
+
+	return nil
+}

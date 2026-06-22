@@ -6,6 +6,7 @@ import {
   IconDeviceFloppy,
   IconDroplet,
   IconCloud,
+  IconPlugConnected,
 } from '@tabler/icons-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -23,7 +24,7 @@ import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
 import { CAPTCHA_PROVIDERS, IMAGE_TOKEN } from '@/config/constants'
 import type { SystemConfig } from '@/lib/types'
-import { useConfigs, useUpdateConfigs } from '../hooks'
+import { useConfigs, useUpdateConfigs, useTestR2 } from '../hooks'
 
 const CFG = {
   CAPTCHA_PROVIDER: 'captcha_provider',
@@ -149,6 +150,7 @@ const FORM_KEYS = Object.keys(CFG_MAP) as (keyof FormState)[]
 export default function Configs() {
   const { data, isLoading } = useConfigs()
   const updateConfigs = useUpdateConfigs()
+  const testR2 = useTestR2()
 
   const server = useMemo<FormState>(() => (data ? fromConfigs(data) : DEFAULTS), [data])
   const [edits, setEdits] = useState<Partial<FormState>>({})
@@ -187,6 +189,17 @@ export default function Configs() {
   function handleCancel() {
     setEdits({})
   }
+
+  function handleTestR2() {
+    testR2.mutate({
+      endpoint: form.r2Endpoint,
+      access_key: form.r2AccessKey,
+      secret_key: form.r2SecretKey,
+      bucket: form.r2Bucket,
+    })
+  }
+
+  const r2FormComplete = form.r2Endpoint && form.r2AccessKey && form.r2SecretKey && form.r2Bucket
 
   const scriptHint = EXTERNAL_SCRIPT_HINTS[form.provider]
 
@@ -405,7 +418,7 @@ export default function Configs() {
               <IconCloud className="size-5 text-primary" />
               <CardTitle>Cloudflare R2 存储</CardTitle>
             </div>
-            <CardDescription>配置后新上传图片同步到 R2，通过 CDN 加速分发。本地始终保留一份。</CardDescription>
+            <CardDescription>启用后新上传图片仅存储到 R2，通过 CDN 加速分发，不占用本地磁盘。</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between">
@@ -484,8 +497,19 @@ export default function Configs() {
             </div>
 
             <p className="text-xs text-muted-foreground">
-              配置前上传的图片保留在本地。保存后可点击"迁移到 R2"将本地图片同步到 R2。
+              启用后新上传图片仅存储在 R2。配置前上传的图片保留在本地，可点击"迁移到 R2"同步。
             </p>
+
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full"
+              disabled={!form.r2Enabled || !r2FormComplete || testR2.isPending}
+              onClick={handleTestR2}
+            >
+              <IconPlugConnected className="size-4" />
+              {testR2.isPending ? '测试中...' : '测试连接'}
+            </Button>
           </CardContent>
         </Card>
       </div>
