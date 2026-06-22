@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -28,6 +28,8 @@ export default function LoginPage() {
   const resolveError = useErrorMessage()
   const [showPassword, setShowPassword] = useState(false)
   const [captchaPayload, setCaptchaPayload] = useState<CaptchaPayload | undefined>(undefined)
+  const [searchParams] = useSearchParams()
+  const isBanned = searchParams.get('reason') === 'banned'
 
   const {
     register,
@@ -51,6 +53,12 @@ export default function LoginPage() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4" noValidate>
+            {isBanned && (
+              <Alert variant="destructive">
+                <IconAlertCircle />
+                <AlertDescription>你的账号已被管理员禁用。如有疑问请联系管理员。</AlertDescription>
+              </Alert>
+            )}
             {login.isError && (
               <Alert variant="destructive">
                 <IconAlertCircle />

@@ -157,7 +157,7 @@ Compose 文件位置（分散管理）：
   管理员 SSH → 204.44.74.211:21093（UFW 仅允许管理员 IP，不经过 Tunnel）
 ```
 
-**关键设计决策**：`image.kserks.org` 保留在 Tunnel 上（API + 前端 + 私密图使用同源相对路径，避免 CORS 问题）。公开图片展示通过 302 重定向到 `cdn.kserks.org`（R2）。此逻辑已在 `public_handler.go:109-120` 实现。
+**关键设计决策**：`image.kserks.org` 保留在 Tunnel 上（API + 前端 + 私密图使用同源相对路径，避免 CORS 问题）。公开图片展示通过 302 重定向到 `image-r2.kserks.org`（R2）。此逻辑已在 `public_handler.go:109-120` 实现。
 
 ### 2.3 安全分层（纵深防御）
 
@@ -293,48 +293,47 @@ LoginGraceTime 30
 |----|------|---------|---------|------|
 | Ubuntu 系统包 | `unattended-upgrades` + ESM | ✅ 自动安装 | ✅ 日志 | ✓ 已启用 |
 | Ubuntu 内核 | `unattended-upgrades` | ⚠️ 自动安装，不自动重启 | ✅ `/var/run/reboot-required` | ✓ 已启用 |
-| Docker 镜像 | Watchtower（仅通知模式） | ❌ 仅通知，手动确认后更新 | ✅ Telegram | ✗ 需安装 |
-| 容器 CVE 扫描 | Trivy（每日 cron） | ❌ 仅报告 | ✅ Telegram | ✗ 需安装 |
+| Docker 镜像 | 自定义脚本（仅通知模式） | ❌ 仅通知，手动确认后更新 | ✅ 钉钉 | ✗ 需编写 |
+| 容器 CVE 扫描 | Trivy（每日 cron） | ❌ 仅报告 | ✅ 钉钉 | ✗ 需安装 |
 | 系统包 CVE | debsecan（每日 cron） | ❌ 仅报告 | ✅ 日志 | ✗ 需安装 |
-| NGINX（自编译） | 版本检查脚本（每日 cron） | ❌ 手动重新编译 | ✅ Telegram | ✗ 需编写 |
-| Go 依赖（summerain） | `govulncheck`（每周 cron） | ❌ 手动更新依赖 | ✅ Telegram | ✗ 需配置 |
+| NGINX（自编译） | 版本检查脚本（每日 cron） | ❌ 手动重新编译 | ✅ 钉钉 | ✗ 需编写 |
+| Go 依赖（summerain） | `govulncheck`（每周 cron） | ❌ 手动更新依赖 | ✅ 钉钉 | ✗ 需配置 |
 
-> **设计原则**：系统包自动修复（低风险、高频率）；应用层仅通知不自动修复（避免破坏性更新）。所有 CVE 发现后通过 Telegram 告警，由管理员决定修复时机。
+> **设计原则**：系统包自动修复（低风险、高频率）；应用层仅通知不自动修复（避免破坏性更新）。所有 CVE 发现后通过钉钉告警，由管理员决定修复时机。
+>
+> **告警渠道选择**：Telegram 在中国大陆被墙，无法送达。钉钉 Webhook 是出站请求（VPS → `oapi.dingtalk.com`），不经 Cloudflare，纽约 VPS 到钉钉 API 约 200-400ms，对告警完全可用。
 
-#### 3.6.2 Watchtower（Docker 镜像更新通知）
+#### 3.6.2 Docker 镜像更新检查（自定义脚本）
 
-```yaml
-# /data/compose/watchtower/docker-compose.yml
-services:
-  watchtower:
-    image: containrrr/watchtower
-    container_name: watchtower
-    restart: unless-stopped
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    environment:
-      WATCHTOWER_NOTIFICATIONS: enabled
-      WATCHTOWER_NOTIFICATION_URL: "telegram://${TELEGRAM_BOT_TOKEN}@telegram?chats=${TELEGRAM_CHAT_ID}"
-      WATCHTOWER_NOTIFY_ONLY: "true"             # 仅通知，不自动更新
-      WATCHTOWER_SCHEDULE: "0 0 4 * * *"          # 每日 4AM 检查
-      WATCHTOWER_CLEANUP: "true"
-      WATCHTOWER_INCLUDE_RESTARTING: "false"
-    networks:
-      - data_frontend
-    mem_limit: 64m
-    security_opt:
-      - no-new-privileges:true
-    cap_drop: ['ALL']
+Watchtower 的通知库（shoutrrr）不原生支持钉钉，改用自定义脚本实现相同功能：检查镜像更新、仅通知不更新。
 
-networks:
-  data_frontend:
-    external: true
+```bash
+# /opt/scripts/docker-update-check.sh
+#!/bin/bash
+source /opt/scripts/.env
+
+# 遍历所有运行中容器的镜像
+for img in $(sudo docker ps --format '{{.Image}}'); do
+  # 拉取最新镜像（不替换运行中的容器）
+  sudo docker pull "$img" > /dev/null 2>&1
+  # 比较本地镜像与刚拉取的 digest
+  local_digest=$(sudo docker images --digests "$img" --format '{{.Digest}}' | head -1)
+  new_digest=$(sudo docker images --digests "$img" --format '{{.Digest}}' | tail -1)
+  if [ "$local_digest" != "$new_digest" ] && [ -n "$new_digest" ]; then
+    send_alert "🔔" "Docker 镜像更新可用：$img"
+  fi
+done
 ```
 
-**关键配置**：
-- `WATCHTOWER_NOTIFY_ONLY: "true"` — **仅通知，不自动拉取更新**。避免镜像更新导致服务中断或配置不兼容
-- 每日 4AM 检查所有容器是否有新镜像
-- 发现新镜像时通过 Telegram 通知，管理员手动 `docker pull` + `docker compose up -d`
+```bash
+# crontab（每日 4AM）
+0 4 * * * /opt/scripts/docker-update-check.sh >> /var/log/docker-update-check.log 2>&1
+```
+
+**关键设计**：
+- **仅通知，不自动更新** — 避免镜像更新导致服务中断或配置不兼容
+- 发现新镜像时通过钉钉通知，管理员手动 `docker pull` + `docker compose up -d`
+- 统一使用 `/opt/scripts/.env` 中的钉钉 Webhook 配置
 
 **监控的容器**：mysql、redis、halo、zfile、cloudreve、summerain-backend、imgproxy
 
@@ -350,12 +349,10 @@ IMAGES=$(sudo docker images --format '{{.Repository}}:{{.Tag}}' | grep -v '<none
 REPORT="/tmp/trivy-report-$(date +%Y%m%d).txt"
 trivy image --severity HIGH,CRITICAL --format table -o "$REPORT" $IMAGES
 
-# 有 HIGH/CRITICAL 时发送 Telegram 通知
+# 有 HIGH/CRITICAL 时发送钉钉通知
 CRITICAL_COUNT=$(trivy image --severity HIGH,CRITICAL --format json $IMAGES 2>/dev/null | jq '[.[].Results[].Vulnerabilities[]?] | length')
 if [ "$CRITICAL_COUNT" -gt 0 ]; then
-  curl -s "https://api.telegram.org/bot${TG_BOT_TOKEN}/sendMessage" \
-    -d "chat_id=${TG_CHAT_ID}" \
-    -d "text=⚠️ Trivy CVE 扫描发现 $CRITICAL_COUNT 个 HIGH/CRITICAL 漏洞，详情见 $REPORT"
+  send_alert "🔴" "Trivy CVE 扫描发现 $CRITICAL_COUNT 个 HIGH/CRITICAL 漏洞，详情见 $REPORT"
 fi
 ```
 
@@ -364,7 +361,7 @@ fi
 0 5 * * * /opt/scripts/cve-scan.sh >> /var/log/cve-scan.log 2>&1
 ```
 
-**扫描范围**：所有 Docker 镜像的 HIGH + CRITICAL 级别漏洞。每日 5AM 执行（在 Watchtower 检查后 1 小时）。
+**扫描范围**：所有 Docker 镜像的 HIGH + CRITICAL 级别漏洞。每日 5AM 执行（在镜像更新检查后 1 小时）。
 
 #### 3.6.4 debsecan（系统包 CVE 监控）
 
@@ -397,9 +394,7 @@ if [ -z "$LATEST" ]; then
 fi
 
 if [ "$CURRENT" != "$LATEST" ]; then
-  curl -s "https://api.telegram.org/bot${TG_BOT_TOKEN}/sendMessage" \
-    -d "chat_id=${TG_CHAT_ID}" \
-    -d "text=🔔 NGINX 版本过期：当前 $CURRENT，最新 $LATEST。需手动重新编译。参考 https://nginx.org/en/CHANGES-1.30"
+  send_alert "🔔" "NGINX 版本过期：当前 $CURRENT，最新 $LATEST。需手动重新编译。参考 https://nginx.org/en/CHANGES-1.30"
 fi
 
 # 检查已知 CVE
@@ -422,13 +417,12 @@ go install golang.org/x/vuln/cmd/govulncheck@latest
 
 # 扫描脚本：/opt/scripts/go-vuln-check.sh
 #!/bin/bash
+source /opt/scripts/.env
 cd /home/kserks/imgcloud/backend
 RESULT=$(/home/kserks/go/bin/govulncheck ./... 2>&1)
 if echo "$RESULT" | grep -q "Vulnerability"; then
   COUNT=$(echo "$RESULT" | grep -c "Vulnerability")
-  curl -s "https://api.telegram.org/bot${TG_BOT_TOKEN}/sendMessage" \
-    -d "chat_id=${TG_CHAT_ID}" \
-    -d "text=⚠️ govulncheck 发现 $COUNT 个 Go 依赖漏洞，需更新依赖。详见 /var/log/govulncheck.log"
+  send_alert "⚠️" "govulncheck 发现 $COUNT 个 Go 依赖漏洞，需更新依赖。详见 /var/log/govulncheck.log"
   echo "$RESULT" > /var/log/govulncheck-$(date +%Y%m%d).log
 fi
 ```
@@ -440,20 +434,23 @@ fi
 
 #### 3.6.7 告警通知渠道
 
-所有 CVE 监控工具统一通过 **Telegram Bot** 通知：
+所有 CVE 监控工具统一通过 **钉钉群机器人 Webhook** 通知：
 
 ```bash
-# /opt/scripts/telegram-alert.sh（通用告警函数）
+# /opt/scripts/dingtalk-alert.sh（通用告警函数，所有 CVE 脚本 source 此文件）
 #!/bin/bash
+source /opt/scripts/.env
+
 send_alert() {
   local severity=$1
   local message=$2
-  curl -s "https://api.telegram.org/bot${TG_BOT_TOKEN}/sendMessage" \
-    -d "chat_id=${TG_CHAT_ID}" \
-    -d "text=$severity $message" \
-    -d "parse_mode=HTML"
+  curl -s -X POST "$DINGTALK_WEBHOOK" \
+    -H "Content-Type: application/json" \
+    -d "{\"msgtype\":\"text\",\"text\":{\"content\":\"$severity $message\"}}"
 }
 ```
+
+> **钉钉 Webhook 是出站请求**：VPS → `oapi.dingtalk.com`，不经 Cloudflare，不经 Tunnel。纽约到钉钉 API 约 200-400ms，对告警完全可用。钉钉不限制来源 IP，境外服务器可正常调用。
 
 **通知分级**：
 
@@ -461,14 +458,15 @@ send_alert() {
 |------|---------|---------|
 | 🔴 CRITICAL | Trivy 发现 CRITICAL 漏洞 | 镜像名 + CVE ID + 修复版本 |
 | 🟡 HIGH | Trivy 发现 HIGH 漏洞 | 镜像名 + CVE ID + 修复版本 |
-| 🔔 INFO | Watchtower 发现新镜像 | 容器名 + 当前版本 + 新版本 |
+| 🔔 INFO | 镜像更新检查发现新版本 | 容器名 + 当前版本 + 新版本 |
 | 🔔 INFO | NGINX 版本过期 | 当前版本 + 最新版本 + CHANGES 链接 |
 | 🔔 INFO | govulncheck 发现漏洞 | 包名 + CVE ID + 修复版本 |
 
 **环境变量**（`/opt/scripts/.env`）：
 ```bash
-TG_BOT_TOKEN=<your_bot_token>
-TG_CHAT_ID=<your_chat_id>
+# 钉钉群机器人 Webhook
+# 获取方式：钉钉群 → 群设置 → 智能群助手 → 添加自定义机器人 → 复制 Webhook URL
+DINGTALK_WEBHOOK=https://oapi.dingtalk.com/robot/send?access_token=<your_token>
 ```
 
 #### 3.6.8 自动修复与手动修复边界
@@ -486,7 +484,7 @@ TG_CHAT_ID=<your_chat_id>
 | 时间 | 工具 | 动作 |
 |------|------|------|
 | 4:00 | unattended-upgrades | 自动安装 Ubuntu 安全包 |
-| 4:00 | Watchtower | 检查 Docker 镜像更新，仅通知 |
+| 4:00 | 镜像更新检查脚本 | 检查 Docker 镜像更新，仅通知 |
 | 5:00 | Trivy | 扫描容器镜像 CVE，通知 HIGH/CRITICAL |
 | 6:00 | debsecan | 报告系统包 CVE |
 | 7:00 | NGINX 版本检查 | 对比最新版本，通知过期 |
@@ -513,13 +511,13 @@ TG_CHAT_ID=<your_chat_id>
 - [ ] `sysctl net.ipv4.tcp_congestion_control` → bbr
 - [ ] fail2ban SSH jail active
 - [ ] unattended-upgrades 启用（✓ 已有，确认 ESM 配置）
-- [ ] Watchtower 容器运行，`WATCHTOWER_NOTIFY_ONLY=true`
+- [ ] `/opt/scripts/docker-update-check.sh` 可执行，crontab 配置完成
 - [ ] Trivy 已安装，`/opt/scripts/cve-scan.sh` 可执行
 - [ ] debsecan 已安装，crontab 配置完成
 - [ ] `/opt/scripts/nginx-cve-check.sh` 可执行，crontab 配置完成
 - [ ] `govulncheck` 已安装，`/opt/scripts/go-vuln-check.sh` 可执行
-- [ ] `/opt/scripts/.env` 配置 `TG_BOT_TOKEN` 和 `TG_CHAT_ID`
-- [ ] 手动触发一次各扫描脚本，确认 Telegram 收到测试通知
+- [ ] `/opt/scripts/.env` 配置 `DINGTALK_WEBHOOK`
+- [ ] 手动触发一次各扫描脚本，确认钉钉群收到测试通知
 
 ---
 
@@ -744,14 +742,14 @@ PATCH /api/v1/admin/configs
     {"key": "r2_access_key", "value": "<access_key>"},
     {"key": "r2_secret_key", "value": "<secret_key>"},
     {"key": "r2_bucket", "value": "doujin-images"},
-    {"key": "r2_public_url", "value": "https://cdn.kserks.org"}
+    {"key": "r2_public_url", "value": "https://image-r2.kserks.org"}
   ]
 }
 ```
 
 R2 服务热重载配置（调用 `reload()`），无需重启。
 
-### 5.4 迁移现有图片（零停机）
+### 5.4 迁移现有图片（零停机，用户自行执行）
 
 `r2_service.go:165` 已实现 `MigrateLocalDir(basePath, subdir)`：
 - 递归遍历 `/data/images/`（summerain_images volume）
@@ -759,6 +757,8 @@ R2 服务热重载配置（调用 `reload()`），无需重启。
 - 逐文件记录日志
 - 通过 admin 端点或一次性脚本执行
 - **无服务中断** — 图片同时存在于本地磁盘和 R2
+
+> **由用户自行执行**：图片迁移涉及生产数据和带宽，由管理员自行选择时机和方式执行。本设计仅提供工具支持（`MigrateLocalDir` 已实现），不包含在自动执行计划中。迁移完成前，R2 重定向功能可暂不启用（`r2_enabled=false`），待迁移完成后再通过 Admin API 开启。
 
 ### 5.5 代码修复：R2 重定向条件（小改动）
 
@@ -958,13 +958,13 @@ CF Dashboard → Speed → Optimization：
 - `https://www.kserks.org` — HTTP(s)，5min
 - `https://image.kserks.org/health` — HTTP(s)，5min
 - `https://image.kserks.org/api/v1/public/stats` — HTTP(s) JSON 校验，5min
-- `https://cdn.kserks.org` — HTTP(s)，5min
+- `https://image-r2.kserks.org` — HTTP(s)，5min
 - `https://cloud.kserks.org` — HTTP(s)，5min
 - `https://pan.kserks.org` — HTTP(s)，5min
 - `https://font.kserks.org` — HTTP(s)，5min
 
 **公开状态页**：`status.kserks.org`（UptimeFlare 内置，CF Pages 托管）
-**通知渠道**：Telegram + 邮箱（UptimeFlare 内置支持）
+**通知渠道**：钉钉 + 邮箱（UptimeFlare 内置支持 Webhook，可配置钉钉）
 
 #### 6.10.2 UptimeRobot（辅助监控 — 外部独立）
 
@@ -975,7 +975,7 @@ CF Dashboard → Speed → Optimization：
 **配置步骤**：
 1. 注册 UptimeRobot 账号
 2. 添加监控项（同上 7 项）
-3. 配置告警渠道：邮箱 + Telegram
+3. 配置告警渠道：邮箱 + 钉钉 Webhook
 4. 可选：启用公开状态页（UptimeRobot 自带 `status.uptimerobot.com/<your-id>`）
 
 **作用**：
@@ -1007,7 +1007,7 @@ UptimeFlare + UptimeRobot 完全无服务器、零维护、零额外成本，且
 
 CF Dashboard → Notifications：
 - Security Events → 邮箱
-- Tunnel Disconnect → 邮箱 + Telegram
+- Tunnel Disconnect → 邮箱 + 钉钉
 - Origin 5xx 激增 → 邮箱
 - R2 操作错误 → 邮箱
 - Weekly Analytics Summary → 邮箱
@@ -1028,7 +1028,7 @@ CF Dashboard → Notifications：
 
 - [ ] CF Analytics 缓存率趋向 99%+
 - [ ] `curl -I https://www.kserks.org` → `cf-cache: HIT`
-- [ ] `curl -I https://cdn.kserks.org/<image>` → `cf-cache: HIT`，`alt-svc: h3=":443"`
+- [ ] `curl -I https://image-r2.kserks.org/<image>` → `cf-cache: HIT`，`alt-svc: h3=":443"`
 - [ ] WAF Security 标签显示已拦截扫描器尝试
 - [ ] `https://www.kserks.org/console` → 重定向到 CF Access 登录
 - [ ] `https://status.kserks.org` → UptimeFlare 状态页（CF Pages）
@@ -1137,7 +1137,7 @@ CF Dashboard → Notifications：
 |------|------|---------|-----------|---------|
 | 1 | 安全加固 | 无 | 容器加固、Redis 命令重命名、secrets、审计修复、内核、CVE 自动修复与监控 | ~2.5h |
 | 2 | Tunnel 迁移 | 每子域名短暂 | cloudflared、mTLS、Web 0 公网端口（SSH 保留受限管理通道） | ~2.5h |
-| 3 | R2 启用 | 无 | R2 bucket、图片迁移、缓存头修复 | ~2h |
+| 3 | R2 启用 | 无 | R2 bucket、缓存头修复（图片迁移由用户自行执行） | ~1h |
 | 4 | CF 控制台优化 | 无 | 10 条 Cache Rules、5 条 WAF、Zero Trust、UptimeFlare + UptimeRobot、速度 | ~2h |
 | 5 | VPS 迁移（未来） | ~30s（Tunnel 切换） | 日本 VPS、备份/恢复、数据迁移 | ~4h |
 

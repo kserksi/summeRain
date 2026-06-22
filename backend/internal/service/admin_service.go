@@ -79,7 +79,6 @@ func (s *AdminService) SetUserStatus(userID uint64, status string) *errcode.AppE
 
 	if status == "suspended" {
 		_ = s.notificationService.Create(userID, "admin.user_disabled", "账号已被禁用", "您的账号已被管理员禁用")
-		s.db.Where("user_id = ?", userID).Delete(&model.Session{})
 	}
 
 	return nil

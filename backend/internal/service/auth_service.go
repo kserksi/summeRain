@@ -194,7 +194,7 @@ func (s *AuthService) Login(ctx context.Context, input *LoginInput, ip string, u
 	if bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(input.Password)) != nil {
 		return nil, errcode.ErrInvalidCredentials
 	}
-	if user.Status != "active" {
+	if user.Status == "suspended" {
 		return nil, errcode.New(4030, "账户已被禁用", 403)
 	}
 
@@ -276,7 +276,7 @@ func (s *AuthService) DeviceLogin(input *DeviceLoginInput, platform string, ip s
 		})
 		return nil, errcode.ErrInvalidCredentials
 	}
-	if user.Status != "active" {
+	if user.Status == "suspended" {
 		return nil, errcode.New(4030, "账户已被禁用", 403)
 	}
 

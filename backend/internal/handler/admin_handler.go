@@ -53,6 +53,12 @@ func (h *AdminHandler) SetUserStatus(c *gin.Context) {
 		return
 	}
 
+	callerID := middleware.GetUserID(c)
+	if callerID == id {
+		response.Error(c, errcode.New(1001, "不能操作自己的账号", 400))
+		return
+	}
+
 	var req setUserStatusReq
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, errcode.New(3001, "参数验证失败", 400))
@@ -122,6 +128,11 @@ func (h *AdminHandler) RequestUserDeletion(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
 		response.Error(c, errcode.New(3001, "无效的用户ID", 400))
+		return
+	}
+
+	if middleware.GetUserID(c) == id {
+		response.Error(c, errcode.New(1001, "不能操作自己的账号", 400))
 		return
 	}
 

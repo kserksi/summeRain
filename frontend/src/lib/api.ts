@@ -51,7 +51,7 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
 
   if (json.code !== 0) {
     if (json.code === 4030 && !skipAuthRedirect) {
-      window.location.assign('/login')
+      window.location.assign('/login?reason=banned')
     }
     throw new ApiError(json.code, json.message || '未知错误')
   }
