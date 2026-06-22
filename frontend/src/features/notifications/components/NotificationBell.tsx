@@ -119,7 +119,7 @@ export function NotificationBell() {
   const deleteMut = useDeleteNotification()
   const clearMut = useClearNotifications()
 
-  const notifications = Array.isArray(data) ? data : []
+  const notifications = data?.items ?? []
   const unreadCount = notifications.filter((n) => !n.is_read).length
   const hasUnread = unreadCount > 0
 

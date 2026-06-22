@@ -1,8 +1,8 @@
 import { api } from '@/lib/api'
 import type { Notification } from '@/lib/types'
 
-export function listNotifications(): Promise<Notification[]> {
-  return api.get<Notification[]>('/notifications/')
+export function listNotifications(): Promise<{ items: Notification[]; next_cursor: string }> {
+  return api.get<{ items: Notification[]; next_cursor: string }>('/notifications/')
 }
 
 export function markRead(id: number): Promise<void> {
