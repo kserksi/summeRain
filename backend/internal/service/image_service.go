@@ -45,6 +45,13 @@ func (s *ImageService) ReloadR2() {
 	}
 }
 
+func (s *ImageService) R2Download(key string) (io.ReadCloser, error) {
+	if s.r2 == nil || !s.r2.IsEnabled() {
+		return nil, fmt.Errorf("R2 not enabled")
+	}
+	return s.r2.Download(key)
+}
+
 func (s *ImageService) MigrateToR2() (int, error) {
 	if s.r2 == nil {
 		return 0, fmt.Errorf("R2 not initialized")
@@ -272,46 +279,19 @@ func (s *ImageService) processFile(userID uint64, fh *multipart.FileHeader, visi
 		s.db.Model(&model.ImageFile{}).Where("id = ?", existing.ID).
 			UpdateColumn("reference_count", gorm.Expr("reference_count + 1"))
 	} else {
-		writtenPaths := make([]string, 0, 3)
-		cleanupWrittenFiles := func() {
-			for _, path := range writtenPaths {
-				if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-					log.Printf("failed to cleanup upload artifact %s: %v", path, err)
-				}
-			}
-		}
-		originalDir := filepath.Join(s.storageCfg.BasePath, "original")
-		os.MkdirAll(originalDir, 0755)
 		originalPath := filepath.Join("original", fileHash[:16]+ext)
-		fullOriginalPath := filepath.Join(s.storageCfg.BasePath, originalPath)
-		if writeErr := os.WriteFile(fullOriginalPath, content, 0644); writeErr != nil {
-			result.Error = errcode.ErrInternal.Message
-			result.ErrorCode = errcode.ErrInternal.Code
-			return result
-		}
-		writtenPaths = append(writtenPaths, fullOriginalPath)
+		thumbnailPath := filepath.Join("thumbnail", fileHash[:16]+".webp")
+		processedPath := filepath.Join("processed", fileHash[:16]+".webp")
+
+		r2Enabled := s.r2 != nil && s.r2.IsEnabled()
 
 		tempDir := s.storageCfg.TempPath
 		os.MkdirAll(tempDir, 0755)
 		tempPath := filepath.Join(tempDir, fileHash[:16]+ext)
 		os.WriteFile(tempPath, content, 0644)
 
-		thumbnailDir := filepath.Join(s.storageCfg.BasePath, "thumbnail")
-		os.MkdirAll(thumbnailDir, 0755)
-		thumbnailPath := filepath.Join("thumbnail", fileHash[:16]+".webp")
-
 		thumbURL := s.imgproxySvc.ThumbnailURL(tempPath)
 		thumbData, thumbErr := s.imgproxySvc.Process(thumbURL)
-		if thumbErr == nil && len(thumbData) > 0 {
-			thumbFullPath := filepath.Join(s.storageCfg.BasePath, thumbnailPath)
-			if err := os.WriteFile(thumbFullPath, thumbData, 0644); err == nil {
-				writtenPaths = append(writtenPaths, thumbFullPath)
-			}
-		}
-
-		processedDir := filepath.Join(s.storageCfg.BasePath, "processed")
-		os.MkdirAll(processedDir, 0755)
-		processedPath := filepath.Join("processed", fileHash[:16]+".webp")
 
 		wmEnabled := false
 		wmText := ""
@@ -339,37 +319,72 @@ func (s *ImageService) processFile(userID uint64, fh *multipart.FileHeader, visi
 		}
 		processedURL := s.imgproxySvc.ProcessedURL(tempPath, wmEnabled, wmText, wmOpacity, wmPosition, wmSize, wmColor)
 		processedData, procErr := s.imgproxySvc.Process(processedURL)
-		if procErr == nil && len(processedData) > 0 {
-			processedFullPath := filepath.Join(s.storageCfg.BasePath, processedPath)
-			if err := os.WriteFile(processedFullPath, processedData, 0644); err == nil {
-				writtenPaths = append(writtenPaths, processedFullPath)
-			}
-		} else if procErr != nil {
+		if procErr != nil {
 			log.Printf("[WATERMARK] imgproxy failed: url=%s err=%v", processedURL, procErr)
-		} else {
-			log.Printf("[WATERMARK] imgproxy returned empty data: url=%s", processedURL)
 		}
 
 		os.Remove(tempPath)
 
-		// R2 dual-write: upload original + thumbnail + processed to R2
-		if s.r2 != nil && s.r2.IsEnabled() {
-			r2Key := "original/" + fileHash[:16] + ext
-			if e := s.r2.Upload(fullOriginalPath, r2Key); e != nil {
+		if r2Enabled {
+			if e := s.r2.UploadBytes(content, originalPath, detectedMIME); e != nil {
 				log.Printf("[R2] upload original failed: %v", e)
+				result.Error = errcode.ErrInternal.Message
+				result.ErrorCode = errcode.ErrInternal.Code
+				return result
 			}
-			thumbFullPath := filepath.Join(s.storageCfg.BasePath, thumbnailPath)
-			if _, e := os.Stat(thumbFullPath); e == nil {
-				if e := s.r2.Upload(thumbFullPath, thumbnailPath); e != nil {
+			if thumbErr == nil && len(thumbData) > 0 {
+				if e := s.r2.UploadBytes(thumbData, thumbnailPath, "image/webp"); e != nil {
 					log.Printf("[R2] upload thumbnail failed: %v", e)
 				}
 			}
-			processedFullPath := filepath.Join(s.storageCfg.BasePath, processedPath)
-			if _, e := os.Stat(processedFullPath); e == nil {
-				if e := s.r2.Upload(processedFullPath, processedPath); e != nil {
+			if procErr == nil && len(processedData) > 0 {
+				if e := s.r2.UploadBytes(processedData, processedPath, "image/webp"); e != nil {
 					log.Printf("[R2] upload processed failed: %v", e)
 				}
 			}
+		} else {
+			writtenPaths := make([]string, 0, 3)
+			cleanupWrittenFiles := func() {
+				for _, p := range writtenPaths {
+					if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
+						log.Printf("failed to cleanup upload artifact %s: %v", p, err)
+					}
+				}
+			}
+
+			originalDir := filepath.Join(s.storageCfg.BasePath, "original")
+			os.MkdirAll(originalDir, 0755)
+			fullOriginalPath := filepath.Join(s.storageCfg.BasePath, originalPath)
+			if writeErr := os.WriteFile(fullOriginalPath, content, 0644); writeErr != nil {
+				result.Error = errcode.ErrInternal.Message
+				result.ErrorCode = errcode.ErrInternal.Code
+				return result
+			}
+			writtenPaths = append(writtenPaths, fullOriginalPath)
+
+			if thumbErr == nil && len(thumbData) > 0 {
+				thumbnailDir := filepath.Join(s.storageCfg.BasePath, "thumbnail")
+				os.MkdirAll(thumbnailDir, 0755)
+				thumbFullPath := filepath.Join(s.storageCfg.BasePath, thumbnailPath)
+				if err := os.WriteFile(thumbFullPath, thumbData, 0644); err == nil {
+					writtenPaths = append(writtenPaths, thumbFullPath)
+				}
+			}
+
+			if procErr == nil && len(processedData) > 0 {
+				processedDir := filepath.Join(s.storageCfg.BasePath, "processed")
+				os.MkdirAll(processedDir, 0755)
+				processedFullPath := filepath.Join(s.storageCfg.BasePath, processedPath)
+				if err := os.WriteFile(processedFullPath, processedData, 0644); err == nil {
+					writtenPaths = append(writtenPaths, processedFullPath)
+				}
+			}
+
+			defer func() {
+				if !result.Success {
+					cleanupWrittenFiles()
+				}
+			}()
 		}
 
 		mimeType := "image/" + strings.TrimPrefix(ext, ".")
@@ -386,18 +401,17 @@ func (s *ImageService) processFile(userID uint64, fh *multipart.FileHeader, visi
 			ProcessedPath: processedPath,
 		}
 		if createErr := s.imageFileRepo.Create(imageFile); createErr != nil {
-			cleanupWrittenFiles()
+			if r2Enabled {
+				_ = s.r2.Delete(originalPath)
+				_ = s.r2.Delete(thumbnailPath)
+				_ = s.r2.Delete(processedPath)
+			}
 			result.Error = errcode.ErrDatabase.Message
 			result.ErrorCode = errcode.ErrDatabase.Code
 			return result
 		}
 		imageFileID = imageFile.ID
 		createdImageFileID = imageFile.ID
-		defer func() {
-			if !result.Success {
-				cleanupWrittenFiles()
-			}
-		}()
 	}
 
 	uniqueLink := s.generateUniqueLink()
@@ -830,15 +844,31 @@ func (s *ImageService) BatchDownloadOriginals(userID uint64) ([]byte, string, *e
 	buf := new(bytes.Buffer)
 	zw := zip.NewWriter(buf)
 
+	r2Enabled := s.r2 != nil && s.r2.IsEnabled()
+
 	for _, img := range images {
 		var imgFile model.ImageFile
 		if err := s.db.First(&imgFile, img.ImageFileID).Error; err != nil {
 			continue
 		}
-		fullPath := filepath.Join(s.storageCfg.BasePath, imgFile.OriginalPath)
-		data, err := os.ReadFile(fullPath)
-		if err != nil {
-			continue
+		var data []byte
+		if r2Enabled {
+			reader, err := s.r2.Download(imgFile.OriginalPath)
+			if err != nil {
+				continue
+			}
+			data, err = io.ReadAll(reader)
+			reader.Close()
+			if err != nil {
+				continue
+			}
+		} else {
+			fullPath := filepath.Join(s.storageCfg.BasePath, imgFile.OriginalPath)
+			var err error
+			data, err = os.ReadFile(fullPath)
+			if err != nil {
+				continue
+			}
 		}
 		f, err := zw.Create(img.Filename)
 		if err != nil {

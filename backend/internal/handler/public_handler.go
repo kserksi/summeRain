@@ -106,13 +106,9 @@ func (h *PublicHandler) ServeImage(c *gin.Context) {
 
 	go h.rdb.Incr(c.Request.Context(), fmt.Sprintf("views:%d", image.ID))
 
-	// R2: if enabled and format is empty (original) or specific format, redirect to R2
-	if h.imageSvc.IsR2Enabled() && !isPrivate {
-		r2Key := imageFile.OriginalPath
-		if format != "" {
-			r2Key = uniqueLink + "." + format
-		}
-		r2URL := h.imageSvc.R2PublicURL(r2Key)
+	// R2: redirect public originals to CDN
+	if h.imageSvc.IsR2Enabled() && !isPrivate && format == "" {
+		r2URL := h.imageSvc.R2PublicURL(imageFile.OriginalPath)
 		if r2URL != "" {
 			c.Redirect(302, r2URL)
 			return
@@ -120,6 +116,23 @@ func (h *PublicHandler) ServeImage(c *gin.Context) {
 	}
 
 	if format == "" {
+		if h.imageSvc.IsR2Enabled() {
+			reader, err := h.imageSvc.R2Download(imageFile.OriginalPath)
+			if err != nil {
+				response.Error(c, errcode.New(4041, "文件不存在", 404))
+				return
+			}
+			defer reader.Close()
+			contentType := imageFile.MimeType
+			if contentType == "image/svg+xml" {
+				contentType = "application/octet-stream"
+			}
+			c.Header("Content-Type", contentType)
+			c.Header("X-Content-Type-Options", "nosniff")
+			c.Status(200)
+			io.Copy(c.Writer, reader)
+			return
+		}
 		fullPath := filepath.Join(h.storageCfg.BasePath, imageFile.OriginalPath)
 		if _, err := os.Stat(fullPath); os.IsNotExist(err) {
 			response.Error(c, errcode.New(4041, "文件不存在", 404))
@@ -157,7 +170,12 @@ func (h *PublicHandler) ServeImage(c *gin.Context) {
 		height = maxDim
 	}
 
-	source := "local:///images/" + imageFile.OriginalPath
+	var source string
+	if h.imageSvc.IsR2Enabled() {
+		source = h.imageSvc.R2PublicURL(imageFile.OriginalPath)
+	} else {
+		source = "local:///images/" + imageFile.OriginalPath
+	}
 	var path string
 	if width > 0 && height > 0 {
 		if format == "png" {
