@@ -5,6 +5,7 @@ import {
   IconKey,
   IconDeviceFloppy,
   IconDroplet,
+  IconCloud,
 } from '@tabler/icons-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -35,6 +36,12 @@ const CFG = {
   WATERMARK_POSITION: 'watermark_position',
   WATERMARK_SIZE: 'watermark_size',
   WATERMARK_COLOR: 'watermark_color',
+  R2_ENABLED: 'r2_enabled',
+  R2_ENDPOINT: 'r2_endpoint',
+  R2_ACCESS_KEY: 'r2_access_key',
+  R2_SECRET_KEY: 'r2_secret_key',
+  R2_BUCKET: 'r2_bucket',
+  R2_PUBLIC_URL: 'r2_public_url',
 } as const
 
 const PROVIDER_LABELS: Record<string, string> = {
@@ -69,6 +76,12 @@ type FormState = {
   watermarkPosition: string
   watermarkSize: string
   watermarkColor: string
+  r2Enabled: boolean
+  r2Endpoint: string
+  r2AccessKey: string
+  r2SecretKey: string
+  r2Bucket: string
+  r2PublicURL: string
 }
 
 const DEFAULTS: FormState = {
@@ -82,6 +95,12 @@ const DEFAULTS: FormState = {
   watermarkPosition: 'soea',
   watermarkSize: '64',
   watermarkColor: 'ffffff',
+  r2Enabled: false,
+  r2Endpoint: '',
+  r2AccessKey: '',
+  r2SecretKey: '',
+  r2Bucket: '',
+  r2PublicURL: '',
 }
 
 function fromConfigs(configs: SystemConfig[]): FormState {
@@ -97,6 +116,12 @@ function fromConfigs(configs: SystemConfig[]): FormState {
     watermarkPosition: map.get(CFG.WATERMARK_POSITION) ?? DEFAULTS.watermarkPosition,
     watermarkSize: map.get(CFG.WATERMARK_SIZE) ?? DEFAULTS.watermarkSize,
     watermarkColor: map.get(CFG.WATERMARK_COLOR) ?? DEFAULTS.watermarkColor,
+    r2Enabled: (map.get(CFG.R2_ENABLED) ?? 'false') === 'true',
+    r2Endpoint: map.get(CFG.R2_ENDPOINT) ?? '',
+    r2AccessKey: map.get(CFG.R2_ACCESS_KEY) ?? '',
+    r2SecretKey: map.get(CFG.R2_SECRET_KEY) ?? '',
+    r2Bucket: map.get(CFG.R2_BUCKET) ?? '',
+    r2PublicURL: map.get(CFG.R2_PUBLIC_URL) ?? '',
   }
 }
 
@@ -111,6 +136,12 @@ const CFG_MAP: Record<keyof FormState, string> = {
   watermarkPosition: CFG.WATERMARK_POSITION,
   watermarkSize: CFG.WATERMARK_SIZE,
   watermarkColor: CFG.WATERMARK_COLOR,
+  r2Enabled: CFG.R2_ENABLED,
+  r2Endpoint: CFG.R2_ENDPOINT,
+  r2AccessKey: CFG.R2_ACCESS_KEY,
+  r2SecretKey: CFG.R2_SECRET_KEY,
+  r2Bucket: CFG.R2_BUCKET,
+  r2PublicURL: CFG.R2_PUBLIC_URL,
 }
 
 const FORM_KEYS = Object.keys(CFG_MAP) as (keyof FormState)[]
@@ -365,6 +396,96 @@ export default function Configs() {
                 </Select>
               )}
             </div>
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-3xl">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <IconCloud className="size-5 text-primary" />
+              <CardTitle>Cloudflare R2 存储</CardTitle>
+            </div>
+            <CardDescription>配置后新上传图片同步到 R2，通过 CDN 加速分发。本地始终保留一份。</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="r2-enabled">启用 R2 存储</Label>
+              {isLoading ? (
+                <Skeleton className="h-6 w-11" />
+              ) : (
+                <Switch
+                  id="r2-enabled"
+                  checked={form.r2Enabled}
+                  onCheckedChange={(v) => setField('r2Enabled', v)}
+                />
+              )}
+            </div>
+
+            <Separator />
+
+            <div className="space-y-2">
+              <Label htmlFor="r2-endpoint">S3 Endpoint</Label>
+              <Input
+                id="r2-endpoint"
+                placeholder="https://xxx.r2.cloudflarestorage.com"
+                value={form.r2Endpoint}
+                disabled={!form.r2Enabled || isLoading}
+                onChange={(e) => setField('r2Endpoint', e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="r2-bucket">Bucket 名称</Label>
+              <Input
+                id="r2-bucket"
+                placeholder="imgcloud"
+                value={form.r2Bucket}
+                disabled={!form.r2Enabled || isLoading}
+                onChange={(e) => setField('r2Bucket', e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="r2-public">公开访问域名</Label>
+              <Input
+                id="r2-public"
+                placeholder="https://r2.kserks.org"
+                value={form.r2PublicURL}
+                disabled={!form.r2Enabled || isLoading}
+                onChange={(e) => setField('r2PublicURL', e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">绑定 R2 Bucket 的自定义域名（需在 Cloudflare 后台配置）</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="r2-access-key">Access Key ID</Label>
+              <Input
+                id="r2-access-key"
+                placeholder="R2 API Token Access Key ID"
+                value={form.r2AccessKey}
+                disabled={!form.r2Enabled || isLoading}
+                onChange={(e) => setField('r2AccessKey', e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="r2-secret-key" className="flex items-center gap-1.5">
+                <IconKey className="size-3.5" />
+                Secret Access Key
+              </Label>
+              <Input
+                id="r2-secret-key"
+                type="password"
+                placeholder="Secret Key"
+                value={form.r2SecretKey}
+                disabled={!form.r2Enabled || isLoading}
+                onChange={(e) => setField('r2SecretKey', e.target.value)}
+              />
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              配置前上传的图片保留在本地。保存后可点击"迁移到 R2"将本地图片同步到 R2。
+            </p>
           </CardContent>
         </Card>
       </div>

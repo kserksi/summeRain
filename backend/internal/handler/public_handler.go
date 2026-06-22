@@ -106,6 +106,19 @@ func (h *PublicHandler) ServeImage(c *gin.Context) {
 
 	go h.rdb.Incr(c.Request.Context(), fmt.Sprintf("views:%d", image.ID))
 
+	// R2: if enabled and format is empty (original) or specific format, redirect to R2
+	if h.imageSvc.IsR2Enabled() && !isPrivate {
+		r2Key := imageFile.OriginalPath
+		if format != "" {
+			r2Key = uniqueLink + "." + format
+		}
+		r2URL := h.imageSvc.R2PublicURL(r2Key)
+		if r2URL != "" {
+			c.Redirect(302, r2URL)
+			return
+		}
+	}
+
 	if format == "" {
 		fullPath := filepath.Join(h.storageCfg.BasePath, imageFile.OriginalPath)
 		if _, err := os.Stat(fullPath); os.IsNotExist(err) {

@@ -18,7 +18,9 @@ import (
 	"github.com/summerain/image-gallery/internal/handler"
 	"github.com/summerain/image-gallery/internal/middleware"
 	"github.com/summerain/image-gallery/internal/model"
+	"github.com/summerain/image-gallery/internal/pkg/errcode"
 	"github.com/summerain/image-gallery/internal/pkg/imgproxy"
+	"github.com/summerain/image-gallery/internal/pkg/response"
 	"github.com/summerain/image-gallery/internal/repository"
 	"github.com/summerain/image-gallery/internal/service"
 	"github.com/summerain/image-gallery/internal/worker"
@@ -75,8 +77,9 @@ func main() {
 	imgproxySvc := service.NewImgproxyService(&cfg.Imgproxy)
 	notificationSvc := service.NewNotificationService(notificationRepo)
 	captchaVerifier := service.NewCaptchaVerifier(cfg.Captcha)
+	r2Svc := service.NewR2Service(configRepo)
 	authSvc := service.NewAuthService(userRepo, sessionRepo, rdb, captchaVerifier, &service.ConfigRepoWrapper{Repo: configRepo})
-	imageSvc := service.NewImageService(db, rdb, imageRepo, imageFileRepo, tokenRepo, uploadQueueRepo, configRepo, imgproxySvc, notificationSvc, &cfg.Storage)
+	imageSvc := service.NewImageService(db, rdb, imageRepo, imageFileRepo, tokenRepo, uploadQueueRepo, configRepo, imgproxySvc, notificationSvc, &cfg.Storage, r2Svc)
 	userSvc := service.NewUserService(db, auditLogRepo, notificationSvc)
 	adminSvc := service.NewAdminService(db, configRepo, notificationSvc, &cfg.Storage, rdb, imageRepo, imageFileRepo, imageSvc)
 	publicConfigSvc := service.NewPublicConfigService(configRepo, cfg.Captcha, rdb)
@@ -198,6 +201,18 @@ func main() {
 		admin.GET("/stats", adminHandler.GetStats)
 		admin.GET("/images", adminHandler.ListImages)
 		admin.DELETE("/images/:id", adminHandler.DeleteImage)
+		admin.POST("/r2/migrate", func(c *gin.Context) {
+			count, err := imageSvc.MigrateToR2()
+			if err != nil {
+				response.Error(c, errcode.New(1003, err.Error(), 500))
+				return
+			}
+			response.Success(c, gin.H{"migrated": count})
+		})
+		admin.POST("/r2/reload", func(c *gin.Context) {
+			imageSvc.ReloadR2()
+			response.Success(c, gin.H{"enabled": imageSvc.IsR2Enabled()})
+		})
 	}
 
 	webRoot, err := filepath.Abs("./web")

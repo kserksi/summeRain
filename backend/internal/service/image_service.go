@@ -28,6 +28,38 @@ import (
 	"gorm.io/gorm"
 )
 
+func (s *ImageService) IsR2Enabled() bool {
+	return s.r2 != nil && s.r2.IsEnabled()
+}
+
+func (s *ImageService) R2PublicURL(key string) string {
+	if s.r2 == nil {
+		return ""
+	}
+	return s.r2.PublicURL(key)
+}
+
+func (s *ImageService) ReloadR2() {
+	if s.r2 != nil {
+		s.r2.reload()
+	}
+}
+
+func (s *ImageService) MigrateToR2() (int, error) {
+	if s.r2 == nil {
+		return 0, fmt.Errorf("R2 not initialized")
+	}
+	total := 0
+	for _, sub := range []string{"original", "thumbnail", "processed"} {
+		n, err := s.r2.MigrateLocalDir(s.storageCfg.BasePath, sub)
+		if err != nil {
+			log.Printf("[R2] migrate %s: %v", sub, err)
+		}
+		total += n
+	}
+	return total, nil
+}
+
 const MaxBatchDownloads = 10
 
 type ImageService struct {
@@ -41,6 +73,7 @@ type ImageService struct {
 	imgproxySvc     *ImgproxyService
 	notificationSvc *NotificationService
 	storageCfg      *config.StorageConfig
+	r2              *R2Service
 }
 
 type imageRepository interface {
@@ -73,6 +106,7 @@ func NewImageService(
 	imgproxySvc *ImgproxyService,
 	notificationSvc *NotificationService,
 	storageCfg *config.StorageConfig,
+	r2 *R2Service,
 ) *ImageService {
 	return &ImageService{
 		db:              db,
@@ -85,6 +119,7 @@ func NewImageService(
 		imgproxySvc:     imgproxySvc,
 		notificationSvc: notificationSvc,
 		storageCfg:      storageCfg,
+		r2:              r2,
 	}
 }
 
@@ -317,6 +352,26 @@ func (s *ImageService) processFile(userID uint64, fh *multipart.FileHeader, visi
 
 		os.Remove(tempPath)
 
+		// R2 dual-write: upload original + thumbnail + processed to R2
+		if s.r2 != nil && s.r2.IsEnabled() {
+			r2Key := "original/" + fileHash[:16] + ext
+			if e := s.r2.Upload(fullOriginalPath, r2Key); e != nil {
+				log.Printf("[R2] upload original failed: %v", e)
+			}
+			thumbFullPath := filepath.Join(s.storageCfg.BasePath, thumbnailPath)
+			if _, e := os.Stat(thumbFullPath); e == nil {
+				if e := s.r2.Upload(thumbFullPath, thumbnailPath); e != nil {
+					log.Printf("[R2] upload thumbnail failed: %v", e)
+				}
+			}
+			processedFullPath := filepath.Join(s.storageCfg.BasePath, processedPath)
+			if _, e := os.Stat(processedFullPath); e == nil {
+				if e := s.r2.Upload(processedFullPath, processedPath); e != nil {
+					log.Printf("[R2] upload processed failed: %v", e)
+				}
+			}
+		}
+
 		mimeType := "image/" + strings.TrimPrefix(ext, ".")
 		if ext == ".jpg" || ext == ".jpeg" {
 			mimeType = "image/jpeg"
@@ -485,6 +540,13 @@ func (s *ImageService) deleteImage(userID uint64, imageID uint64, isAdmin bool) 
 		}
 		if err := os.Remove(filepath.Join(storagePath, imageFile.ProcessedPath)); err != nil && !os.IsNotExist(err) {
 			log.Printf("failed to remove processed file: %v", err)
+		}
+
+		// R2 dual-delete
+		if s.r2 != nil && s.r2.IsEnabled() {
+			_ = s.r2.Delete(imageFile.OriginalPath)
+			_ = s.r2.Delete(imageFile.ThumbnailPath)
+			_ = s.r2.Delete(imageFile.ProcessedPath)
 		}
 	}
 
