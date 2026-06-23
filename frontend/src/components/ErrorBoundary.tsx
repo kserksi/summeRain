@@ -10,12 +10,22 @@ interface State {
 
 export class ErrorBoundary extends Component<Props, State> {
   state: State = { hasError: false }
+  #domRetryCount = 0
 
   static getDerivedStateFromError(error: Error): State {
     return { hasError: true, error }
   }
 
   componentDidCatch(error: Error, info: unknown) {
+    const isDomMutation = error.message.includes('insertBefore')
+      || error.message.includes('removeChild')
+      || error.message.includes('appendChild')
+      || error.message.includes('not a child of this node')
+    if (isDomMutation && this.#domRetryCount < 3) {
+      this.#domRetryCount++
+      this.setState({ hasError: false, error: undefined })
+      return
+    }
     console.error('ErrorBoundary:', error, info)
   }
 
