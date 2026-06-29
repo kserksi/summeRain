@@ -1,3 +1,6 @@
+// Copyright 2026 kserks
+// SPDX-License-Identifier: Apache-2.0
+
 import { lazy, Suspense, useEffect } from 'react'
 import { Routes, Route, Navigate, Outlet } from 'react-router'
 import { Navbar } from '@/components/layout/Navbar'

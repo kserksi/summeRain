@@ -1,3 +1,6 @@
+// Copyright 2026 kserks
+// SPDX-License-Identifier: Apache-2.0
+
 import { useCallback } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { useNavigate } from 'react-router'

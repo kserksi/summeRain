@@ -1,3 +1,6 @@
+// Copyright 2026 kserks
+// SPDX-License-Identifier: Apache-2.0
+
 const BG_MAP: Record<string, string> = {
   light: '#F1E7DA',
   dark: '#16100D',

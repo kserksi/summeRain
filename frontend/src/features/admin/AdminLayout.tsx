@@ -1,3 +1,6 @@
+// Copyright 2026 kserks
+// SPDX-License-Identifier: Apache-2.0
+
 import { NavLink, Outlet } from 'react-router'
 import { IconAdjustments, IconChartBar, IconPhoto, IconUsers } from '@tabler/icons-react'
 

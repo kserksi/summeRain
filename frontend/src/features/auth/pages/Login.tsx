@@ -1,3 +1,6 @@
+// Copyright 2026 kserks
+// SPDX-License-Identifier: Apache-2.0
+
 import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { useForm } from 'react-hook-form'

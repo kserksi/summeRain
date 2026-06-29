@@ -1,3 +1,6 @@
+// Copyright 2026 kserks
+// SPDX-License-Identifier: Apache-2.0
+
 import { useEffect, useRef } from 'react'
 import { IconShield, IconShieldCheckFilled } from '@tabler/icons-react'
 import { Badge } from '@/components/ui/badge'

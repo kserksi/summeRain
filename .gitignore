@@ -27,3 +27,16 @@ Thumbs.db
 # Env
 .env
 backend/.env
+
+# Logs
+*.log
+frontend/.dev-*.log
+
+# Local scratch / working dirs (not part of source)
+manual/
+mockup/
+
+# Root-level screenshots (keep docs/images/ for committed assets)
+/捕获.PNG
+/*.PNG
+/*.png

@@ -1,3 +1,6 @@
+// Copyright 2026 kserks
+// SPDX-License-Identifier: Apache-2.0
+
 import { API_BASE_URL } from '@/config/constants'
 import { getCsrfToken } from '@/lib/csrf'
 import { ApiError } from '@/lib/errors'

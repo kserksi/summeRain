@@ -1,3 +1,6 @@
+// Copyright 2026 kserks
+// SPDX-License-Identifier: Apache-2.0
+
 export const API_BASE_URL = '/api/v1'
 
 export const STORAGE_KEYS = {

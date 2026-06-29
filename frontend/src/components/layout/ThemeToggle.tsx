@@ -1,3 +1,6 @@
+// Copyright 2026 kserks
+// SPDX-License-Identifier: Apache-2.0
+
 import { useRef } from 'react'
 import { IconSun, IconMoon } from '@tabler/icons-react'
 import { useThemeStore } from '@/store/theme-store'

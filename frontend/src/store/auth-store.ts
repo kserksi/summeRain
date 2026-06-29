@@ -1,3 +1,6 @@
+// Copyright 2026 kserks
+// SPDX-License-Identifier: Apache-2.0
+
 import { create } from 'zustand'
 import type { User } from '@/lib/types'
 import { api } from '@/lib/api'

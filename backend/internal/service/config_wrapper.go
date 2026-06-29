@@ -1,3 +1,6 @@
+// Copyright 2026 kserks
+// SPDX-License-Identifier: Apache-2.0
+
 package service
 
 import "github.com/summerain/image-gallery/internal/repository"

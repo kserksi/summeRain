@@ -1,3 +1,6 @@
+// Copyright 2026 kserks
+// SPDX-License-Identifier: Apache-2.0
+
 import { useEffect, useState } from 'react'
 import { IconAlertTriangle, IconPackageImport } from '@tabler/icons-react'
 import { Badge } from '@/components/ui/badge'

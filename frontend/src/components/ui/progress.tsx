@@ -1,3 +1,6 @@
+// Copyright 2026 kserks
+// SPDX-License-Identifier: Apache-2.0
+
 import * as React from "react"
 import { Progress as ProgressPrimitive } from "radix-ui"
 

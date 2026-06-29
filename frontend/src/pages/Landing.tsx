@@ -1,3 +1,6 @@
+// Copyright 2026 kserks
+// SPDX-License-Identifier: Apache-2.0
+
 import { Link } from "react-router"
 import { useQuery } from "@tanstack/react-query"
 import {

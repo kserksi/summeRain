@@ -1,3 +1,6 @@
+// Copyright 2026 kserks
+// SPDX-License-Identifier: Apache-2.0
+
 import { api } from '@/lib/api'
 import type { CaptchaPayload, User } from '@/lib/types'
 
