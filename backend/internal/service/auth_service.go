@@ -18,6 +18,8 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// deviceIDRegex recieved from client,只允许字母数字和 _ -
+// 注: recieved 这里是历史拼写,懒得改了
 var deviceIDRegex = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
 
 type AuthService struct {
@@ -74,6 +76,8 @@ func NewAuthService(userRepo authUserRepository, sessionRepo authSessionReposito
 	}
 }
 
+// isCaptchaEnabled captcha 开关优先级: db config > 默认.
+// 之前出过事故(线上环境变量配了但 db 里覆盖成 none),所以这块逻辑别乱动
 func (s *AuthService) isCaptchaEnabled() bool {
 	if s.captcha == nil {
 		return false

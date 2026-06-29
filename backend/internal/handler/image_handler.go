@@ -34,6 +34,7 @@ func (h *ImageHandler) Upload(c *gin.Context) {
 		return
 	}
 
+	// fix: 之前直接用 c.Request.MultipartForm 偶发拿不到文件,改成 c.MultipartForm() 后稳定
 	form, err := c.MultipartForm()
 	if err != nil {
 		response.Error(c, errcode.ErrInternal)
@@ -65,6 +66,7 @@ func (h *ImageHandler) List(c *gin.Context) {
 	}
 
 	cursor := c.Query("cursor")
+	// limit 没传就用默认 20,这里 _ 掉 err 是因为 atoi 失败 fallback 0,后面 service 会兜底
 	limitStr := c.DefaultQuery("limit", "20")
 	limit, _ := strconv.Atoi(limitStr)
 	sort := c.DefaultQuery("sort", "-created_at")
@@ -209,6 +211,7 @@ func (h *ImageHandler) IssueToken(c *gin.Context) {
 	var req struct {
 		TTLms int64 `json:"ttl_ms"`
 	}
+	// 没传 body 也行,后面 service 会用默认 TTL,_ 掉 err 是故意的
 	_ = c.ShouldBindJSON(&req)
 
 	isAdmin := middleware.GetRole(c) == "admin"

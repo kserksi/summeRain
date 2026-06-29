@@ -29,6 +29,8 @@ func (r *UserRepo) FindByUsername(username string) (*model.User, error) {
 	return &user, nil
 }
 
+// FIXME: 邮箱大小写敏感查询,User@x.com 和 user@x.com 会被当成两个账号
+// 注册时前端最好先 toLowerCase 一下,目前还没加
 func (r *UserRepo) FindByEmail(email string) (*model.User, error) {
 	var user model.User
 	err := r.db.Where("email = ?", email).First(&user).Error

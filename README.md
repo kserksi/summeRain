@@ -105,7 +105,7 @@ npm run build  # 输出到 ../backend/web/
 - [API 契约](docs/API.md) — 602 行，逐接口字段、错误码、CSRF 规则
 - [部署使用手册](docs/USAGE.md) — 环境变量、运维手册、安全要点、阈值速查
 - [后端调整方案](docs/backend-changes-plan.md) — 私密图统一令牌、Captcha 三 Provider
-- [前端架构设计](docs/superpowers/specs/frontend-architecture/) — 13 篇设计文档
+- [前端架构设计](docs/design/frontend-architecture/) — 设计文档集合
 
 ## 限制与阈值速查
 

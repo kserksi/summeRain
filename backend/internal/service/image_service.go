@@ -59,8 +59,11 @@ func (s *ImageService) MigrateToR2() (int, error) {
 	if s.r2 == nil {
 		return 0, fmt.Errorf("R2 not initialized")
 	}
+	// XXX: 大量文件时这个同步迁移会卡住整个请求,理想是丢到 worker 异步跑
+	// 目前先用着,文件少的时候没问题
 	total := 0
 	for _, sub := range []string{"original", "thumbnail", "processed"} {
+		// 三个子目录都要传,少一个迁移完不完整
 		n, err := s.r2.MigrateLocalDir(s.storageCfg.BasePath, sub)
 		if err != nil {
 			log.Printf("[R2] migrate %s: %v", sub, err)
@@ -154,6 +157,7 @@ type UploadResponse struct {
 }
 
 func (s *ImageService) Upload(userID uint64, files []*multipart.FileHeader, visibility string) (*UploadResponse, *errcode.AppError) {
+	// 20 个上限是拍脑袋定的,够用了,真要改扔到 config 里
 	if len(files) > 20 {
 		return nil, errcode.ErrFileCountExceeded
 	}
@@ -198,6 +202,7 @@ func (s *ImageService) Upload(userID uint64, files []*multipart.FileHeader, visi
 	}
 
 	if successSize > 0 {
+		// 这里 Updates 的 err 没接,理论上配额会算错,但前台会重新拉 profile,影响不大,先这样
 		s.db.Model(&model.User{}).Where("id = ?", userID).
 			Updates(map[string]interface{}{
 				"storage_used": gorm.Expr("storage_used + ?", successSize),

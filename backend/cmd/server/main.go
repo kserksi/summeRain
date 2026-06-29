@@ -39,6 +39,7 @@ func main() {
 		log.Fatalf("failed to connect database: %v", err)
 	}
 
+	// 兼容老版本 token 数据,上线时一定要跑一次,不然老用户的私密图全打不开
 	repository.MigrateLegacyTokens(db)
 
 	if err := db.AutoMigrate(
@@ -108,7 +109,7 @@ func main() {
 		log.Fatalf("failed to set trusted proxies: %v", err)
 	}
 
-	r.MaxMultipartMemory = 8 << 20
+	r.MaxMultipartMemory = 8 << 20 // 8MB,跟前端单文件限制对齐,改的时候两边一起改
 
 	r.Use(middleware.RequestID())
 	r.Use(gin.Recovery())
@@ -239,6 +240,7 @@ func main() {
 		})
 	}
 
+	// TODO: 后续上了 cdn 这块静态服务可以挪到 nginx,Go 这边只管 API
 	webRoot, err := filepath.Abs("./web")
 	if err != nil {
 		log.Fatalf("failed to resolve web root: %v", err)
@@ -266,6 +268,7 @@ func main() {
 	go wm.Start(workerCtx)
 
 	if configs, err := configRepo.FindAll(); err == nil {
+		// 启动时重新生成水印 SVG,不然改了配置要重启 imgproxy 才生效,体验很差
 		cfgMap := make(map[string]string)
 		for _, c := range configs {
 			cfgMap[c.ConfigKey] = c.ConfigValue

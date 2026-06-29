@@ -20,6 +20,12 @@ backend/server_linux
 .idea
 *.swp
 
+# AI tools (local only, not part of source)
+.opencode/
+.claude/
+.cursor/
+.agents/
+
 # OS
 .DS_Store
 Thumbs.db

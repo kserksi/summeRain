@@ -37,6 +37,8 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
       signal,
     })
   } catch {
+    // 网络错误统一吞掉,不然用户看到 raw fetch error 会懵
+    // FIXME: 这里其实应该区分 timeout 和 offline,后面再加
     throw new ApiError(0, '网络错误，请检查连接')
   }
 
@@ -68,6 +70,8 @@ export const api = {
   del: <T>(path: string, opts?: RequestOptions) => request<T>(path, { ...opts, method: 'DELETE' }),
   upload: async <T>(path: string, formData: FormData, opts?: RequestOptions): Promise<T> => {
     const csrf = getCsrfToken()
+    // 注意: upload 不要全局设 Content-Type,浏览器会自动加 boundary
+    // 之前这里手写了 multipart/form-data 导致后端一直解析失败,debug 了一晚上
     const headers: Record<string, string> = {}
     if (csrf) headers['X-CSRF-Token'] = csrf
     if (opts?.headers) Object.assign(headers, opts.headers)

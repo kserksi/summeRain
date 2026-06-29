@@ -2,7 +2,7 @@
 
 - **日期**：2026-06-18
 - **状态**：方案，待实现
-- **范围**：为支持前端设计（见 `docs/superpowers/specs/frontend-architecture/`）的两项既定规则，列出 Go 后端（`backend/`）需配套调整的 delta。
+- **范围**：为支持前端设计（见 `docs/design/frontend-architecture/`）的两项既定规则，列出 Go 后端（`backend/`）需配套调整的 delta。
 - **原则**：本文仅描述"改什么、在哪、为什么"，不写实现代码。
 
 ---
