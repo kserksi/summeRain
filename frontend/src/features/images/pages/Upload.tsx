@@ -19,17 +19,9 @@ import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { Label } from '@/components/ui/label'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Progress } from '@/components/ui/progress'
 import {
   Select,
@@ -88,6 +80,7 @@ export default function Upload() {
   const [uploading, setUploading] = useState(false)
   const [linkFormat, setLinkFormat] = useState<CopyLinkFormat>(() => loadPrefs().link)
   const [imageFormat, setImageFormat] = useState<CopyImageFormat>(() => loadPrefs().image)
+  const [copyMenuOpen, setCopyMenuOpen] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const navigate = useNavigate()
   const qc = useQueryClient()
@@ -212,7 +205,7 @@ export default function Upload() {
   const hasQueued = items.some((i) => i.status === 'queued')
   const completedLinks = items.filter((i) => i.status === 'done' && i.uniqueLink)
 
-  const copyAllLinks = () => {
+  const copyAllLinks = async () => {
     if (!completedLinks.length) return
     const text = buildCopyText(
       window.location.origin,
@@ -221,7 +214,8 @@ export default function Upload() {
       imageFormat,
     )
     const fmt = `${t(`upload.copy.linkFormats.${linkFormat}`)}·${t(`upload.copy.imageFormats.${imageFormat}`)}`
-    copy(text, t('upload.toast.copied', { count: completedLinks.length, format: fmt }))
+    const ok = await copy(text, t('upload.toast.copied', { count: completedLinks.length, format: fmt }))
+    if (ok) setCopyMenuOpen(false)
   }
 
   return (
@@ -310,8 +304,8 @@ export default function Upload() {
                   {t('upload.done')}
                 </Button>
                 {completedLinks.length > 0 && (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
+                  <Popover open={copyMenuOpen} onOpenChange={setCopyMenuOpen}>
+                    <PopoverTrigger asChild>
                       <Button size="sm" variant="outline">
                         {copied ? (
                           <IconCheck className="text-primary" />
@@ -321,38 +315,66 @@ export default function Upload() {
                         {t('upload.copy.button')} ({completedLinks.length})
                         <IconChevronDown className="size-3.5 opacity-60" />
                       </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="min-w-56">
-                      <DropdownMenuLabel>{t('upload.copy.linkFormatLabel')}</DropdownMenuLabel>
-                      <DropdownMenuRadioGroup
-                        value={linkFormat}
-                        onValueChange={(v) => setLinkFormat(v as CopyLinkFormat)}
-                      >
-                        {(['url', 'markdown', 'bbs', 'html'] as const).map((f) => (
-                          <DropdownMenuRadioItem key={f} value={f}>
-                            {t(`upload.copy.linkFormats.${f}`)}
-                          </DropdownMenuRadioItem>
-                        ))}
-                      </DropdownMenuRadioGroup>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuLabel>{t('upload.copy.imageFormatLabel')}</DropdownMenuLabel>
-                      <DropdownMenuRadioGroup
-                        value={imageFormat}
-                        onValueChange={(v) => setImageFormat(v as CopyImageFormat)}
-                      >
-                        {(['original', 'webp', 'avif'] as const).map((f) => (
-                          <DropdownMenuRadioItem key={f} value={f}>
-                            {t(`upload.copy.imageFormats.${f}`)}
-                          </DropdownMenuRadioItem>
-                        ))}
-                      </DropdownMenuRadioGroup>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem onClick={copyAllLinks}>
-                        <IconLink />
-                        {t('upload.copy.action', { count: completedLinks.length })}
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                    </PopoverTrigger>
+                    <PopoverContent align="end" className="w-64">
+                      <div className="space-y-3">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs text-muted-foreground">
+                            {t('upload.copy.linkFormatLabel')}
+                          </Label>
+                          <ToggleGroup
+                            type="single"
+                            variant="outline"
+                            size="sm"
+                            orientation="vertical"
+                            value={linkFormat}
+                            onValueChange={(v) => v && setLinkFormat(v as CopyLinkFormat)}
+                            className="w-full"
+                          >
+                            {(['url', 'markdown', 'bbs', 'html'] as const).map((f) => (
+                              <ToggleGroupItem
+                                key={f}
+                                value={f}
+                                className="w-full justify-start"
+                              >
+                                {t(`upload.copy.linkFormats.${f}`)}
+                              </ToggleGroupItem>
+                            ))}
+                          </ToggleGroup>
+                        </div>
+                        <Separator />
+                        <div className="space-y-1.5">
+                          <Label className="text-xs text-muted-foreground">
+                            {t('upload.copy.imageFormatLabel')}
+                          </Label>
+                          <ToggleGroup
+                            type="single"
+                            variant="outline"
+                            size="sm"
+                            orientation="vertical"
+                            value={imageFormat}
+                            onValueChange={(v) => v && setImageFormat(v as CopyImageFormat)}
+                            className="w-full"
+                          >
+                            {(['original', 'webp', 'avif'] as const).map((f) => (
+                              <ToggleGroupItem
+                                key={f}
+                                value={f}
+                                className="w-full justify-start"
+                              >
+                                {t(`upload.copy.imageFormats.${f}`)}
+                              </ToggleGroupItem>
+                            ))}
+                          </ToggleGroup>
+                        </div>
+                        <Separator />
+                        <Button onClick={copyAllLinks} className="w-full">
+                          <IconLink />
+                          {t('upload.copy.action', { count: completedLinks.length })}
+                        </Button>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
                 )}
               </div>
             </div>
