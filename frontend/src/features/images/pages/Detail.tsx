@@ -3,6 +3,7 @@
 
 import {
   IconBan,
+  IconCheck,
   IconCopy,
   IconEye,
   IconKey,
@@ -17,6 +18,8 @@ import {
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { toast } from 'sonner'
+
+import { useCopy } from '@/lib/use-copy'
 
 import {
   AlertDialog,
@@ -110,13 +113,14 @@ function ShareRow({
   label,
   value,
   display,
-  onCopy,
+  successMsg,
 }: {
   label: string
   value: string
   display?: string
-  onCopy: () => void
+  successMsg?: string
 }) {
+  const { copied, copy } = useCopy()
   return (
     <div className="space-y-1">
       <Label className="text-xs text-muted-foreground">{label}</Label>
@@ -130,12 +134,33 @@ function ShareRow({
           type="button"
           size="icon"
           variant="outline"
-          onClick={onCopy}
+          onClick={() => copy(value, successMsg)}
           aria-label={`复制${label}`}
         >
-          <IconCopy />
+          {copied ? (
+            <IconCheck className="text-primary" />
+          ) : (
+            <IconCopy />
+          )}
         </Button>
       </div>
+    </div>
+  )
+}
+
+function ProcessedLinkRow({ value }: { value: string }) {
+  const { copied, copy } = useCopy()
+  return (
+    <div className="flex gap-2">
+      <Input readOnly value={value} className="font-mono text-xs" />
+      <Button type="button" onClick={() => copy(value, '已复制处理链接')}>
+        {copied ? (
+          <IconCheck className="text-primary" />
+        ) : (
+          <IconCopy />
+        )}
+        复制
+      </Button>
     </div>
   )
 }
@@ -159,15 +184,6 @@ export default function Detail() {
   const del = useDeleteImage()
   const issue = useIssueToken()
   const revoke = useRevokeToken()
-
-  const copy = async (text: string, msg = '已复制到剪贴板') => {
-    try {
-      await navigator.clipboard.writeText(text)
-      toast.success(msg)
-    } catch {
-      toast.error('复制失败')
-    }
-  }
 
   const processedPath = buildImageUrl(
     image?.unique_link ?? '',
@@ -305,22 +321,14 @@ export default function Detail() {
           <Card>
             <CardContent className="space-y-3 p-5">
               <p className="font-medium">分享链接</p>
-              <ShareRow
-                label="链接"
-                value={shareUrl}
-                onCopy={() => copy(shareUrl)}
-              />
+              <ShareRow label="链接" value={shareUrl} />
               <ShareRow
                 label="Markdown"
                 value={`![${title}](${shareUrl})`}
-                onCopy={() => copy(`![${title}](${shareUrl})`)}
               />
               <ShareRow
                 label="HTML"
                 value={`<img src="${shareUrl}" alt="${title}" />`}
-                onCopy={() =>
-                  copy(`<img src="${shareUrl}" alt="${title}" />`)
-                }
               />
             </CardContent>
           </Card>
@@ -423,20 +431,7 @@ export default function Detail() {
 
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">链接</Label>
-                <div className="flex gap-2">
-                  <Input
-                    readOnly
-                    value={processedUrl}
-                    className="font-mono text-xs"
-                  />
-                  <Button
-                    type="button"
-                    onClick={() => copy(processedUrl, '已复制处理链接')}
-                  >
-                    <IconCopy />
-                    复制
-                  </Button>
-                </div>
+                <ProcessedLinkRow value={processedUrl} />
               </div>
             </CardContent>
           </Card>
@@ -457,13 +452,9 @@ export default function Detail() {
                       label="令牌"
                       value={activeToken}
                       display={maskedToken}
-                      onCopy={() => copy(activeToken, '令牌已复制')}
+                      successMsg="令牌已复制"
                     />
-                    <ShareRow
-                      label="带令牌链接"
-                      value={tokenShare}
-                      onCopy={() => copy(tokenShare)}
-                    />
+                    <ShareRow label="带令牌链接" value={tokenShare} />
                     {image?.token_expires_at && (
                       <p className="text-xs text-muted-foreground">
                         过期时间：{formatDate(image?.token_expires_at ?? '')}
