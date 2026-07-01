@@ -41,6 +41,7 @@ func (s *ImgproxyService) signPath(path string) string {
 }
 
 func (s *ImgproxyService) ThumbnailURL(sourcePath string) string {
+	sourcePath = strings.TrimPrefix(sourcePath, s.cfg.LocalFSRoot+"/")
 	path := fmt.Sprintf("/rs:fill:300:300/quality:75/plain/local:///%s@webp", sourcePath)
 	return s.signPath(path)
 }
@@ -62,6 +63,7 @@ func (s *ImgproxyService) ProcessedURL(sourcePath string, watermarkEnabled bool,
 		}
 		path += fmt.Sprintf("/wm:%s:%s", watermarkOpacity, watermarkPosition)
 	}
+	sourcePath = strings.TrimPrefix(sourcePath, s.cfg.LocalFSRoot+"/")
 	path += fmt.Sprintf("/plain/local:///%s@webp", sourcePath)
 	return s.signPath(path)
 }

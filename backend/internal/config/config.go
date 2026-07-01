@@ -38,10 +38,11 @@ type RedisConfig struct {
 }
 
 type ImgproxyConfig struct {
-	BaseURL   string
-	Key       string
-	Salt      string
-	PublicURL string
+	BaseURL     string
+	Key         string
+	Salt        string
+	PublicURL   string
+	LocalFSRoot string
 }
 
 type StorageConfig struct {
@@ -100,10 +101,11 @@ func Load() *Config {
 			DB:       getEnvInt("REDIS_DB", 0),
 		},
 		Imgproxy: ImgproxyConfig{
-			BaseURL:   getEnv("IMGPROXY_URL", "http://imgproxy:8080"),
-			Key:       getEnv("IMGPROXY_KEY", ""),
-			Salt:      getEnv("IMGPROXY_SALT", ""),
-			PublicURL: getEnv("IMGPROXY_PUBLIC_URL", "/img"),
+			BaseURL:     getEnv("IMGPROXY_URL", "http://imgproxy:8080"),
+			Key:         getEnv("IMGPROXY_KEY", ""),
+			Salt:        getEnv("IMGPROXY_SALT", ""),
+			PublicURL:   getEnv("IMGPROXY_PUBLIC_URL", "/img"),
+			LocalFSRoot: getEnv("IMGPROXY_LOCAL_FILESYSTEM_ROOT", "/data"),
 		},
 		Storage: StorageConfig{
 			BasePath: getEnv("STORAGE_PATH", "/data/images"),
