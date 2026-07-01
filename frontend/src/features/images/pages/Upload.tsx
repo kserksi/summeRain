@@ -3,6 +3,7 @@
 
 import {
   IconCheck,
+  IconChevronDown,
   IconLink,
   IconLoader2,
   IconPhoto,
@@ -12,11 +13,22 @@ import {
 import { useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
+import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Label } from '@/components/ui/label'
 import { Progress } from '@/components/ui/progress'
 import {
@@ -28,8 +40,17 @@ import {
 } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 import { API_BASE_URL } from '@/config/constants'
+import { useCopy } from '@/lib/use-copy'
 import { getCsrfToken } from '@/lib/csrf'
 import { useAuthStore } from '@/store/auth-store'
+
+import {
+  buildCopyText,
+  loadPrefs,
+  savePrefs,
+  type CopyImageFormat,
+  type CopyLinkFormat,
+} from '../copy-format'
 
 type Status = 'queued' | 'uploading' | 'done' | 'failed'
 
@@ -52,22 +73,30 @@ function formatBytes(bytes: number): string {
   return `${(bytes / Math.pow(1024, i)).toFixed(i === 0 ? 0 : 1)} ${units[i]}`
 }
 
-const STATUS_MAP: Record<Status, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
-  queued: { label: '等待中', variant: 'outline' },
-  uploading: { label: '上传中', variant: 'secondary' },
-  done: { label: '完成', variant: 'default' },
-  failed: { label: '失败', variant: 'destructive' },
+const STATUS_VARIANT: Record<Status, 'default' | 'secondary' | 'destructive' | 'outline'> = {
+  queued: 'outline',
+  uploading: 'secondary',
+  done: 'default',
+  failed: 'destructive',
 }
 
 export default function Upload() {
+  const { t } = useTranslation()
   const [items, setItems] = useState<QueueItem[]>([])
   const [visibility, setVisibility] = useState<'public' | 'private'>('public')
   const [dragging, setDragging] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [linkFormat, setLinkFormat] = useState<CopyLinkFormat>(() => loadPrefs().link)
+  const [imageFormat, setImageFormat] = useState<CopyImageFormat>(() => loadPrefs().image)
   const inputRef = useRef<HTMLInputElement>(null)
   const navigate = useNavigate()
   const qc = useQueryClient()
   const refreshUser = useAuthStore((s) => s.refreshUser)
+  const { copied, copy } = useCopy()
+
+  useEffect(() => {
+    savePrefs({ link: linkFormat, image: imageFormat })
+  }, [linkFormat, imageFormat])
 
   const itemsRef = useRef(items)
   useEffect(() => {
@@ -136,17 +165,17 @@ export default function Upload() {
           if (json.code === 0 && json.data?.results?.length) {
             const r = json.data.results[0]
             failed = !r.success
-            if (failed) errMsg = r.error || `错误码 ${r.error_code || '?'}`
+            if (failed) errMsg = r.error || t('upload.toast.errorCode', { code: r.error_code || '?' })
             else link = r.unique_link || ''
           } else if (json.code !== 0) {
             failed = true
-            errMsg = json.message || `错误码 ${json.code}`
+            errMsg = json.message || t('upload.toast.errorCode', { code: json.code })
           }
         } catch {
           failed = true
-          errMsg = '响应解析失败'
+          errMsg = t('upload.toast.parseFailed')
         }
-        if (failed && errMsg) toast.error(`${item.file.name}: ${errMsg}`)
+        if (failed && errMsg) toast.error(t('upload.toast.itemFailed', { name: item.file.name, msg: errMsg }))
         patch({ status: failed ? 'failed' : 'done', progress: 100, uniqueLink: link || undefined })
         resolve(failed ? 'failed' : 'done')
       }
@@ -169,9 +198,9 @@ export default function Upload() {
     refreshUser()
     const ok = statuses.filter((s) => s === 'done').length
     const fail = statuses.length - ok
-    if (fail === 0) toast.success(`已上传 ${ok} 张图片`)
-    else if (ok === 0) toast.error('上传失败')
-    else toast.warning(`${ok} 张成功，${fail} 张失败`)
+    if (fail === 0) toast.success(t('upload.toast.uploadSuccess', { count: ok }))
+    else if (ok === 0) toast.error(t('upload.toast.uploadAllFailed'))
+    else toast.warning(t('upload.toast.uploadPartial', { ok, fail }))
   }
 
   const onDrop = (e: React.DragEvent) => {
@@ -184,15 +213,20 @@ export default function Upload() {
   const completedLinks = items.filter((i) => i.status === 'done' && i.uniqueLink)
 
   const copyAllLinks = () => {
-    const urls = completedLinks.map((i) => `${window.location.origin}/i/${i.uniqueLink}.webp?q=85`)
-    if (!urls.length) return
-    navigator.clipboard.writeText(urls.join('\n'))
-    toast.success(`已复制 ${urls.length} 个链接`)
+    if (!completedLinks.length) return
+    const text = buildCopyText(
+      window.location.origin,
+      completedLinks.map((i) => ({ uniqueLink: i.uniqueLink!, fileName: i.file.name })),
+      linkFormat,
+      imageFormat,
+    )
+    const fmt = `${t(`upload.copy.linkFormats.${linkFormat}`)}·${t(`upload.copy.imageFormats.${imageFormat}`)}`
+    copy(text, t('upload.toast.copied', { count: completedLinks.length, format: fmt }))
   }
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">上传图片</h1>
+      <h1 className="text-2xl font-bold">{t('upload.title')}</h1>
 
       <div
         role="button"
@@ -225,15 +259,15 @@ export default function Upload() {
           }}
         />
         <IconUpload className="size-10 text-muted-foreground" />
-        <p className="mt-3 font-medium">点击或拖拽图片到此处上传</p>
+        <p className="mt-3 font-medium">{t('upload.dropzone')}</p>
         <p className="mt-1 text-sm text-muted-foreground">
-          支持 JPG / PNG / GIF / WebP 等格式，可多选
+          {t('upload.dropzoneHint')}
         </p>
       </div>
 
       <Card>
         <CardContent className="flex items-center gap-3 p-5">
-          <Label className="text-sm">可见性</Label>
+          <Label className="text-sm">{t('upload.visibility')}</Label>
           <Select
             value={visibility}
             onValueChange={(v) => setVisibility(v as 'public' | 'private')}
@@ -242,8 +276,8 @@ export default function Upload() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="public">公开</SelectItem>
-              <SelectItem value="private">私密</SelectItem>
+              <SelectItem value="public">{t('upload.visibilityPublic')}</SelectItem>
+              <SelectItem value="private">{t('upload.visibilityPrivate')}</SelectItem>
             </SelectContent>
           </Select>
         </CardContent>
@@ -253,7 +287,7 @@ export default function Upload() {
         <Card>
           <CardContent className="space-y-3 p-5">
             <div className="flex items-center justify-between">
-              <p className="font-medium">上传队列（{items.length}）</p>
+              <p className="font-medium">{t('upload.queue', { count: items.length })}</p>
               <div className="flex gap-2">
                 <Button
                   size="sm"
@@ -265,7 +299,7 @@ export default function Upload() {
                   ) : (
                     <IconUpload />
                   )}
-                  {uploading ? '上传中…' : '开始上传'}
+                  {uploading ? t('upload.uploading') : t('upload.startUpload')}
                 </Button>
                 <Button
                   size="sm"
@@ -273,24 +307,59 @@ export default function Upload() {
                   disabled={uploading}
                   onClick={() => navigate('/images')}
                 >
-                  完成
+                  {t('upload.done')}
                 </Button>
                 {completedLinks.length > 0 && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={copyAllLinks}
-                  >
-                    <IconLink />
-                    复制全部链接 ({completedLinks.length})
-                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button size="sm" variant="outline">
+                        {copied ? (
+                          <IconCheck className="text-primary" />
+                        ) : (
+                          <IconLink />
+                        )}
+                        {t('upload.copy.button')} ({completedLinks.length})
+                        <IconChevronDown className="size-3.5 opacity-60" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="min-w-56">
+                      <DropdownMenuLabel>{t('upload.copy.linkFormatLabel')}</DropdownMenuLabel>
+                      <DropdownMenuRadioGroup
+                        value={linkFormat}
+                        onValueChange={(v) => setLinkFormat(v as CopyLinkFormat)}
+                      >
+                        {(['url', 'markdown', 'bbs', 'html'] as const).map((f) => (
+                          <DropdownMenuRadioItem key={f} value={f}>
+                            {t(`upload.copy.linkFormats.${f}`)}
+                          </DropdownMenuRadioItem>
+                        ))}
+                      </DropdownMenuRadioGroup>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuLabel>{t('upload.copy.imageFormatLabel')}</DropdownMenuLabel>
+                      <DropdownMenuRadioGroup
+                        value={imageFormat}
+                        onValueChange={(v) => setImageFormat(v as CopyImageFormat)}
+                      >
+                        {(['original', 'webp', 'avif'] as const).map((f) => (
+                          <DropdownMenuRadioItem key={f} value={f}>
+                            {t(`upload.copy.imageFormats.${f}`)}
+                          </DropdownMenuRadioItem>
+                        ))}
+                      </DropdownMenuRadioGroup>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={copyAllLinks}>
+                        <IconLink />
+                        {t('upload.copy.action', { count: completedLinks.length })}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 )}
               </div>
             </div>
             <Separator />
             <ul className="space-y-3">
               {items.map((item) => {
-                const st = STATUS_MAP[item.status]
+                const variant = STATUS_VARIANT[item.status]
                 return (
                   <li key={item.id} className="flex items-center gap-3">
                     <img
@@ -309,12 +378,12 @@ export default function Upload() {
                       </div>
                       <Progress value={item.progress} className="h-2" />
                     </div>
-                    <Badge variant={st.variant} className="shrink-0">
+                    <Badge variant={variant} className="shrink-0">
                       {item.status === 'done' && <IconCheck />}
                       {item.status === 'uploading' && (
                         <IconLoader2 className="animate-spin" />
                       )}
-                      {st.label}
+                      {t(`upload.status.${item.status}`)}
                     </Badge>
                     <Button
                       type="button"
@@ -322,7 +391,7 @@ export default function Upload() {
                       variant="ghost"
                       disabled={uploading}
                       onClick={() => removeItem(item.id)}
-                      aria-label="移除"
+                      aria-label={t('upload.remove')}
                     >
                       <IconX />
                     </Button>
@@ -337,7 +406,7 @@ export default function Upload() {
       {items.length === 0 && (
         <div className="grid place-items-center py-6 text-center text-muted-foreground">
           <IconPhoto className="mb-2 size-8 opacity-40" />
-          <p className="text-sm">还没有添加任何图片</p>
+          <p className="text-sm">{t('upload.empty')}</p>
         </div>
       )}
     </div>
