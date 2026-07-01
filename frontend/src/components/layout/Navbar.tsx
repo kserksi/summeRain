@@ -22,7 +22,7 @@ export function Navbar() {
       <div className="mx-auto flex h-16 max-w-7xl items-center gap-4 px-6">
         <Link to="/" className="flex items-center gap-2 text-lg font-extrabold">
           <span className="text-primary text-2xl">⬢</span>
-          <span>ImgCloud</span>
+          <span>月兔图床</span>
           <span className="text-accent">.</span>
         </Link>
         <nav className="hidden flex-1 items-center gap-1 md:flex">

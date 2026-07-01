@@ -52,7 +52,7 @@ export default function LoginPage() {
       <Card className="w-full max-w-md rounded-3xl shadow-2xl">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-semibold">{t('common.login')}</CardTitle>
-          <CardDescription>登录你的 ImgCloud 账号</CardDescription>
+          <CardDescription>登录你的 月兔图床 账号</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4" noValidate>
