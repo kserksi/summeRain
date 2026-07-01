@@ -1,6 +1,6 @@
 {
   "common": {
-    "appName": "ImgCloud",
+    "appName": "月兔图床",
     "loading": "加载中…",
     "error": "出错了",
     "retry": "重试",
@@ -13,7 +13,9 @@
     "upload": "上传",
     "logout": "退出",
     "login": "登录",
-    "register": "注册"
+    "register": "注册",
+    "copySuccess": "已复制到剪贴板",
+    "copyFailed": "复制失败，请检查浏览器权限"
   },
   "nav": {
     "home": "首页",
@@ -43,5 +45,49 @@
     "4042": "私密图片令牌已吊销",
     "1004": "人机验证服务暂时不可用",
     "1003": "图片处理服务错误，图片可能过大（4K+ 需服务器增大 imgproxy 内存）"
+  },
+  "upload": {
+    "title": "上传图片",
+    "dropzone": "点击或拖拽图片到此处上传",
+    "dropzoneHint": "支持 JPG / PNG / GIF / WebP 等格式，可多选",
+    "visibility": "可见性",
+    "visibilityPublic": "公开",
+    "visibilityPrivate": "私密",
+    "queue": "上传队列（{{count}}）",
+    "startUpload": "开始上传",
+    "uploading": "上传中…",
+    "done": "完成",
+    "remove": "移除",
+    "empty": "还没有添加任何图片",
+    "status": {
+      "queued": "等待中",
+      "uploading": "上传中",
+      "done": "完成",
+      "failed": "失败"
+    },
+    "toast": {
+      "uploadSuccess": "已上传 {{count}} 张图片",
+      "uploadAllFailed": "上传失败",
+      "uploadPartial": "{{ok}} 张成功，{{fail}} 张失败",
+      "itemFailed": "{{name}}: {{msg}}",
+      "copied": "已复制 {{count}} 个链接（{{format}}）"
+    },
+    "copy": {
+      "button": "复制全部链接",
+      "linkFormatLabel": "链接格式",
+      "imageFormatLabel": "图片格式",
+      "linkFormats": {
+        "url": "URL",
+        "markdown": "Markdown",
+        "bbs": "BBS (BBCode)",
+        "html": "HTML"
+      },
+      "imageFormats": {
+        "original": "原图",
+        "webp": "WebP",
+        "avif": "AVIF"
+      },
+      "action": "复制 {{count}} 个链接"
+    }
   }
 }
