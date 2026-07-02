@@ -7,6 +7,7 @@ import {
   IconLink,
   IconLoader2,
   IconPhoto,
+  IconRefresh,
   IconUpload,
   IconX,
 } from '@tabler/icons-react'
@@ -43,6 +44,7 @@ import {
   type CopyImageFormat,
   type CopyLinkFormat,
 } from '../copy-format'
+import { runWithConcurrency } from '../upload-concurrency'
 
 type Status = 'queued' | 'uploading' | 'done' | 'failed'
 
@@ -71,6 +73,11 @@ const STATUS_VARIANT: Record<Status, 'default' | 'secondary' | 'destructive' | '
   done: 'default',
   failed: 'destructive',
 }
+
+const CONCURRENCY = 5
+
+const ALLOWED_EXTS = ['.png', '.jpg', '.jpeg', '.webp', '.gif']
+const ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif']
 
 export default function Upload() {
   const { t } = useTranslation()
@@ -104,7 +111,11 @@ export default function Upload() {
 
   const addFiles = useCallback((files: FileList | File[]) => {
     const next = Array.from(files)
-      .filter((f) => f.type.startsWith('image/'))
+      .filter((f) => {
+        const dot = f.name.lastIndexOf('.')
+        const ext = dot >= 0 ? f.name.slice(dot).toLowerCase() : ''
+        return ALLOWED_EXTS.includes(ext) && ALLOWED_TYPES.includes(f.type)
+      })
       .map((f) => ({
         id: `${f.name}-${f.size}-${Math.random().toString(36).slice(2, 8)}`,
         file: f,
@@ -181,11 +192,10 @@ export default function Upload() {
       xhr.send(fd)
     })
 
-  const startUpload = async () => {
-    const pending = items.filter((i) => i.status === 'queued')
-    if (!pending.length || uploading) return
+  const runUploads = async (toUpload: QueueItem[]) => {
+    if (!toUpload.length || uploading) return
     setUploading(true)
-    const statuses = await Promise.all(pending.map(uploadOne))
+    const statuses = await runWithConcurrency(toUpload, uploadOne, CONCURRENCY)
     setUploading(false)
     qc.invalidateQueries({ queryKey: ['images'] })
     refreshUser()
@@ -196,6 +206,11 @@ export default function Upload() {
     else toast.warning(t('upload.toast.uploadPartial', { ok, fail }))
   }
 
+  const startUpload = () => runUploads(items.filter((i) => i.status === 'queued'))
+  const retryAllFailed = () => runUploads(items.filter((i) => i.status === 'failed'))
+  const retryOne = (id: string) =>
+    runUploads(items.filter((i) => i.id === id && i.status === 'failed'))
+
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault()
     setDragging(false)
@@ -204,6 +219,7 @@ export default function Upload() {
 
   const hasQueued = items.some((i) => i.status === 'queued')
   const completedLinks = items.filter((i) => i.status === 'done' && i.uniqueLink)
+  const failedCount = items.filter((i) => i.status === 'failed').length
 
   const copyAllLinks = async () => {
     if (!completedLinks.length) return
@@ -244,7 +260,7 @@ export default function Upload() {
         <input
           ref={inputRef}
           type="file"
-          accept="image/*"
+          accept=".png,.jpg,.jpeg,.webp,.gif,image/png,image/jpeg,image/webp,image/gif"
           multiple
           className="hidden"
           onChange={(e) => {
@@ -303,6 +319,17 @@ export default function Upload() {
                 >
                   {t('upload.done')}
                 </Button>
+                {failedCount > 0 && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={uploading}
+                    onClick={retryAllFailed}
+                  >
+                    <IconRefresh />
+                    {t('upload.retryAll', { count: failedCount })}
+                  </Button>
+                )}
                 {completedLinks.length > 0 && (
                   <Popover open={copyMenuOpen} onOpenChange={setCopyMenuOpen}>
                     <PopoverTrigger asChild>
@@ -407,6 +434,18 @@ export default function Upload() {
                       )}
                       {t(`upload.status.${item.status}`)}
                     </Badge>
+                    {item.status === 'failed' && (
+                      <Button
+                        type="button"
+                        size="icon-sm"
+                        variant="ghost"
+                        disabled={uploading}
+                        onClick={() => retryOne(item.id)}
+                        aria-label={t('upload.retry')}
+                      >
+                        <IconRefresh />
+                      </Button>
+                    )}
                     <Button
                       type="button"
                       size="icon-sm"
