@@ -90,6 +90,8 @@
         "avif": "AVIF"
       },
       "action": "复制 {{count}} 个链接"
-    }
+    },
+    "retry": "重试",
+    "retryAll": "重试全部失败（{{count}}）"
   }
 }
