@@ -3,6 +3,7 @@
 
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router'
+import { useTranslation } from 'react-i18next'
 import {
   IconUsers,
   IconPhoto,
@@ -24,14 +25,15 @@ function formatBytes(bytes: number): string {
 }
 
 const STAT_CARDS = [
-  { key: 'total_users', label: '总用户数', icon: IconUsers, format: (v: number) => v.toLocaleString() },
-  { key: 'total_images', label: '图片总数', icon: IconPhoto, format: (v: number) => v.toLocaleString() },
-  { key: 'storage_used', label: '存储用量', icon: IconDeviceFloppy, format: formatBytes },
-  { key: 'active_users', label: '活跃用户', icon: IconChartBar, format: (v: number) => v.toLocaleString() },
-  { key: 'total_sessions', label: '会话总数', icon: IconShieldCheck, format: (v: number) => v.toLocaleString() },
+  { key: 'total_users', labelKey: 'admin.overview.totalUsers', icon: IconUsers, format: (v: number) => v.toLocaleString() },
+  { key: 'total_images', labelKey: 'admin.overview.totalImages', icon: IconPhoto, format: (v: number) => v.toLocaleString() },
+  { key: 'storage_used', labelKey: 'admin.overview.storageUsed', icon: IconDeviceFloppy, format: formatBytes },
+  { key: 'active_users', labelKey: 'admin.overview.activeUsers', icon: IconChartBar, format: (v: number) => v.toLocaleString() },
+  { key: 'total_sessions', labelKey: 'admin.overview.totalSessions', icon: IconShieldCheck, format: (v: number) => v.toLocaleString() },
 ] as const
 
 export default function Overview() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const { data, isLoading, error } = useAdminStats()
 
@@ -45,8 +47,8 @@ export default function Overview() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="font-heading text-2xl font-semibold">后台概览</h1>
-        <p className="mt-1 text-sm text-muted-foreground">系统运行数据一览</p>
+        <h1 className="font-heading text-2xl font-semibold">{t('admin.overview.title')}</h1>
+        <p className="mt-1 text-sm text-muted-foreground">{t('admin.overview.subtitle')}</p>
       </div>
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5">
@@ -65,7 +67,7 @@ export default function Overview() {
                   ) : (
                     <div className="text-2xl font-bold tabular-nums">{value}</div>
                   )}
-                  <div className="mt-0.5 text-sm text-muted-foreground">{card.label}</div>
+                  <div className="mt-0.5 text-sm text-muted-foreground">{t(card.labelKey)}</div>
                 </div>
               </CardContent>
             </Card>

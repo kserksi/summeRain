@@ -4,6 +4,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router'
 import { toast } from 'sonner'
+import i18n from '@/i18n'
 import { QUERY_KEYS } from '@/config/constants'
 import { useAuthStore } from '@/store/auth-store'
 import { getProfile, changePassword } from './api'
@@ -24,7 +25,7 @@ export function useChangePassword() {
     onSuccess: () => {
       queryClient.clear()
       useAuthStore.getState().clear()
-      toast.success('密码已修改，请重新登录')
+      toast.success(i18n.t('profile.password.changed'))
       navigate('/login', { replace: true })
     },
   })

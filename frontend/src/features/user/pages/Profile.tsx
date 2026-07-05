@@ -5,6 +5,8 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
+import { useTranslation } from 'react-i18next'
+import i18n from '@/i18n'
 import {
   IconUser,
   IconMail,
@@ -34,12 +36,12 @@ import { useProfile, useChangePassword } from '../hooks'
 
 const passwordSchema = z
   .object({
-    old_password: z.string().min(1, '请输入当前密码'),
-    new_password: z.string().min(8, '密码至少需要 8 个字符'),
-    confirm_password: z.string().min(1, '请再次输入新密码'),
+    old_password: z.string().min(1, i18n.t('profile.password.currentRequired')),
+    new_password: z.string().min(8, i18n.t('profile.password.newMinLength')),
+    confirm_password: z.string().min(1, i18n.t('profile.password.confirmRequired')),
   })
   .refine((data) => data.new_password === data.confirm_password, {
-    message: '两次输入的密码不一致',
+    message: i18n.t('profile.password.mismatch'),
     path: ['confirm_password'],
   })
 
@@ -63,26 +65,28 @@ function formatDate(iso: string): string {
 }
 
 function RoleBadge({ role }: { role: UserProfile['role'] }) {
+  const { t } = useTranslation()
   if (role === USER_ROLES.ADMIN) {
     return (
       <Badge className="bg-blue-500/10 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400">
-        管理员
+        {t('profile.role.admin')}
       </Badge>
     )
   }
-  return <Badge variant="default">普通用户</Badge>
+  return <Badge variant="default">{t('profile.role.user')}</Badge>
 }
 
 function StatusBadge({ status }: { status: UserProfile['status'] }) {
+  const { t } = useTranslation()
   if (status === USER_STATUS.SUSPENDED) {
-    return <Badge variant="destructive">已封禁</Badge>
+    return <Badge variant="destructive">{t('profile.status.suspended')}</Badge>
   }
   if (status === USER_STATUS.PENDING) {
-    return <Badge variant="outline">待激活</Badge>
+    return <Badge variant="outline">{t('profile.status.pending')}</Badge>
   }
   return (
     <Badge className="bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-400">
-      正常
+      {t('profile.status.active')}
     </Badge>
   )
 }
@@ -108,13 +112,14 @@ function InfoRow({
 }
 
 function AccountCard() {
+  const { t } = useTranslation()
   const { data: profile, isLoading, isError } = useProfile()
 
   return (
     <Card className="rounded-3xl">
       <CardHeader>
-        <CardTitle className="text-lg">账户信息</CardTitle>
-        <CardDescription>查看你的账户与存储使用情况</CardDescription>
+        <CardTitle className="text-lg">{t('profile.account.title')}</CardTitle>
+        <CardDescription>{t('profile.account.description')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-1">
         {isLoading ? (
@@ -128,27 +133,27 @@ function AccountCard() {
           </div>
         ) : isError || !profile ? (
           <p className="py-6 text-center text-sm text-muted-foreground">
-            加载账户信息失败，请稍后重试
+            {t('profile.account.loadFailed')}
           </p>
         ) : (
           <>
-            <InfoRow icon={<IconUser className="size-4" />} label="用户名">
+            <InfoRow icon={<IconUser className="size-4" />} label={t('profile.account.username')}>
               {profile.username}
             </InfoRow>
             <Separator />
-            <InfoRow icon={<IconMail className="size-4" />} label="邮箱">
+            <InfoRow icon={<IconMail className="size-4" />} label={t('profile.account.email')}>
               {profile.email}
             </InfoRow>
             <Separator />
-            <InfoRow icon={<IconShieldCheck className="size-4" />} label="角色">
+            <InfoRow icon={<IconShieldCheck className="size-4" />} label={t('profile.account.role')}>
               <RoleBadge role={profile.role} />
             </InfoRow>
             <Separator />
-            <InfoRow icon={<IconShieldCheck className="size-4" />} label="状态">
+            <InfoRow icon={<IconShieldCheck className="size-4" />} label={t('profile.account.status')}>
               <StatusBadge status={profile.status} />
             </InfoRow>
             <Separator />
-            <InfoRow icon={<IconCalendar className="size-4" />} label="注册时间">
+            <InfoRow icon={<IconCalendar className="size-4" />} label={t('profile.account.createdAt')}>
               {formatDate(profile.created_at)}
             </InfoRow>
             <Separator />
@@ -156,7 +161,7 @@ function AccountCard() {
               <div className="flex items-center justify-between text-sm">
                 <span className="flex items-center gap-2.5 text-muted-foreground">
                   <IconDeviceFloppy className="size-4 text-foreground/70" />
-                  存储用量
+                  {t('profile.account.storageUsage')}
                 </span>
                 <span className="font-medium">
                   {formatBytes(profile.storage_used)} / {formatBytes(profile.storage_quota)}
@@ -164,7 +169,7 @@ function AccountCard() {
               </div>
               <Progress value={profile.storage_percent} />
               <p className="text-right text-xs text-muted-foreground">
-                已使用 {profile.storage_percent.toFixed(1)}%
+                {t('profile.account.usedPercent', { percent: profile.storage_percent.toFixed(1) })}
               </p>
             </div>
           </>
@@ -175,6 +180,7 @@ function AccountCard() {
 }
 
 function PasswordCard() {
+  const { t } = useTranslation()
   const { mutateAsync, isPending } = useChangePassword()
   const {
     register,
@@ -193,7 +199,7 @@ function PasswordCard() {
         new_password: values.new_password,
       })
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : '修改密码失败，请稍后重试')
+      toast.error(err instanceof ApiError ? err.message : t('profile.password.changeFailed'))
       reset({ ...values, old_password: '' })
     }
   }
@@ -201,15 +207,15 @@ function PasswordCard() {
   return (
     <Card className="rounded-3xl">
       <CardHeader>
-        <CardTitle className="text-lg">修改密码</CardTitle>
+        <CardTitle className="text-lg">{t('profile.password.title')}</CardTitle>
         <CardDescription>
-          修改成功后将自动退出登录，请使用新密码重新登录
+          {t('profile.password.description')}
         </CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="old_password">当前密码</Label>
+            <Label htmlFor="old_password">{t('profile.password.current')}</Label>
             <div className="relative">
               <IconLock className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -226,7 +232,7 @@ function PasswordCard() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="new_password">新密码</Label>
+            <Label htmlFor="new_password">{t('profile.password.new')}</Label>
             <div className="relative">
               <IconLock className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -240,12 +246,12 @@ function PasswordCard() {
             {errors.new_password ? (
               <p className="text-xs text-destructive">{errors.new_password.message}</p>
             ) : (
-              <p className="text-xs text-muted-foreground">至少 8 个字符</p>
+              <p className="text-xs text-muted-foreground">{t('profile.password.minLengthHint')}</p>
             )}
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="confirm_password">确认新密码</Label>
+            <Label htmlFor="confirm_password">{t('profile.password.confirm')}</Label>
             <div className="relative">
               <IconLock className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -263,7 +269,7 @@ function PasswordCard() {
 
           <Button type="submit" className="w-full" disabled={isPending}>
             <IconDeviceFloppy className="size-4" />
-            {isPending ? '保存中…' : '保存新密码'}
+            {isPending ? t('profile.password.saving') : t('profile.password.save')}
           </Button>
         </form>
       </CardContent>
@@ -272,11 +278,12 @@ function PasswordCard() {
 }
 
 export default function ProfilePage() {
+  const { t } = useTranslation()
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div>
-        <h1 className="font-heading text-2xl font-bold">个人资料</h1>
-        <p className="mt-1 text-sm text-muted-foreground">管理你的账户信息与安全设置</p>
+        <h1 className="font-heading text-2xl font-bold">{t('profile.title')}</h1>
+        <p className="mt-1 text-sm text-muted-foreground">{t('profile.subtitle')}</p>
       </div>
       <AccountCard />
       <PasswordCard />

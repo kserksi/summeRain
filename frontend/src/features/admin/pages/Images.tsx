@@ -4,6 +4,7 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { useTranslation } from 'react-i18next'
 import {
   IconSearch,
   IconTrash,
@@ -52,14 +53,15 @@ function formatBytes(bytes: number): string {
 }
 
 function DeleteImageButton({ image }: { image: AdminImage }) {
+  const { t } = useTranslation()
   const qc = useQueryClient()
   const mutation = useMutation({
     mutationFn: () => api.del<void>(`/admin/images/${image.id}`),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin', 'images'] })
-      toast.success('图片已删除')
+      toast.success(t('admin.images.deleted'))
     },
-    onError: () => toast.error('删除失败，请重试'),
+    onError: () => toast.error(t('admin.images.deleteFailed')),
   })
 
   return (
@@ -67,24 +69,24 @@ function DeleteImageButton({ image }: { image: AdminImage }) {
       <AlertDialogTrigger asChild>
         <Button size="sm" variant="destructive">
           <IconTrash className="size-4" />
-          删除
+          {t('common.delete')}
         </Button>
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>确认删除该图片？</AlertDialogTitle>
+          <AlertDialogTitle>{t('admin.images.confirmDeleteTitle')}</AlertDialogTitle>
           <AlertDialogDescription>
-            删除后该图片将无法恢复，相关数据将被清除。
+            {t('admin.images.deleteDesc')}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel>取消</AlertDialogCancel>
+          <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
           <AlertDialogAction
             variant="destructive"
             disabled={mutation.isPending}
             onClick={() => mutation.mutate()}
           >
-            确认
+            {t('common.confirm')}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
@@ -93,6 +95,7 @@ function DeleteImageButton({ image }: { image: AdminImage }) {
 }
 
 export default function Images() {
+  const { t } = useTranslation()
   const [page, setPage] = useState(1)
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
   const [search, setSearch] = useState('')
@@ -117,13 +120,15 @@ export default function Images() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="font-heading text-2xl font-semibold">图片管理</h1>
-          <p className="mt-1 text-sm text-muted-foreground">共 {total} 张图片</p>
+          <h1 className="font-heading text-2xl font-semibold">{t('admin.images.title')}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {t('admin.images.totalCount', { total })}
+          </p>
         </div>
         <div className="relative w-full max-w-xs">
           <IconSearch className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="搜索文件名"
+            placeholder={t('admin.images.searchPlaceholder')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9"
@@ -135,14 +140,14 @@ export default function Images() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[100px]">预览</TableHead>
-              <TableHead>文件名</TableHead>
-              <TableHead>所有者</TableHead>
-              <TableHead>可见性</TableHead>
-              <TableHead className="text-right">大小</TableHead>
-              <TableHead className="text-right">浏览</TableHead>
-              <TableHead>上传时间</TableHead>
-              <TableHead className="text-right">操作</TableHead>
+              <TableHead className="w-[100px]">{t('admin.images.colPreview')}</TableHead>
+              <TableHead>{t('admin.images.colFilename')}</TableHead>
+              <TableHead>{t('admin.images.colOwner')}</TableHead>
+              <TableHead>{t('admin.images.colVisibility')}</TableHead>
+              <TableHead className="text-right">{t('images.shared.size')}</TableHead>
+              <TableHead className="text-right">{t('images.shared.views')}</TableHead>
+              <TableHead>{t('images.shared.uploadedAt')}</TableHead>
+              <TableHead className="text-right">{t('admin.shared.colActions')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -159,7 +164,7 @@ export default function Images() {
             ) : filtered.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={8} className="py-12 text-center text-muted-foreground">
-                  {search ? '没有匹配的图片' : '暂无图片'}
+                  {search ? t('admin.images.noMatch') : t('admin.images.empty')}
                 </TableCell>
               </TableRow>
             ) : (
@@ -181,10 +186,10 @@ export default function Images() {
                   <TableCell>
                     {img.visibility === 'public' ? (
                       <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-                        公开
+                        {t('images.shared.public')}
                       </Badge>
                     ) : (
-                      <Badge variant="secondary">私有</Badge>
+                      <Badge variant="secondary">{t('admin.images.private')}</Badge>
                     )}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
@@ -215,7 +220,7 @@ export default function Images() {
           size="icon-sm"
           onClick={() => setPage((p) => Math.max(1, p - 1))}
           disabled={page <= 1 || isLoading}
-          aria-label="上一页"
+          aria-label={t('admin.shared.prevPage')}
         >
           <IconChevronLeft className="size-4" />
         </Button>
@@ -227,7 +232,7 @@ export default function Images() {
           size="icon-sm"
           onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
           disabled={page >= totalPages || isLoading}
-          aria-label="下一页"
+          aria-label={t('admin.shared.nextPage')}
         >
           <IconChevronRight className="size-4" />
         </Button>

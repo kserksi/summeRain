@@ -3,6 +3,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import i18n from '@/i18n'
 import { PAGINATION, QUERY_KEYS, USER_STATUS } from '@/config/constants'
 import {
   listUsers,
@@ -32,9 +33,9 @@ export function useSetUserStatus() {
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: QUERY_KEYS.adminUsers })
       qc.invalidateQueries({ queryKey: QUERY_KEYS.adminStats })
-      toast.success(vars.status === USER_STATUS.SUSPENDED ? '已封禁该用户' : '已解封该用户')
+      toast.success(vars.status === USER_STATUS.SUSPENDED ? i18n.t('admin.users.suspendedUser') : i18n.t('admin.users.unsuspendedUser'))
     },
-    onError: () => toast.error('操作失败，请重试'),
+    onError: () => toast.error(i18n.t('admin.shared.actionFailed')),
   })
 }
 
@@ -58,9 +59,9 @@ export function useUpdateConfigs() {
     mutationFn: (items: { key: string; value: string }[]) => updateConfigs(items),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: QUERY_KEYS.adminConfigs })
-      toast.success('配置已保存')
+      toast.success(i18n.t('admin.configs.saved'))
     },
-    onError: () => toast.error('保存失败，请重试'),
+    onError: () => toast.error(i18n.t('admin.configs.saveFailed')),
   })
 }
 
@@ -79,9 +80,9 @@ export function useRequestDeletion() {
       requestUserDeletion(id, username, adminUsername),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: QUERY_KEYS.adminUsers })
-      toast.success('已发送删除请求')
+      toast.success(i18n.t('admin.users.deletionRequested'))
     },
-    onError: () => toast.error('操作失败，请重试'),
+    onError: () => toast.error(i18n.t('admin.shared.actionFailed')),
   })
 }
 
@@ -91,9 +92,9 @@ export function useCancelDeletion() {
     mutationFn: (id: number) => cancelUserDeletion(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: QUERY_KEYS.adminUsers })
-      toast.success('已取消删除请求')
+      toast.success(i18n.t('admin.users.deletionCancelled'))
     },
-    onError: () => toast.error('操作失败，请重试'),
+    onError: () => toast.error(i18n.t('admin.shared.actionFailed')),
   })
 }
 
@@ -104,18 +105,18 @@ export function useUpdateQuota() {
       updateUserQuota(id, storageQuota),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: QUERY_KEYS.adminUsers })
-      toast.success('配额已更新')
+      toast.success(i18n.t('admin.users.quotaUpdated'))
     },
-    onError: () => toast.error('操作失败，请重试'),
+    onError: () => toast.error(i18n.t('admin.shared.actionFailed')),
   })
 }
 
 export function useTestR2() {
   return useMutation({
     mutationFn: testR2Connection,
-    onSuccess: () => toast.success('R2 连接测试成功'),
+    onSuccess: () => toast.success(i18n.t('admin.configs.r2TestSuccess')),
     onError: (e: unknown) => {
-      const msg = e instanceof Error ? e.message : '连接测试失败'
+      const msg = e instanceof Error ? e.message : i18n.t('admin.configs.r2TestFailed')
       toast.error(msg)
     },
   })

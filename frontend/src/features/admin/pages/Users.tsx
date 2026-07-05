@@ -4,6 +4,7 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import {
   IconSearch,
   IconBan,
@@ -81,9 +82,12 @@ function getRemainingHours(deletionScheduledAt?: string | null): number | null {
 }
 
 function StatusBadge({ user }: { user: AdminUser }) {
+  const { t } = useTranslation()
   if (user.status === USER_STATUS.ACTIVE) {
     return (
-      <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">正常</Badge>
+      <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+        {t('admin.users.status.active')}
+      </Badge>
     )
   }
   if (user.status === PENDING_DELETION) {
@@ -91,15 +95,16 @@ function StatusBadge({ user }: { user: AdminUser }) {
     return (
       <Badge className="gap-1 bg-amber-500/10 text-amber-600 dark:text-amber-400">
         <IconClockCancel className="size-3.5" />
-        注销中
-        {hours !== null && hours > 0 ? `（剩 ${hours}h）` : ''}
+        {t('admin.users.status.deleting')}
+        {hours !== null && hours > 0 ? t('admin.users.status.remainingHours', { hours }) : ''}
       </Badge>
     )
   }
-  return <Badge variant="destructive">封禁</Badge>
+  return <Badge variant="destructive">{t('admin.users.status.banned')}</Badge>
 }
 
 function BanUnbanActions({ user }: { user: AdminUser }) {
+  const { t } = useTranslation()
   const setStatus = useSetUserStatus()
   const isSuspended = user.status === USER_STATUS.SUSPENDED
 
@@ -108,22 +113,22 @@ function BanUnbanActions({ user }: { user: AdminUser }) {
       <AlertDialogTrigger asChild>
         <Button size="sm" variant={isSuspended ? 'outline' : 'destructive'}>
           {isSuspended ? <IconCheck className="size-4" /> : <IconBan className="size-4" />}
-          {isSuspended ? '解封' : '封禁'}
+          {isSuspended ? t('admin.users.unban') : t('admin.users.ban')}
         </Button>
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>
-            {isSuspended ? '确认解封该用户？' : '确认封禁该用户？'}
+            {isSuspended ? t('admin.users.confirmUnbanTitle') : t('admin.users.confirmBanTitle')}
           </AlertDialogTitle>
           <AlertDialogDescription>
             {isSuspended
-              ? '解封后该用户将恢复正常登录与使用。'
-              : '封禁后该用户将无法登录，已上传的图片不受影响。'}
+              ? t('admin.users.unbanDesc')
+              : t('admin.users.banDesc')}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel>取消</AlertDialogCancel>
+          <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
           <AlertDialogAction
             variant={isSuspended ? 'default' : 'destructive'}
             disabled={setStatus.isPending}
@@ -134,7 +139,7 @@ function BanUnbanActions({ user }: { user: AdminUser }) {
               })
             }
           >
-            确认
+            {t('common.confirm')}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
@@ -143,6 +148,7 @@ function BanUnbanActions({ user }: { user: AdminUser }) {
 }
 
 function QuotaEditDialog({ user }: { user: AdminUser }) {
+  const { t } = useTranslation()
   const qc = useQueryClient()
   const [open, setOpen] = useState(false)
   const [mb, setMb] = useState<string>(() => String(Math.round((user.storage_quota ?? 0) / 1024 / 1024)))
@@ -164,10 +170,10 @@ function QuotaEditDialog({ user }: { user: AdminUser }) {
     try {
       await api.patch(`/admin/users/${user.id}/quota`, { storage_quota: numMb * 1024 * 1024 })
       qc.invalidateQueries({ queryKey: QUERY_KEYS.adminUsers })
-      toast.success('配额已更新')
+      toast.success(t('admin.users.quotaUpdated'))
       setOpen(false)
     } catch {
-      toast.error('更新配额失败，请重试')
+      toast.error(t('admin.users.quotaUpdateFailed'))
     } finally {
       setSubmitting(false)
     }
@@ -178,19 +184,22 @@ function QuotaEditDialog({ user }: { user: AdminUser }) {
       <DialogTrigger asChild>
         <Button size="sm" variant="ghost">
           <IconDatabaseEdit className="size-4" />
-          配额
+          {t('admin.users.quota')}
         </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>调整存储配额</DialogTitle>
+          <DialogTitle>{t('admin.users.adjustQuotaTitle')}</DialogTitle>
           <DialogDescription>
-            {`当前配额：${formatBytes(user.storage_quota)} · 已用：${formatBytes(user.storage_used)}`}
+            {t('admin.users.quotaCurrentDesc', {
+              current: formatBytes(user.storage_quota),
+              used: formatBytes(user.storage_used),
+            })}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <div className="space-y-2">
-            <Label htmlFor={`quota-mb-${user.id}`}>新配额（MB）</Label>
+            <Label htmlFor={`quota-mb-${user.id}`}>{t('admin.users.newQuotaMb')}</Label>
             <Input
               id={`quota-mb-${user.id}`}
               type="number"
@@ -200,7 +209,7 @@ function QuotaEditDialog({ user }: { user: AdminUser }) {
               aria-invalid={tooLow}
             />
             {tooLow && (
-              <p className="text-xs text-destructive">最小配额为 500 MB</p>
+              <p className="text-xs text-destructive">{t('admin.users.minQuota')}</p>
             )}
           </div>
           <div className="flex flex-wrap gap-2">
@@ -219,14 +228,14 @@ function QuotaEditDialog({ user }: { user: AdminUser }) {
         </div>
         <DialogFooter>
           <DialogClose asChild>
-            <Button variant="outline">取消</Button>
+            <Button variant="outline">{t('common.cancel')}</Button>
           </DialogClose>
           <Button
             variant="default"
             disabled={submitting || !mb || tooLow || !Number.isFinite(numMb)}
             onClick={handleSave}
           >
-            {submitting ? '保存中…' : '保存'}
+            {submitting ? t('admin.shared.saving') : t('common.save')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -235,6 +244,7 @@ function QuotaEditDialog({ user }: { user: AdminUser }) {
 }
 
 function DeleteDialog({ user }: { user: AdminUser }) {
+  const { t } = useTranslation()
   const qc = useQueryClient()
   const adminUsername = useAuthStore((s) => s.user?.username) ?? ''
   const [open, setOpen] = useState(false)
@@ -252,11 +262,11 @@ function DeleteDialog({ user }: { user: AdminUser }) {
         { username: typed.trim() },
       )
       qc.invalidateQueries({ queryKey: QUERY_KEYS.adminUsers })
-      toast.success('已发起注销')
+      toast.success(t('admin.users.deletionInitiated'))
       setOpen(false)
       setTyped('')
     } catch {
-      toast.error('发起注销失败，请重试')
+      toast.error(t('admin.users.deletionInitFailed'))
     } finally {
       setSubmitting(false)
     }
@@ -273,40 +283,40 @@ function DeleteDialog({ user }: { user: AdminUser }) {
       <DialogTrigger asChild>
         <Button size="sm" variant="outline" className="text-destructive hover:text-destructive">
           <IconTrash className="size-4" />
-          注销
+          {t('admin.users.requestDelete')}
         </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-destructive">
             <IconAlertTriangle className="size-5" />
-            注销用户 {user.username}
+            {t('admin.users.deleteUserTitle', { username: user.username })}
           </DialogTitle>
           <DialogDescription>
-            此操作将立即锁定该用户，24小时后永久删除所有数据。
+            {t('admin.users.deleteDesc')}
           </DialogDescription>
         </DialogHeader>
         <ul className="space-y-1.5 text-sm">
           <li className="flex items-start gap-2">
             <IconBan className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-            <span>禁止上传 / 删除 / 转换</span>
+            <span>{t('admin.users.deleteRestrict')}</span>
           </li>
           <li className="flex items-start gap-2">
             <IconCheck className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-            <span>允许打包下载原图（最多 10 次）</span>
+            <span>{t('admin.users.deleteAllowDownload')}</span>
           </li>
           <li className="flex items-start gap-2">
             <IconTrash className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-            <span>24 小时后永久删除</span>
+            <span>{t('admin.users.deleteAfter24h')}</span>
           </li>
           <li className="flex items-start gap-2">
             <IconArrowBackUp className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-            <span>24 小时内可撤销</span>
+            <span>{t('admin.users.deleteCancellable')}</span>
           </li>
         </ul>
         <Separator />
         <div className="space-y-2">
-          <Label htmlFor={`del-confirm-${user.id}`}>请输入用户名确认</Label>
+          <Label htmlFor={`del-confirm-${user.id}`}>{t('admin.users.typeUsernameConfirm')}</Label>
           <Input
             id={`del-confirm-${user.id}`}
             placeholder={user.username}
@@ -316,14 +326,14 @@ function DeleteDialog({ user }: { user: AdminUser }) {
         </div>
         <DialogFooter>
           <DialogClose asChild>
-            <Button variant="outline">取消</Button>
+            <Button variant="outline">{t('common.cancel')}</Button>
           </DialogClose>
           <Button
             variant="destructive"
             disabled={!matched || submitting}
             onClick={handleConfirm}
           >
-            {submitting ? '处理中…' : '确认注销'}
+            {submitting ? t('admin.users.processing') : t('admin.users.confirmDelete')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -332,6 +342,7 @@ function DeleteDialog({ user }: { user: AdminUser }) {
 }
 
 function CancelDeletionButton({ user }: { user: AdminUser }) {
+  const { t } = useTranslation()
   const qc = useQueryClient()
   const [submitting, setSubmitting] = useState(false)
 
@@ -340,9 +351,9 @@ function CancelDeletionButton({ user }: { user: AdminUser }) {
     try {
       await api.post(`/admin/users/${user.id}/cancel-deletion`)
       qc.invalidateQueries({ queryKey: QUERY_KEYS.adminUsers })
-      toast.success('已撤销注销')
+      toast.success(t('admin.users.undoDeletionDone'))
     } catch {
-      toast.error('撤销失败，请重试')
+      toast.error(t('admin.users.undoDeletionFailed'))
     } finally {
       setSubmitting(false)
     }
@@ -356,7 +367,7 @@ function CancelDeletionButton({ user }: { user: AdminUser }) {
       onClick={handleCancel}
     >
       <IconArrowBackUp className="size-4" />
-      {submitting ? '撤销中…' : '撤销'}
+      {submitting ? t('admin.users.undoing') : t('admin.users.undo')}
     </Button>
   )
 }
@@ -380,6 +391,7 @@ function UserActions({ user }: { user: AdminUser }) {
 }
 
 export default function Users() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
@@ -406,13 +418,15 @@ export default function Users() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="font-heading text-2xl font-semibold">用户管理</h1>
-          <p className="mt-1 text-sm text-muted-foreground">共 {total} 位用户</p>
+          <h1 className="font-heading text-2xl font-semibold">{t('admin.users.title')}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {t('admin.users.totalCount', { total })}
+          </p>
         </div>
         <div className="relative w-full max-w-xs">
           <IconSearch className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="搜索用户名或邮箱"
+            placeholder={t('admin.users.searchPlaceholder')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9"
@@ -423,14 +437,14 @@ export default function Users() {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>用户</TableHead>
-            <TableHead>邮箱</TableHead>
-            <TableHead>角色</TableHead>
-            <TableHead>状态</TableHead>
-            <TableHead className="text-right">图片</TableHead>
-            <TableHead className="min-w-[160px]">存储</TableHead>
-            <TableHead>注册时间</TableHead>
-            <TableHead className="text-right">操作</TableHead>
+            <TableHead>{t('admin.users.colUser')}</TableHead>
+            <TableHead>{t('admin.users.colEmail')}</TableHead>
+            <TableHead>{t('admin.users.colRole')}</TableHead>
+            <TableHead>{t('admin.users.colStatus')}</TableHead>
+            <TableHead className="text-right">{t('admin.users.colImages')}</TableHead>
+            <TableHead className="min-w-[160px]">{t('admin.users.colStorage')}</TableHead>
+            <TableHead>{t('admin.users.colCreatedAt')}</TableHead>
+            <TableHead className="text-right">{t('admin.shared.colActions')}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -447,7 +461,7 @@ export default function Users() {
           ) : filtered.length === 0 ? (
             <TableRow>
               <TableCell colSpan={8} className="py-12 text-center text-muted-foreground">
-                {search ? '没有匹配的用户' : '暂无用户'}
+                {search ? t('admin.users.noMatch') : t('admin.users.empty')}
               </TableCell>
             </TableRow>
           ) : (
@@ -469,7 +483,7 @@ export default function Users() {
                   <TableCell className="text-muted-foreground">{u.email}</TableCell>
                   <TableCell>
                     <Badge variant={u.role === USER_ROLES.ADMIN ? 'default' : 'secondary'}>
-                      {u.role === USER_ROLES.ADMIN ? '管理员' : '用户'}
+                      {u.role === USER_ROLES.ADMIN ? t('admin.users.role.admin') : t('admin.users.role.user')}
                     </Badge>
                   </TableCell>
                   <TableCell>
@@ -504,7 +518,7 @@ export default function Users() {
           size="icon-sm"
           onClick={() => setPage((p) => Math.max(1, p - 1))}
           disabled={page <= 1 || isLoading}
-          aria-label="上一页"
+          aria-label={t('admin.shared.prevPage')}
         >
           <IconChevronLeft className="size-4" />
         </Button>
@@ -516,7 +530,7 @@ export default function Users() {
           size="icon-sm"
           onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
           disabled={page >= totalPages || isLoading}
-          aria-label="下一页"
+          aria-label={t('admin.shared.nextPage')}
         >
           <IconChevronRight className="size-4" />
         </Button>

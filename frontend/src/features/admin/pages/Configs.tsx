@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   IconAdjustments,
   IconShieldCheck,
@@ -49,24 +50,23 @@ const CFG = {
 } as const
 
 const PROVIDER_LABELS: Record<string, string> = {
-  none: '不启用',
   recaptcha: 'reCAPTCHA v3',
   turnstile: 'Cloudflare Turnstile',
   geetest_v4: 'GeeTest v4',
 }
 
-const EXTERNAL_SCRIPT_HINTS: Record<string, string> = {
-  recaptcha: '需在页面引入 https://www.google.com/recaptcha/api.js',
-  turnstile: '需在页面引入 https://challenges.cloudflare.com/turnstile/api.js',
-  geetest_v4: '需在页面引入 GeeTest v4 SDK 脚本',
+const SCRIPT_HINT_KEYS: Record<string, string> = {
+  recaptcha: 'admin.configs.scriptHintRecaptcha',
+  turnstile: 'admin.configs.scriptHintTurnstile',
+  geetest_v4: 'admin.configs.scriptHintGeetest',
 }
 
 const WATERMARK_POSITIONS = [
-  { value: 'ce', label: '居中' },
-  { value: 'soea', label: '右下' },
-  { value: 'sowe', label: '左下' },
-  { value: 'noea', label: '右上' },
-  { value: 'nowe', label: '左上' },
+  { value: 'ce', labelKey: 'admin.configs.posCenter' },
+  { value: 'soea', labelKey: 'admin.configs.posBottomRight' },
+  { value: 'sowe', labelKey: 'admin.configs.posBottomLeft' },
+  { value: 'noea', labelKey: 'admin.configs.posTopRight' },
+  { value: 'nowe', labelKey: 'admin.configs.posTopLeft' },
 ] as const
 
 type FormState = {
@@ -151,6 +151,7 @@ const CFG_MAP: Record<keyof FormState, string> = {
 const FORM_KEYS = Object.keys(CFG_MAP) as (keyof FormState)[]
 
 export default function Configs() {
+  const { t } = useTranslation()
   const { data, isLoading } = useConfigs()
   const updateConfigs = useUpdateConfigs()
   const testR2 = useTestR2()
@@ -204,13 +205,13 @@ export default function Configs() {
 
   const r2FormComplete = form.r2Endpoint && form.r2AccessKey && form.r2SecretKey && form.r2Bucket
 
-  const scriptHint = EXTERNAL_SCRIPT_HINTS[form.provider]
+  const scriptHintKey = SCRIPT_HINT_KEYS[form.provider]
 
   return (
     <div className="flex min-h-[calc(100vh-8rem)] flex-col gap-6">
       <div>
-        <h1 className="font-heading text-2xl font-semibold">系统配置</h1>
-        <p className="mt-1 text-sm text-muted-foreground">人机验证、图片访问令牌与水印设置</p>
+        <h1 className="font-heading text-2xl font-semibold">{t('admin.configs.title')}</h1>
+        <p className="mt-1 text-sm text-muted-foreground">{t('admin.configs.subtitle')}</p>
       </div>
 
       <div className="flex-1 space-y-6">
@@ -218,13 +219,13 @@ export default function Configs() {
           <CardHeader>
             <div className="flex items-center gap-2">
               <IconShieldCheck className="size-5 text-primary" />
-              <CardTitle>人机验证</CardTitle>
+              <CardTitle>{t('admin.configs.captchaTitle')}</CardTitle>
             </div>
-            <CardDescription>配置注册与登录流程的验证码服务</CardDescription>
+            <CardDescription>{t('admin.configs.captchaDesc')}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label>验证服务提供商</Label>
+              <Label>{t('admin.configs.providerLabel')}</Label>
               {isLoading ? (
                 <Skeleton className="h-9 w-full max-w-xs" />
               ) : (
@@ -235,14 +236,14 @@ export default function Configs() {
                   <SelectContent>
                     {CAPTCHA_PROVIDERS.map((p) => (
                       <SelectItem key={p} value={p}>
-                        {PROVIDER_LABELS[p] ?? p}
+                        {p === 'none' ? t('admin.configs.providerNone') : (PROVIDER_LABELS[p] ?? p)}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               )}
-              {scriptHint && (
-                <p className="text-xs text-muted-foreground">{scriptHint}</p>
+              {scriptHintKey && (
+                <p className="text-xs text-muted-foreground">{t(scriptHintKey)}</p>
               )}
             </div>
 
@@ -252,7 +253,7 @@ export default function Configs() {
               <Label htmlFor="site-key">Site Key</Label>
               <Input
                 id="site-key"
-                placeholder="公钥，用于前端渲染"
+                placeholder={t('admin.configs.siteKeyPlaceholder')}
                 value={form.siteKey}
                 disabled={form.provider === 'none' || isLoading}
                 onChange={(e) => setField('siteKey', e.target.value)}
@@ -267,7 +268,7 @@ export default function Configs() {
               <Input
                 id="captcha-secret"
                 type="password"
-                placeholder="私钥，用于服务端校验"
+                placeholder={t('admin.configs.secretPlaceholder')}
                 value={form.secret}
                 disabled={form.provider === 'none' || isLoading}
                 onChange={(e) => setField('secret', e.target.value)}
@@ -280,12 +281,12 @@ export default function Configs() {
           <CardHeader>
             <div className="flex items-center gap-2">
               <IconAdjustments className="size-5 text-primary" />
-              <CardTitle>私密图片令牌有效期</CardTitle>
+              <CardTitle>{t('admin.configs.tokenTtlTitle')}</CardTitle>
             </div>
-            <CardDescription>访问私密图片所需的临时令牌默认有效时长</CardDescription>
+            <CardDescription>{t('admin.configs.tokenTtlDesc')}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
-            <Label htmlFor="ttl">默认有效期（毫秒）</Label>
+            <Label htmlFor="ttl">{t('admin.configs.defaultTtlLabel')}</Label>
             <Input
               id="ttl"
               type="number"
@@ -297,9 +298,11 @@ export default function Configs() {
               onChange={(e) => setField('ttl', e.target.value)}
             />
             <p className="text-xs text-muted-foreground tabular-nums">
-              允许范围：{IMAGE_TOKEN.MIN_TTL_MS.toLocaleString()} –{' '}
-              {IMAGE_TOKEN.MAX_TTL_MS.toLocaleString()} ms（默认{' '}
-              {IMAGE_TOKEN.DEFAULT_TTL_MS.toLocaleString()} ms）
+              {t('admin.configs.ttlRange', {
+                min: IMAGE_TOKEN.MIN_TTL_MS.toLocaleString(),
+                max: IMAGE_TOKEN.MAX_TTL_MS.toLocaleString(),
+                default: IMAGE_TOKEN.DEFAULT_TTL_MS.toLocaleString(),
+              })}
             </p>
           </CardContent>
         </Card>
@@ -308,13 +311,13 @@ export default function Configs() {
           <CardHeader>
             <div className="flex items-center gap-2">
               <IconDroplet className="size-5 text-primary" />
-              <CardTitle>图片水印</CardTitle>
+              <CardTitle>{t('admin.configs.watermarkTitle')}</CardTitle>
             </div>
-            <CardDescription>启用后，所有经 imgproxy 处理的图片将自动添加水印</CardDescription>
+            <CardDescription>{t('admin.configs.watermarkDesc')}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between">
-              <Label htmlFor="watermark-enabled">启用水印</Label>
+              <Label htmlFor="watermark-enabled">{t('admin.configs.enableWatermark')}</Label>
               {isLoading ? (
                 <Skeleton className="h-6 w-11" />
               ) : (
@@ -329,10 +332,10 @@ export default function Configs() {
             <Separator />
 
             <div className="space-y-2">
-              <Label htmlFor="watermark-text">水印文字</Label>
+              <Label htmlFor="watermark-text">{t('admin.configs.watermarkText')}</Label>
               <Input
                 id="watermark-text"
-                placeholder="例如 © kserks"
+                placeholder={t('admin.configs.watermarkTextPlaceholder')}
                 value={form.watermarkText}
                 disabled={!form.watermarkEnabled || isLoading}
                 onChange={(e) => setField('watermarkText', e.target.value)}
@@ -340,7 +343,7 @@ export default function Configs() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="watermark-opacity">不透明度（0.0–1.0）</Label>
+              <Label htmlFor="watermark-opacity">{t('admin.configs.opacityLabel')}</Label>
               <Input
                 id="watermark-opacity"
                 type="number"
@@ -352,11 +355,11 @@ export default function Configs() {
                 disabled={!form.watermarkEnabled || isLoading}
                 onChange={(e) => setField('watermarkOpacity', e.target.value)}
               />
-              <p className="text-xs text-muted-foreground">推荐 0.3–0.7，值越大越不透明</p>
+              <p className="text-xs text-muted-foreground">{t('admin.configs.opacityHint')}</p>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="watermark-size">字体大小（px）</Label>
+              <Label htmlFor="watermark-size">{t('admin.configs.sizeLabel')}</Label>
               <Input
                 id="watermark-size"
                 type="number"
@@ -370,7 +373,7 @@ export default function Configs() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="watermark-color">颜色（十六进制，不含 #）</Label>
+              <Label htmlFor="watermark-color">{t('admin.configs.colorLabel')}</Label>
               <div className="flex items-center gap-2">
                 <Input
                   id="watermark-color"
@@ -386,11 +389,11 @@ export default function Configs() {
                   style={{ backgroundColor: `#${form.watermarkColor || 'ffffff'}` }}
                 />
               </div>
-              <p className="text-xs text-muted-foreground">如 ffffff（白）、000000（黑）、ff6600（橙）</p>
+              <p className="text-xs text-muted-foreground">{t('admin.configs.colorHint')}</p>
             </div>
 
             <div className="space-y-2">
-              <Label>水印位置</Label>
+              <Label>{t('admin.configs.positionLabel')}</Label>
               {isLoading ? (
                 <Skeleton className="h-9 w-full max-w-xs" />
               ) : (
@@ -405,7 +408,7 @@ export default function Configs() {
                   <SelectContent>
                     {WATERMARK_POSITIONS.map((p) => (
                       <SelectItem key={p.value} value={p.value}>
-                        {p.label}
+                        {t(p.labelKey)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -419,13 +422,13 @@ export default function Configs() {
           <CardHeader>
             <div className="flex items-center gap-2">
               <IconCloud className="size-5 text-primary" />
-              <CardTitle>Cloudflare R2 存储</CardTitle>
+              <CardTitle>{t('admin.configs.r2Title')}</CardTitle>
             </div>
-            <CardDescription>启用后新上传图片仅存储到 R2，通过 CDN 加速分发，不占用本地磁盘。</CardDescription>
+            <CardDescription>{t('admin.configs.r2Desc')}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between">
-              <Label htmlFor="r2-enabled">启用 R2 存储</Label>
+              <Label htmlFor="r2-enabled">{t('admin.configs.enableR2')}</Label>
               {isLoading ? (
                 <Skeleton className="h-6 w-11" />
               ) : (
@@ -451,7 +454,7 @@ export default function Configs() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="r2-bucket">Bucket 名称</Label>
+              <Label htmlFor="r2-bucket">{t('admin.configs.bucketLabel')}</Label>
               <Input
                 id="r2-bucket"
                 placeholder="imgcloud"
@@ -462,7 +465,7 @@ export default function Configs() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="r2-public">公开访问域名</Label>
+              <Label htmlFor="r2-public">{t('admin.configs.publicUrlLabel')}</Label>
               <Input
                 id="r2-public"
                 placeholder="https://r2.kserks.org"
@@ -470,7 +473,7 @@ export default function Configs() {
                 disabled={!form.r2Enabled || isLoading}
                 onChange={(e) => setField('r2PublicURL', e.target.value)}
               />
-              <p className="text-xs text-muted-foreground">绑定 R2 Bucket 的自定义域名（需在 Cloudflare 后台配置）</p>
+              <p className="text-xs text-muted-foreground">{t('admin.configs.publicUrlHint')}</p>
             </div>
 
             <div className="space-y-2">
@@ -500,7 +503,7 @@ export default function Configs() {
             </div>
 
             <p className="text-xs text-muted-foreground">
-              启用后新上传图片仅存储在 R2。配置前上传的图片保留在本地，可点击"迁移到 R2"同步。
+              {t('admin.configs.r2MigrateHint')}
             </p>
 
             <Button
@@ -511,7 +514,7 @@ export default function Configs() {
               onClick={handleTestR2}
             >
               <IconPlugConnected className="size-4" />
-              {testR2.isPending ? '测试中...' : '测试连接'}
+              {testR2.isPending ? t('admin.configs.testing') : t('admin.configs.testConnection')}
             </Button>
           </CardContent>
         </Card>
@@ -520,7 +523,7 @@ export default function Configs() {
       <div className="sticky bottom-0 z-10 -mx-6 flex items-center justify-between gap-4 border-t border-border/60 bg-background/80 px-6 py-4 backdrop-blur-md">
         <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
           <IconDeviceFloppy className="size-4" />
-          修改将影响全站
+          {t('admin.configs.affectsAll')}
         </span>
         <div className="flex gap-2">
           <Button
@@ -528,10 +531,10 @@ export default function Configs() {
             onClick={handleCancel}
             disabled={!hasChanges || updateConfigs.isPending}
           >
-            取消
+            {t('common.cancel')}
           </Button>
           <Button onClick={handleSave} disabled={!hasChanges || updateConfigs.isPending}>
-            保存
+            {t('common.save')}
           </Button>
         </div>
       </div>
