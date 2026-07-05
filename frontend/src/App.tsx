@@ -3,6 +3,7 @@
 
 import { lazy, Suspense, useEffect } from 'react'
 import { Routes, Route, Navigate, Outlet } from 'react-router'
+import { useTranslation } from 'react-i18next'
 import { Navbar } from '@/components/layout/Navbar'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { useAuthStore } from '@/store/auth-store'
@@ -32,11 +33,12 @@ function Loading() {
 }
 
 function NotFound() {
+  const { t } = useTranslation()
   return (
     <div className="grid min-h-[60vh] place-items-center text-center">
       <div>
         <p className="text-6xl font-extrabold text-primary">404</p>
-        <p className="mt-3 text-muted-foreground">页面不存在</p>
+        <p className="mt-3 text-muted-foreground">{t('layout.notFound')}</p>
       </div>
     </div>
   )

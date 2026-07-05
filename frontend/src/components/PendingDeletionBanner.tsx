@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { IconAlertTriangle, IconPackageImport } from '@tabler/icons-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -18,6 +19,7 @@ function computeRemaining(iso: string | null) {
 }
 
 export function PendingDeletionBanner() {
+  const { t } = useTranslation()
   const user = useAuthStore((s) => s.user)
   const scheduledAt = user?.deletion_scheduled_at ?? null
   const [, setTick] = useState(0)
@@ -38,13 +40,13 @@ export function PendingDeletionBanner() {
     <div className="sticky top-[64px] z-40 flex flex-wrap items-center gap-x-4 gap-y-2 border-b-2 border-destructive/30 bg-destructive/10 px-6 py-3">
       <IconAlertTriangle className="size-5 shrink-0 text-destructive" />
       <div className="min-w-0 flex-1">
-        <p className="font-semibold text-destructive">账号即将删除</p>
+        <p className="font-semibold text-destructive">{t('layout.deletionTitle')}</p>
         <p className="text-sm text-muted-foreground">
-          您的账号将在 {hours} 小时 {minutes} 分钟后永久删除，请尽快下载您需要的数据。
+          {t('layout.deletionMessage', { hours, minutes })}
         </p>
       </div>
       <Badge variant="destructive">
-        剩余下载 {MAX_DOWNLOADS - used}/{MAX_DOWNLOADS}
+        {t('layout.remainingDownloads', { remaining: MAX_DOWNLOADS - used, total: MAX_DOWNLOADS })}
       </Badge>
       <Button
         type="button"
@@ -54,7 +56,7 @@ export function PendingDeletionBanner() {
         onClick={() => window.open('/api/v1/images/batch-download', '_blank')}
       >
         <IconPackageImport className="size-4" />
-        打包下载
+        {t('layout.batchDownload')}
       </Button>
     </div>
   )

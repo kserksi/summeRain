@@ -2,18 +2,20 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Link, NavLink } from 'react-router'
+import { useTranslation } from 'react-i18next'
 import { ThemeToggle } from '@/components/layout/ThemeToggle'
 import { NotificationBell } from '@/features/notifications/components/NotificationBell'
 import { useAuthStore } from '@/store/auth-store'
 
 const navItems = [
-  { to: '/', label: '首页' },
-  { to: '/dashboard', label: '控制台', auth: true },
-  { to: '/images', label: '我的图片', auth: true },
-  { to: '/upload', label: '上传', auth: true },
+  { to: '/', labelKey: 'nav.home' },
+  { to: '/dashboard', labelKey: 'nav.dashboard', auth: true },
+  { to: '/images', labelKey: 'nav.images', auth: true },
+  { to: '/upload', labelKey: 'nav.upload', auth: true },
 ]
 
 export function Navbar() {
+  const { t } = useTranslation()
   const user = useAuthStore((s) => s.user)
   const items = navItems.filter((i) => !i.auth || user)
 
@@ -22,7 +24,7 @@ export function Navbar() {
       <div className="mx-auto flex h-16 max-w-7xl items-center gap-4 px-6">
         <Link to="/" className="flex items-center gap-2 text-lg font-extrabold">
           <span className="text-primary text-2xl">⬢</span>
-          <span>月兔图床</span>
+          <span>{t('common.appName')}</span>
           <span className="text-accent">.</span>
         </Link>
         <nav className="hidden flex-1 items-center gap-1 md:flex">
@@ -35,12 +37,12 @@ export function Navbar() {
                 `rounded-full px-4 py-2 text-sm font-medium transition ${isActive ? 'bg-primary text-white' : 'text-muted-foreground hover:bg-accent hover:text-foreground'}`
               }
             >
-              {item.label}
+              {t(item.labelKey)}
             </NavLink>
           ))}
           {user?.role === 'admin' && (
             <NavLink to="/admin" className={({ isActive }) => `rounded-full px-4 py-2 text-sm font-medium transition ${isActive ? 'bg-primary text-white' : 'text-muted-foreground hover:bg-accent hover:text-foreground'}`}>
-              后台
+              {t('nav.admin')}
             </NavLink>
           )}
         </nav>
@@ -54,7 +56,7 @@ export function Navbar() {
               </div>
             </div>
           ) : (
-            <Link to="/login" className="text-sm font-medium text-muted-foreground hover:text-primary">登录</Link>
+            <Link to="/login" className="text-sm font-medium text-muted-foreground hover:text-primary">{t('common.login')}</Link>
           )}
         </div>
       </div>

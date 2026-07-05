@@ -46,6 +46,16 @@
     "1004": "人机验证服务暂时不可用",
     "1003": "图片处理服务错误，图片可能过大（4K+ 需服务器增大 imgproxy 内存）"
   },
+  "layout": {
+    "errorTitle": "页面出错了",
+    "unknownError": "未知错误",
+    "notFound": "页面不存在",
+    "deletionTitle": "账号即将删除",
+    "deletionMessage": "您的账号将在 {{hours}} 小时 {{minutes}} 分钟后永久删除，请尽快下载您需要的数据。",
+    "remainingDownloads": "剩余下载 {{remaining}}/{{total}}",
+    "batchDownload": "打包下载",
+    "toggleTheme": "切换深/浅色模式"
+  },
   "upload": {
     "title": "上传图片",
     "dropzone": "点击或拖拽图片到此处上传",

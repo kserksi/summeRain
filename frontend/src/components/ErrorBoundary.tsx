@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Component, type ReactNode } from 'react'
+import i18n from '@/i18n'
 
 interface Props {
   children: ReactNode
@@ -37,15 +38,15 @@ export class ErrorBoundary extends Component<Props, State> {
       return (
         <div className="grid min-h-screen place-items-center bg-background p-6 text-center">
           <div className="max-w-md">
-            <p className="text-2xl font-bold text-primary">页面出错了</p>
+            <p className="text-2xl font-bold text-primary">{i18n.t('layout.errorTitle')}</p>
             <p className="mt-2 break-words text-sm text-muted-foreground">
-              {this.state.error?.message ?? '未知错误'}
+              {this.state.error?.message ?? i18n.t('layout.unknownError')}
             </p>
             <button
               onClick={() => this.setState({ hasError: false, error: undefined })}
               className="mt-5 rounded-xl bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
             >
-              重试
+              {i18n.t('common.retry')}
             </button>
           </div>
         </div>
