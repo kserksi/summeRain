@@ -1,0 +1,525 @@
+{
+  "common": {
+    "appName": "月兔図床",
+    "loading": "読み込み中…",
+    "error": "エラーが発生しました",
+    "retry": "再試行",
+    "cancel": "キャンセル",
+    "save": "保存",
+    "delete": "削除",
+    "confirm": "確認",
+    "back": "戻る",
+    "search": "検索",
+    "upload": "アップロード",
+    "logout": "ログアウト",
+    "login": "ログイン",
+    "register": "登録",
+    "copySuccess": "クリップボードにコピーしました",
+    "copyFailed": "コピーに失敗しました。ブラウザの権限を確認してください"
+  },
+  "nav": {
+    "home": "ホーム",
+    "dashboard": "ダッシュボード",
+    "images": "マイ画像",
+    "upload": "アップロード",
+    "profile": "プロフィール",
+    "admin": "管理画面",
+    "notifications": "通知"
+  },
+  "errors": {
+    "2001": "ユーザー名またはパスワードが正しくありません",
+    "2008": "操作が頻繁すぎます。しばらくしてから再試行してください",
+    "2009": "ボット認証に失敗しました。再試行してください",
+    "3000": "パラメータエラー",
+    "3002": "ファイルサイズが制限を超えています",
+    "3003": "サポートされていないファイル形式です",
+    "3004": "ファイル数が制限を超えています",
+    "4010": "未認証またはログインの有効期限が切れています",
+    "4011": "セッションの有効期限が切れました。再ログインしてください",
+    "4012": "ストレージ容量が上限に達しました",
+    "4029": "操作が頻繁すぎます",
+    "4030": "アカウントが無効化されています",
+    "4035": "CSRFトークンがありません",
+    "4036": "CSRFトークンが無効です",
+    "4037": "プライベート画像のトークンが無効または期限切れです",
+    "4042": "プライベート画像のトークンは取り消されました",
+    "1004": "ボット認証サービスは一時的に利用できません",
+    "1003": "画像処理サービスのエラー。画像が大きすぎる可能性があります（4K以上はサーバー側でimgproxyのメモリ増設が必要）"
+  },
+  "layout": {
+    "errorTitle": "ページでエラーが発生しました",
+    "unknownError": "不明なエラー",
+    "notFound": "ページが見つかりません",
+    "deletionTitle": "アカウントの削除予定",
+    "deletionMessage": "アカウントは {{hours}} 時間 {{minutes}} 分後に永久削除されます。必要なデータを至急ダウンロードしてください。",
+    "remainingDownloads": "残りダウンロード {{remaining}}/{{total}}",
+    "batchDownload": "一括ダウンロード",
+    "toggleTheme": "テーマを切り替え"
+  },
+  "upload": {
+    "title": "画像をアップロード",
+    "dropzone": "クリックまたはドラッグして画像をアップロード",
+    "dropzoneHint": "JPG / PNG / GIF / WebP などに対応、複数選択可能",
+    "visibility": "公開設定",
+    "visibilityPublic": "公開",
+    "visibilityPrivate": "プライベート",
+    "queue": "アップロードキュー（{{count}}）",
+    "startUpload": "アップロード開始",
+    "uploading": "アップロード中…",
+    "done": "完了",
+    "remove": "削除",
+    "empty": "まだ画像が追加されていません",
+    "status": {
+      "queued": "待機中",
+      "uploading": "アップロード中",
+      "done": "完了",
+      "failed": "失敗"
+    },
+    "toast": {
+      "uploadSuccess": "{{count}} 枚の画像をアップロードしました",
+      "uploadAllFailed": "アップロードに失敗しました",
+      "uploadPartial": "{{ok}} 枚成功、{{fail}} 枚失敗",
+      "itemFailed": "{{name}}: {{msg}}",
+      "copied": "{{count}} 個のリンクをコピーしました（{{format}}）",
+      "errorCode": "エラーコード {{code}}",
+      "parseFailed": "レスポンスの解析に失敗しました"
+    },
+    "copy": {
+      "button": "全リンクをコピー",
+      "linkFormatLabel": "リンク形式",
+      "imageFormatLabel": "画像形式",
+      "linkFormats": {
+        "url": "URL",
+        "markdown": "Markdown",
+        "bbs": "BBS (BBCode)",
+        "html": "HTML"
+      },
+      "imageFormats": {
+        "original": "オリジナル",
+        "webp": "WebP",
+        "avif": "AVIF"
+      },
+      "action": "{{count}} 個のリンクをコピー"
+    },
+    "retry": "再試行",
+    "retryAll": "失敗をすべて再試行（{{count}}）"
+  },
+  "auth": {
+    "loginSubtitle": "{{appName}} アカウントにログイン",
+    "registerSubtitle": "{{appName}} アカウントを作成",
+    "bannedMessage": "アカウントは管理者により無効化されています。お問い合わせください。",
+    "noAccount": "アカウントをお持ちでないですか？",
+    "hasAccount": "すでにアカウントをお持ちですか？",
+    "registerNow": "今すぐ登録",
+    "hidePassword": "パスワードを非表示",
+    "showPassword": "パスワードを表示",
+    "registerSuccess": "登録完了しました。ログインしてください",
+    "field": {
+      "username": "ユーザー名",
+      "password": "パスワード",
+      "email": "メールアドレス",
+      "confirmPassword": "パスワード確認"
+    },
+    "validation": {
+      "usernameRequired": "ユーザー名を入力してください",
+      "passwordMin6": "パスワードは6文字以上で入力してください",
+      "usernameMin3": "ユーザー名は3文字以上で入力してください",
+      "usernameMax50": "ユーザー名は50文字以内で入力してください",
+      "emailInvalid": "有効なメールアドレスを入力してください",
+      "passwordMin8": "パスワードは8文字以上で入力してください",
+      "confirmRequired": "パスワードを再入力してください",
+      "passwordMismatch": "入力したパスワードが一致しません"
+    }
+  },
+  "captcha": {
+    "clickToVerify": "クリックして認証",
+    "protectedByRecaptcha": "reCAPTCHA により保護されています"
+  },
+  "images": {
+    "shared": {
+      "public": "公開",
+      "private": "プライベート",
+      "close": "閉じる",
+      "copy": "コピー",
+      "link": "リンク",
+      "token": "トークン",
+      "format": "形式",
+      "dimensions": "サイズ",
+      "size": "容量",
+      "views": "閲覧数",
+      "uploadedAt": "アップロード日時",
+      "formatOriginal": "オリジナル",
+      "formatWebp": "WebP",
+      "formatAvif": "AVIF",
+      "formatJpeg": "JPEG",
+      "formatPng": "PNG"
+    },
+    "list": {
+      "searchPlaceholder": "画像を検索…",
+      "filterAll": "すべて",
+      "gridView": "グリッド表示",
+      "listView": "リスト表示",
+      "select": "選択",
+      "selectedCount": "{{count}} 枚選択中",
+      "selectAll": "すべて選択",
+      "batchDelete": "一括削除",
+      "empty": "まだ画像がアップロードされていません",
+      "confirmBatchDeleteTitle": "一括削除の確認",
+      "confirmBatchDeleteDesc": "選択した {{count}} 枚の画像を削除しますか？この操作は取り消せません。",
+      "toast": {
+        "deleted": "{{count}} 枚を削除しました",
+        "deleteAllFailed": "削除に失敗しました（外部キー制約の可能性があります。関連トークンを先に削除してください）",
+        "deletePartial": "{{ok}} 枚成功、{{fail}} 枚失敗",
+        "deleteFailedWithMsg": "削除に失敗しました: {{msg}}"
+      }
+    },
+    "detail": {
+      "zoom": "拡大",
+      "zoomAria": "拡大して表示",
+      "privateHint": "トークン付きリンクからのみアクセス可能",
+      "publicHint": "誰でも閲覧可能",
+      "shareLinks": "共有リンク",
+      "processingTitle": "画像処理・変換",
+      "processingHint": "imgproxy により形式・サイズ・品質をリアルタイム変換。",
+      "dimensionsPx": "サイズ (px)",
+      "lockAspect": "縦横比を固定",
+      "widthAria": "幅",
+      "heightAria": "高さ",
+      "reset": "リセット",
+      "quality": "品質",
+      "accessToken": "アクセストークン",
+      "tokenHelp": "プライベート画像にはトークン付きリンクが必要です。",
+      "tokenLink": "トークン付きリンク",
+      "tokenCopied": "トークンをコピーしました",
+      "processedLinkCopied": "処理リンクをコピーしました",
+      "copyAriaLabel": "{{label}}をコピー",
+      "expiresAt": "有効期限: {{date}}",
+      "noActiveToken": "有効なトークンなし",
+      "validity": "有効期限",
+      "ttl10m": "10 分",
+      "ttl1h": "1 時間",
+      "ttl24h": "24 時間",
+      "ttl72h": "72 時間",
+      "issueToken": "トークン発行",
+      "reissueToken": "再発行",
+      "revoke": "取り消し",
+      "deleteImage": "画像を削除",
+      "confirmDeleteTitle": "削除の確認",
+      "confirmDeleteDesc": "この操作は取り消せません。画像は永久に削除されます。",
+      "confirmDelete": "削除を確認",
+      "deleting": "削除中…"
+    },
+    "toast": {
+      "deleted": "画像を削除しました",
+      "deleteFailed": "削除に失敗しました",
+      "setToPrivate": "プライベートに設定しました。公開リンクはアクセスできなくなります",
+      "setToPublic": "公開に設定しました",
+      "toggleFailed": "切り替えに失敗しました",
+      "tokenIssued": "トークンを発行しました",
+      "issueFailed": "発行に失敗しました",
+      "tokenRevoked": "トークンを取り消しました",
+      "revokeFailed": "取り消しに失敗しました"
+    }
+  },
+  "profile": {
+    "title": "プロフィール",
+    "subtitle": "アカウント情報とセキュリティ設定の管理",
+    "settings": {
+      "title": "設定",
+      "language": "インターフェース言語",
+      "languageDesc": "表示言語を選択してください"
+    },
+    "account": {
+      "title": "アカウント情報",
+      "description": "アカウントとストレージの使用状況",
+      "loadFailed": "アカウント情報の読み込みに失敗しました。しばらくしてから再試行してください",
+      "username": "ユーザー名",
+      "email": "メールアドレス",
+      "role": "ロール",
+      "status": "ステータス",
+      "createdAt": "登録日時",
+      "storageUsage": "ストレージ使用量",
+      "usedPercent": "{{percent}}% 使用中"
+    },
+    "role": {
+      "admin": "管理者",
+      "user": "一般ユーザー"
+    },
+    "status": {
+      "active": "正常",
+      "suspended": "BAN済み",
+      "pending": "認証待ち"
+    },
+    "password": {
+      "title": "パスワード変更",
+      "description": "変更成功後に自動的にログアウトされます。新しいパスワードで再ログインしてください",
+      "current": "現在のパスワード",
+      "new": "新しいパスワード",
+      "confirm": "新しいパスワード確認",
+      "minLengthHint": "8 文字以上",
+      "currentRequired": "現在のパスワードを入力してください",
+      "newMinLength": "パスワードは8文字以上で入力してください",
+      "confirmRequired": "新しいパスワードを再入力してください",
+      "mismatch": "入力したパスワードが一致しません",
+      "changeFailed": "パスワードの変更に失敗しました。しばらくしてから再試行してください",
+      "changed": "パスワードを変更しました。再ログインしてください",
+      "saving": "保存中…",
+      "save": "新しいパスワードを保存"
+    }
+  },
+  "admin": {
+    "shared": {
+      "title": "管理画面",
+      "subtitle": "システム管理パネル",
+      "prevPage": "前のページ",
+      "nextPage": "次のページ",
+      "colActions": "操作",
+      "actionFailed": "操作に失敗しました。再試行してください",
+      "saving": "保存中…",
+      "nav": {
+        "overview": "概览",
+        "users": "ユーザー管理",
+        "images": "画像管理",
+        "configs": "システム設定"
+      }
+    },
+    "overview": {
+      "title": "管理概覧",
+      "subtitle": "システム稼働データ一覧",
+      "totalUsers": "総ユーザー数",
+      "totalImages": "画像総数",
+      "storageUsed": "ストレージ使用量",
+      "activeUsers": "アクティブユーザー",
+      "totalSessions": "セッション総数"
+    },
+    "users": {
+      "title": "ユーザー管理",
+      "totalCount": "全 {{total}} 名",
+      "searchPlaceholder": "ユーザー名またはメールアドレスで検索",
+      "colUser": "ユーザー",
+      "colEmail": "メール",
+      "colRole": "ロール",
+      "colStatus": "ステータス",
+      "colImages": "画像",
+      "colStorage": "ストレージ",
+      "colCreatedAt": "登録日時",
+      "noMatch": "該当するユーザーがいません",
+      "empty": "ユーザーがいません",
+      "role": {
+        "admin": "管理者",
+        "user": "ユーザー"
+      },
+      "status": {
+        "active": "正常",
+        "banned": "BAN中",
+        "deleting": "削除処理中",
+        "remainingHours": "（残り {{hours}}h）"
+      },
+      "unban": "BAN解除",
+      "ban": "BAN",
+      "confirmUnbanTitle": "このユーザーのBANを解除しますか？",
+      "confirmBanTitle": "このユーザーをBANしますか？",
+      "unbanDesc": "解除後、该ユーザーは正常にログイン・利用できるようになります。",
+      "banDesc": "BAN後、该ユーザーはログインできなくなります。アップロード済みの画像には影響しません。",
+      "suspendedUser": "ユーザーをBANしました",
+      "unsuspendedUser": "ユーザーのBANを解除しました",
+      "quota": "容量",
+      "adjustQuotaTitle": "ストレージ容量を調整",
+      "quotaCurrentDesc": "現在の容量: {{current}} · 使用済み: {{used}}",
+      "newQuotaMb": "新しい容量（MB）",
+      "minQuota": "最小容量は 500 MB です",
+      "quotaUpdated": "容量を更新しました",
+      "quotaUpdateFailed": "容量の更新に失敗しました。再試行してください",
+      "requestDelete": "アカウント削除",
+      "deleteUserTitle": "ユーザー {{username}} を削除",
+      "deleteDesc": "この操作は即座に该ユーザーをロックし、24時間後にすべてのデータを永久削除します。",
+      "deleteRestrict": "アップロード / 削除 / 変換を禁止",
+      "deleteAllowDownload": "オリジナル画像の一括ダウンロードを許可（最大10回）",
+      "deleteAfter24h": "24 時間後に永久削除",
+      "deleteCancellable": "24 時間以内は取り消し可能",
+      "typeUsernameConfirm": "確認のためユーザー名を入力してください",
+      "processing": "処理中…",
+      "confirmDelete": "削除を確認",
+      "deletionInitiated": "削除手続きを開始しました",
+      "deletionInitFailed": "削除手続きの開始に失敗しました。再試行してください",
+      "deletionRequested": "削除リクエストを送信しました",
+      "deletionCancelled": "削除リクエストを取り消しました",
+      "undo": "取り消し",
+      "undoing": "取り消し中…",
+      "undoDeletionDone": "アカウント削除を取り消しました",
+      "undoDeletionFailed": "取り消しに失敗しました。再試行してください"
+    },
+    "images": {
+      "title": "画像管理",
+      "totalCount": "全 {{total}} 枚",
+      "searchPlaceholder": "ファイル名で検索",
+      "colPreview": "プレビュー",
+      "colFilename": "ファイル名",
+      "colOwner": "所有者",
+      "colVisibility": "公開設定",
+      "private": "プライベート",
+      "noMatch": "該当する画像がありません",
+      "empty": "画像がありません",
+      "confirmDeleteTitle": "この画像を削除しますか？",
+      "deleteDesc": "削除後、この画像は復元できません。関連データも削除されます。",
+      "deleted": "画像を削除しました",
+      "deleteFailed": "削除に失敗しました。再試行してください"
+    },
+    "configs": {
+      "title": "システム設定",
+      "subtitle": "ボット認証・画像アクセストークン・透かしの設定",
+      "captchaTitle": "ボット認証",
+      "captchaDesc": "登録・ログイン時のCAPTCHAサービスを設定",
+      "providerLabel": "認証サービスプロバイダー",
+      "providerNone": "無効",
+      "scriptHintRecaptcha": "https://www.google.com/recaptcha/api.js をページに挿入する必要があります",
+      "scriptHintTurnstile": "https://challenges.cloudflare.com/turnstile/api.js をページに挿入する必要があります",
+      "scriptHintGeetest": "GeeTest v4 SDK スクリプトをページに挿入する必要があります",
+      "siteKeyPlaceholder": "サイトキー（フロントエンド表示用）",
+      "secretPlaceholder": "シークレットキー（サーバー検証用）",
+      "tokenTtlTitle": "プライベート画像トークンの有効期限",
+      "tokenTtlDesc": "プライベート画像アクセスに必要な一時トークンのデフォルト有効期間",
+      "defaultTtlLabel": "デフォルト有効期限（ミリ秒）",
+      "ttlRange": "許容範囲: {{min}} – {{max}} ms（デフォルト {{default}} ms）",
+      "watermarkTitle": "画像透かし",
+      "watermarkDesc": "有効にすると、imgproxy で処理されたすべての画像に自動的に透かしが追加されます",
+      "enableWatermark": "透かしを有効化",
+      "watermarkText": "透かしテキスト",
+      "watermarkTextPlaceholder": "例: © kserks",
+      "opacityLabel": "不透明度（0.0–1.0）",
+      "opacityHint": "0.3–0.7 を推奨。値が大きいほど不透明になります",
+      "sizeLabel": "フォントサイズ（px）",
+      "colorLabel": "色（16進数、# なし）",
+      "colorHint": "例: ffffff（白）、000000（黒）、ff6600（オレンジ）",
+      "positionLabel": "透かしの位置",
+      "posCenter": "中央",
+      "posBottomRight": "右下",
+      "posBottomLeft": "左下",
+      "posTopRight": "右上",
+      "posTopLeft": "左上",
+      "r2Title": "Cloudflare R2 ストレージ",
+      "r2Desc": "有効にすると、新規アップロード画像はR2にのみ保存され、CDN経由で配信されます。ローカルディスクを消費しません。",
+      "enableR2": "R2 ストレージを有効化",
+      "bucketLabel": "Bucket 名",
+      "publicUrlLabel": "公開アクセスドメイン",
+      "publicUrlHint": "R2 Bucket にバインドしたカスタムドメイン（Cloudflare 管理画面で設定）",
+      "r2MigrateHint": "有効化後、新規アップロード画像はR2にのみ保存されます。設定前にアップロードした画像はローカルに残り、「R2へ移行」で同期できます。",
+      "testing": "テスト中...",
+      "testConnection": "接続テスト",
+      "affectsAll": "変更はサイト全体に影響します",
+      "saved": "設定を保存しました",
+      "saveFailed": "保存に失敗しました。再試行してください",
+      "r2TestSuccess": "R2 接続テスト成功",
+      "r2TestFailed": "接続テストに失敗しました"
+    }
+  },
+  "landing": {
+    "hero": {
+      "badge": "⚡ 高速 · 安定 · 無料",
+      "titlePrefix": "あなたの画像を",
+      "titleHighlight": "クラウドで守る",
+      "subtitle": "高速・安定の画像ホスティングサービス。グローバルCDN配信、永続的な外部リンク",
+      "uploadNow": "今すぐアップロード",
+      "registerFree": "無料登録"
+    },
+    "stats": {
+      "images": "ホスト画像",
+      "users": "登録ユーザー",
+      "views": "累計閲覧数",
+      "storage": "ストレージ容量"
+    },
+    "features": {
+      "fastTransfer": {
+        "title": "高速転送",
+        "desc": "グローバルCDNアクセラレーション。アップロードもダウンロードも稲妻のように速く、ミリ秒レベルのレスポンス。"
+      },
+      "permanentLink": {
+        "title": "永続リンク",
+        "desc": "安定のHTTPS直リンク。外部リンクは永久に有効で、どんなウェブサイトにも埋め込めます。"
+      },
+      "secure": {
+        "title": "セキュア保護",
+        "desc": "プライベート画像はアクセストークンで保護。不正アクセスを完全にブロック。"
+      },
+      "analytics": {
+        "title": "データ分析",
+        "desc": "リアルタイムの閲覧数分析で、画像ごとの传播効果を把握。"
+      },
+      "management": {
+        "title": "スマート管理",
+        "desc": "公開・プライベートを自在に切り替え。アルバム式で一目で整理。"
+      },
+      "crossPlatform": {
+        "title": "マルチプラットフォーム",
+        "desc": "ウェブ・オープンAPI・デスクトップクライアントでマルチデバイスシームレス連携。"
+      }
+    }
+  },
+  "dashboard": {
+    "title": "ダッシュボード",
+    "welcomeBack": "おかえりなさい、{{name}}",
+    "subtitle": "画像とストレージの概況",
+    "uploadNow": "今すぐアップロード",
+    "statCards": {
+      "myImages": "マイ画像",
+      "totalViews": "総閲覧数",
+      "storageUsed": "使用ストレージ",
+      "publicImages": "公開画像"
+    },
+    "storage": {
+      "title": "ストレージ使用量",
+      "remaining": "残り {{used}} / {{total}}"
+    },
+    "recent": {
+      "title": "最近のアップロード",
+      "viewAll": "すべて表示"
+    },
+    "empty": {
+      "title": "まだ画像がアップロードされていません",
+      "desc": "最初の画像をアップロードして、画像ホスティングを始めましょう"
+    },
+    "adminStats": {
+      "totalUsers": "総ユーザー",
+      "totalImages": "画像総数",
+      "storageUsed": "ストレージ使用量",
+      "activeUsers": "アクティブユーザー",
+      "totalSessions": "セッション総数"
+    },
+    "adminSection": {
+      "title": "システム管理",
+      "subtitle": "システム稼働データ一覧",
+      "enterAdmin": "管理画面へ"
+    }
+  },
+  "notification": {
+    "title": "通知",
+    "markAllRead": "すべて既読",
+    "clearAll": "すべて削除",
+    "empty": "通知はありません",
+    "confirmClear": "すべての通知を削除しますか？",
+    "time": {
+      "justNow": "たった今",
+      "minutesAgo": "{{count}}分前",
+      "hoursAgo": "{{count}}時間前",
+      "daysAgo": "{{count}}日前"
+    },
+    "actions": {
+      "markRead": "既読にする",
+      "delete": "通知を削除"
+    },
+    "toast": {
+      "markReadFailed": "既読設定に失敗しました",
+      "allMarkedRead": "すべて既読にしました",
+      "actionFailed": "操作に失敗しました",
+      "deleteFailed": "削除に失敗しました",
+      "allCleared": "通知をすべて削除しました",
+      "clearFailed": "削除に失敗しました"
+    }
+  },
+  "api": {
+    "networkError": "ネットワークエラーです。接続を確認してください",
+    "sessionExpired": "セッションの有効期限が切れました",
+    "parseFailed": "レスポンスの解析に失敗しました",
+    "unknownError": "不明なエラー"
+  }
+}

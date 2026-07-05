@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
 import { useTranslation } from 'react-i18next'
-import i18n from '@/i18n'
+import i18n, { changeLanguage } from '@/i18n'
 import {
   IconUser,
   IconMail,
@@ -14,6 +14,7 @@ import {
   IconShieldCheck,
   IconLock,
   IconDeviceFloppy,
+  IconLanguage,
 } from '@tabler/icons-react'
 import {
   Card,
@@ -29,6 +30,13 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Progress } from '@/components/ui/progress'
 import { Skeleton } from '@/components/ui/skeleton'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { USER_ROLES, USER_STATUS } from '@/config/constants'
 import { ApiError } from '@/lib/errors'
 import type { UserProfile } from '@/lib/types'
@@ -277,6 +285,35 @@ function PasswordCard() {
   )
 }
 
+function LanguageCard() {
+  const { t } = useTranslation()
+  return (
+    <Card className="rounded-3xl">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-lg">
+          <IconLanguage className="size-5" />
+          {t('profile.settings.title')}
+        </CardTitle>
+        <CardDescription>{t('profile.settings.languageDesc')}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="flex items-center gap-4">
+          <Label className="text-sm">{t('profile.settings.language')}</Label>
+          <Select value={i18n.language} onValueChange={(v) => changeLanguage(v)}>
+            <SelectTrigger className="w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="zh-CN">中文</SelectItem>
+              <SelectItem value="ja-JP">日本語</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
 export default function ProfilePage() {
   const { t } = useTranslation()
   return (
@@ -287,6 +324,7 @@ export default function ProfilePage() {
       </div>
       <AccountCard />
       <PasswordCard />
+      <LanguageCard />
     </div>
   )
 }

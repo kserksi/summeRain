@@ -224,6 +224,11 @@
   "profile": {
     "title": "个人资料",
     "subtitle": "管理你的账户信息与安全设置",
+    "settings": {
+      "title": "偏好设置",
+      "language": "界面语言",
+      "languageDesc": "选择界面显示语言"
+    },
     "account": {
       "title": "账户信息",
       "description": "查看你的账户与存储使用情况",
