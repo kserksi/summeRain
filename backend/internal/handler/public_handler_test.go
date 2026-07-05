@@ -43,7 +43,7 @@ func TestPublicConfigExposesProviderAndSiteKeyWithoutSecret(t *testing.T) {
 	}
 }
 
-func TestApplyImageCacheHeadersForPublicImagesRequiresRevalidation(t *testing.T) {
+func TestApplyImageCacheHeadersForPublicImagesIsAggressivelyCached(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
@@ -51,17 +51,25 @@ func TestApplyImageCacheHeadersForPublicImagesRequiresRevalidation(t *testing.T)
 	applyImageCacheHeaders(c, false)
 
 	headers := w.Header()
-	if got := headers.Get("Cache-Control"); got != "no-cache, must-revalidate" {
-		t.Fatalf("Cache-Control = %q, want no-cache, must-revalidate", got)
+	// Public images are immutable (unique_link never changes, content never modified).
+	// Cache aggressively at every layer: browser, nginx, Cloudflare/CDN.
+	if got := headers.Get("Cache-Control"); got != "public, max-age=31536000, immutable" {
+		t.Fatalf("Cache-Control = %q, want public, max-age=31536000, immutable", got)
 	}
-	if got := headers.Get("Pragma"); got != "no-cache" {
-		t.Fatalf("Pragma = %q, want no-cache", got)
+	// No legacy anti-cache headers for public images
+	if got := headers.Get("Pragma"); got != "" {
+		t.Fatalf("Pragma = %q, want empty for public images", got)
 	}
-	if got := headers.Get("Expires"); got != "0" {
-		t.Fatalf("Expires = %q, want 0", got)
+	if got := headers.Get("Expires"); got != "" {
+		t.Fatalf("Expires = %q, want empty for public images", got)
 	}
-	if got := headers.Get("X-Accel-Expires"); got != "0" {
-		t.Fatalf("X-Accel-Expires = %q, want 0", got)
+	// nginx edge cache (1 year)
+	if got := headers.Get("X-Accel-Expires"); got != "31536000" {
+		t.Fatalf("X-Accel-Expires = %q, want 31536000", got)
+	}
+	// CDN / Cloudflare surrogate cache (1 year)
+	if got := headers.Get("Surrogate-Control"); got != "max-age=31536000" {
+		t.Fatalf("Surrogate-Control = %q, want max-age=31536000", got)
 	}
 }
 
@@ -84,6 +92,9 @@ func TestApplyImageCacheHeadersForPrivateImagesDisablesStorage(t *testing.T) {
 	}
 	if got := headers.Get("X-Accel-Expires"); got != "0" {
 		t.Fatalf("X-Accel-Expires = %q, want 0", got)
+	}
+	if got := headers.Get("Surrogate-Control"); got != "no-store" {
+		t.Fatalf("Surrogate-Control = %q, want no-store", got)
 	}
 }
 

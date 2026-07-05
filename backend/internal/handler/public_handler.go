@@ -45,7 +45,7 @@ func NewPublicHandler(imageSvc *service.ImageService, storageCfg *config.Storage
 		rdb:                 rdb,
 		signer:              signer,
 		imgproxyURL:         imgproxyURL,
-		client:              &http.Client{Timeout: 10 * time.Second},
+		client:              &http.Client{Timeout: 30 * time.Second},
 		publicConfigService: publicConfigService,
 		publicStatsService:  publicStatsService,
 		resolver:            resolver,
@@ -219,15 +219,21 @@ func (h *PublicHandler) ServeImage(c *gin.Context) {
 
 func applyImageCacheHeaders(c *gin.Context, private bool) {
 	if private {
+		// Private images: never cache — token validation must run on every request.
 		c.Header("Cache-Control", "no-store, no-cache, must-revalidate, private")
+		c.Header("Pragma", "no-cache")
+		c.Header("Expires", "0")
+		c.Header("X-Accel-Expires", "0")
+		c.Header("Surrogate-Control", "no-store")
+		c.Header("Vary", "Accept, X-Image-Token, Authorization")
 	} else {
-		c.Header("Cache-Control", "no-cache, must-revalidate")
+		// Public images are immutable (unique_link never changes, content never modified).
+		// Cache aggressively at every layer: browser, nginx, Cloudflare/CDN.
+		// 31536000 seconds = 1 year.
+		c.Header("Cache-Control", "public, max-age=31536000, immutable")
+		c.Header("X-Accel-Expires", "31536000")
+		c.Header("Surrogate-Control", "max-age=31536000")
 	}
-	c.Header("Pragma", "no-cache")
-	c.Header("Expires", "0")
-	c.Header("X-Accel-Expires", "0")
-	c.Header("Surrogate-Control", "no-store")
-	c.Header("Vary", "Accept, X-Image-Token, Authorization")
 }
 
 func (h *PublicHandler) isOwnerOrAdmin(c *gin.Context, ownerID uint64) bool {
