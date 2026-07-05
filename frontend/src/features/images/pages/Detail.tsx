@@ -17,6 +17,7 @@ import {
 } from '@tabler/icons-react'
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
+import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { useCopy } from '@/lib/use-copy'
@@ -77,12 +78,12 @@ function formatDate(iso: string): string {
 
 type ProcFormat = 'original' | 'webp' | 'avif' | 'jpg' | 'png'
 
-const FORMAT_OPTIONS: { label: string; value: ProcFormat }[] = [
-  { label: '原图', value: 'original' },
-  { label: 'WebP', value: 'webp' },
-  { label: 'AVIF', value: 'avif' },
-  { label: 'JPEG', value: 'jpg' },
-  { label: 'PNG', value: 'png' },
+const FORMAT_OPTIONS: { labelKey: string; value: ProcFormat }[] = [
+  { labelKey: 'images.shared.formatOriginal', value: 'original' },
+  { labelKey: 'images.shared.formatWebp', value: 'webp' },
+  { labelKey: 'images.shared.formatAvif', value: 'avif' },
+  { labelKey: 'images.shared.formatJpeg', value: 'jpg' },
+  { labelKey: 'images.shared.formatPng', value: 'png' },
 ]
 
 function buildImageUrl(
@@ -102,11 +103,11 @@ function buildImageUrl(
   return `/i/${link}${ext}${qs ? `?${qs}` : ''}`
 }
 
-const TTL_OPTIONS = [
-  { label: '10 分钟', value: 10 * 60 * 1000 },
-  { label: '1 小时', value: IMAGE_TOKEN.DEFAULT_TTL_MS },
-  { label: '24 小时', value: 24 * 60 * 60 * 1000 },
-  { label: '72 小时', value: IMAGE_TOKEN.MAX_TTL_MS },
+const TTL_OPTIONS: { labelKey: string; value: number }[] = [
+  { labelKey: 'images.detail.ttl10m', value: 10 * 60 * 1000 },
+  { labelKey: 'images.detail.ttl1h', value: IMAGE_TOKEN.DEFAULT_TTL_MS },
+  { labelKey: 'images.detail.ttl24h', value: 24 * 60 * 60 * 1000 },
+  { labelKey: 'images.detail.ttl72h', value: IMAGE_TOKEN.MAX_TTL_MS },
 ]
 
 function ShareRow({
@@ -120,6 +121,7 @@ function ShareRow({
   display?: string
   successMsg?: string
 }) {
+  const { t } = useTranslation()
   const { copied, copy } = useCopy()
   return (
     <div className="space-y-1">
@@ -135,7 +137,7 @@ function ShareRow({
           size="icon"
           variant="outline"
           onClick={() => copy(value, successMsg)}
-          aria-label={`复制${label}`}
+          aria-label={t('images.detail.copyAriaLabel', { label })}
         >
           {copied ? (
             <IconCheck className="text-primary" />
@@ -149,23 +151,25 @@ function ShareRow({
 }
 
 function ProcessedLinkRow({ value }: { value: string }) {
+  const { t } = useTranslation()
   const { copied, copy } = useCopy()
   return (
     <div className="flex gap-2">
       <Input readOnly value={value} className="font-mono text-xs" />
-      <Button type="button" onClick={() => copy(value, '已复制处理链接')}>
+      <Button type="button" onClick={() => copy(value, t('images.detail.processedLinkCopied'))}>
         {copied ? (
           <IconCheck className="text-primary" />
         ) : (
           <IconCopy />
         )}
-        复制
+        {t('images.shared.copy')}
       </Button>
     </div>
   )
 }
 
 export default function Detail() {
+  const { t } = useTranslation()
   const { id } = useParams()
   const navigate = useNavigate()
   const numericId = Number(id)
@@ -242,7 +246,7 @@ export default function Detail() {
   return (
     <div className="space-y-6">
       <Button variant="ghost" size="sm" onClick={() => navigate('/images')}>
-        ← 返回
+        ← {t('common.back')}
       </Button>
 
       <div className="grid gap-6 md:grid-cols-[1fr_360px]">
@@ -251,7 +255,7 @@ export default function Detail() {
             type="button"
             onClick={() => setLightbox(true)}
             className="group relative block size-full"
-            aria-label="放大查看"
+            aria-label={t('images.detail.zoomAria')}
           >
             <img
               src={imgUrl}
@@ -259,7 +263,7 @@ export default function Detail() {
               className="mx-auto max-h-[70vh] w-full object-contain"
             />
             <span className="absolute right-3 bottom-3 flex items-center gap-1 rounded-full bg-black/60 px-2.5 py-1 text-xs text-white opacity-0 transition-opacity group-hover:opacity-100">
-              <IconZoomScan className="size-3.5" /> 放大
+              <IconZoomScan className="size-3.5" /> {t('images.detail.zoom')}
             </span>
           </button>
         </div>
@@ -276,22 +280,22 @@ export default function Detail() {
                 </div>
                 <Badge variant={isPrivate ? 'secondary' : 'default'}>
                   {isPrivate ? <IconLock /> : <IconWorld />}
-                  {isPrivate ? '私密' : '公开'}
+                  {isPrivate ? t('images.shared.private') : t('images.shared.public')}
                 </Badge>
               </div>
               <Separator />
               <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
-                <dt className="text-muted-foreground">尺寸</dt>
+                <dt className="text-muted-foreground">{t('images.shared.dimensions')}</dt>
                 <dd>
                   {image.width} × {image.height}
                 </dd>
-                <dt className="text-muted-foreground">大小</dt>
+                <dt className="text-muted-foreground">{t('images.shared.size')}</dt>
                 <dd>{formatBytes(image.file_size)}</dd>
                 <dt className="flex items-center gap-1 text-muted-foreground">
-                  <IconEye className="size-3.5" /> 浏览
+                  <IconEye className="size-3.5" /> {t('images.shared.views')}
                 </dt>
                 <dd>{image.view_count}</dd>
-                <dt className="text-muted-foreground">上传时间</dt>
+                <dt className="text-muted-foreground">{t('images.shared.uploadedAt')}</dt>
                 <dd>{formatDate(image.created_at)}</dd>
               </dl>
             </CardContent>
@@ -300,9 +304,9 @@ export default function Detail() {
           <Card>
             <CardContent className="flex items-center justify-between p-5">
               <div>
-                <p className="font-medium">可见性</p>
+                <p className="font-medium">{t('upload.visibility')}</p>
                 <p className="text-sm text-muted-foreground">
-                  {isPrivate ? '仅通过令牌链接可访问' : '所有人可见'}
+                  {isPrivate ? t('images.detail.privateHint') : t('images.detail.publicHint')}
                 </p>
               </div>
               <Switch
@@ -320,8 +324,8 @@ export default function Detail() {
 
           <Card>
             <CardContent className="space-y-3 p-5">
-              <p className="font-medium">分享链接</p>
-              <ShareRow label="链接" value={shareUrl} />
+              <p className="font-medium">{t('images.detail.shareLinks')}</p>
+              <ShareRow label={t('images.shared.link')} value={shareUrl} />
               <ShareRow
                 label="Markdown"
                 value={`![${title}](${shareUrl})`}
@@ -337,15 +341,15 @@ export default function Detail() {
             <CardContent className="space-y-4 p-5">
               <div className="space-y-0.5">
                 <p className="flex items-center gap-1.5 font-medium">
-                  <IconPhotoEdit className="size-4" /> 图片处理与转换
+                  <IconPhotoEdit className="size-4" /> {t('images.detail.processingTitle')}
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  基于 imgproxy 实时转换格式、尺寸与质量。
+                  {t('images.detail.processingHint')}
                 </p>
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">格式</Label>
+                <Label className="text-xs text-muted-foreground">{t('images.shared.format')}</Label>
                 <div className="flex flex-wrap gap-2">
                   {FORMAT_OPTIONS.map((f) => (
                     <Button
@@ -354,7 +358,7 @@ export default function Detail() {
                       variant={procFormat === f.value ? 'default' : 'outline'}
                       onClick={() => setProcFormat(f.value)}
                     >
-                      {f.label}
+                      {t(f.labelKey)}
                     </Button>
                   ))}
                 </div>
@@ -363,11 +367,11 @@ export default function Detail() {
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <Label className="text-xs text-muted-foreground">
-                    尺寸 (px)
+                    {t('images.shared.dimensions')} (px)
                   </Label>
                   <div className="flex items-center gap-1.5">
                     <span className="text-xs text-muted-foreground">
-                      锁定比例
+                      {t('images.detail.lockAspect')}
                     </span>
                     <Switch
                       checked={lockAspect}
@@ -383,7 +387,7 @@ export default function Detail() {
                     value={procWidth}
                     onChange={(e) => onProcWidthChange(e.target.value)}
                     className="h-8"
-                    aria-label="宽度"
+                    aria-label={t('images.detail.widthAria')}
                   />
                   <span className="text-muted-foreground">×</span>
                   <Input
@@ -393,7 +397,7 @@ export default function Detail() {
                     value={procHeight}
                     onChange={(e) => onProcHeightChange(e.target.value)}
                     className="h-8"
-                    aria-label="高度"
+                    aria-label={t('images.detail.heightAria')}
                   />
                   <Button
                     size="sm"
@@ -403,7 +407,7 @@ export default function Detail() {
                       setProcHeight('')
                     }}
                   >
-                    重置
+                    {t('images.detail.reset')}
                   </Button>
                 </div>
               </div>
@@ -412,7 +416,7 @@ export default function Detail() {
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
                     <Label className="text-xs text-muted-foreground">
-                      质量
+                      {t('images.detail.quality')}
                     </Label>
                     <span className="text-xs tabular-nums text-muted-foreground">
                       {quality}
@@ -430,7 +434,7 @@ export default function Detail() {
               )}
 
               <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">链接</Label>
+                <Label className="text-xs text-muted-foreground">{t('images.shared.link')}</Label>
                 <ProcessedLinkRow value={processedUrl} />
               </div>
             </CardContent>
@@ -440,33 +444,33 @@ export default function Detail() {
             <Card>
               <CardContent className="space-y-3 p-5">
                 <p className="flex items-center gap-1.5 font-medium">
-                  <IconKey className="size-4" /> 访问令牌
+                  <IconKey className="size-4" /> {t('images.detail.accessToken')}
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  私密图片需要带令牌的链接才能访问。
+                  {t('images.detail.tokenHelp')}
                 </p>
 
                 {activeToken ? (
                   <>
                     <ShareRow
-                      label="令牌"
+                      label={t('images.shared.token')}
                       value={activeToken}
                       display={maskedToken}
-                      successMsg="令牌已复制"
+                      successMsg={t('images.detail.tokenCopied')}
                     />
-                    <ShareRow label="带令牌链接" value={tokenShare} />
+                    <ShareRow label={t('images.detail.tokenLink')} value={tokenShare} />
                     {image?.token_expires_at && (
                       <p className="text-xs text-muted-foreground">
-                        过期时间：{formatDate(image?.token_expires_at ?? '')}
+                        {t('images.detail.expiresAt', { date: formatDate(image?.token_expires_at ?? '') })}
                       </p>
                     )}
                   </>
                 ) : (
-                  <p className="text-sm text-muted-foreground">无活跃令牌</p>
+                  <p className="text-sm text-muted-foreground">{t('images.detail.noActiveToken')}</p>
                 )}
 
                 <div className="flex flex-wrap items-center gap-2">
-                  <Label className="text-sm">有效期</Label>
+                  <Label className="text-sm">{t('images.detail.validity')}</Label>
                   <Select
                     value={String(ttl)}
                     onValueChange={(v) => setTtl(Number(v))}
@@ -477,7 +481,7 @@ export default function Detail() {
                     <SelectContent>
                       {TTL_OPTIONS.map((o) => (
                         <SelectItem key={o.value} value={String(o.value)}>
-                          {o.label}
+                          {t(o.labelKey)}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -494,7 +498,7 @@ export default function Detail() {
                         {
                           onSuccess: (data) => {
                             setIssuedToken(data.access_token || '')
-                            toast.success('令牌已签发')
+                            toast.success(t('images.toast.tokenIssued'))
                             const warning = (
                               data as { warning?: string }
                             ).warning
@@ -509,7 +513,7 @@ export default function Detail() {
                     ) : (
                       <IconRefresh />
                     )}
-                    {image?.access_token ? '重新签发' : '签发令牌'}
+                    {image?.access_token ? t('images.detail.reissueToken') : t('images.detail.issueToken')}
                   </Button>
                   <Button
                     size="sm"
@@ -518,7 +522,7 @@ export default function Detail() {
                     onClick={() => revoke.mutate(image.id)}
                   >
                     <IconBan />
-                    吊销
+                    {t('images.detail.revoke')}
                   </Button>
                 </div>
               </CardContent>
@@ -529,23 +533,23 @@ export default function Detail() {
             <AlertDialogTrigger asChild>
               <Button variant="destructive" className="w-full">
                 <IconTrash />
-                删除图片
+                {t('images.detail.deleteImage')}
               </Button>
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>确认删除？</AlertDialogTitle>
+                <AlertDialogTitle>{t('images.detail.confirmDeleteTitle')}</AlertDialogTitle>
                 <AlertDialogDescription>
-                  此操作不可撤销，图片将被永久删除。
+                  {t('images.detail.confirmDeleteDesc')}
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel>取消</AlertDialogCancel>
+                <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
                 <AlertDialogAction
                   onClick={onDelete}
                   disabled={del.isPending}
                 >
-                  {del.isPending ? '删除中…' : '确认删除'}
+                  {del.isPending ? t('images.detail.deleting') : t('images.detail.confirmDelete')}
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>

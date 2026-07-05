@@ -6,6 +6,7 @@ import { useMutation } from '@tanstack/react-query'
 import { useNavigate } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+import i18n from '@/i18n'
 import { queryClient } from '@/lib/query-client'
 import { ApiError } from '@/lib/errors'
 import { ROUTES } from '@/config/constants'
@@ -54,7 +55,7 @@ export function useRegister() {
   return useMutation({
     mutationFn: (data: RegisterData) => register(data),
     onSuccess: () => {
-      toast.success('注册成功，请登录')
+      toast.success(i18n.t('auth.registerSuccess'))
       navigate(ROUTES.LOGIN, { replace: true })
     },
     onError: (err) => {

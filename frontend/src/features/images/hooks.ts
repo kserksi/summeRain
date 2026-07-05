@@ -9,6 +9,7 @@ import {
 } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
+import i18n from '@/i18n'
 import { QUERY_KEYS } from '@/config/constants'
 import { useAuthStore } from '@/store/auth-store'
 
@@ -50,10 +51,10 @@ export function useUpload() {
       qc.invalidateQueries({ queryKey: ['images'] })
       refreshUser()
       const failed = data.results.filter((r) => !r.success).length
-      if (failed === 0) toast.success(`已上传 ${data.total} 张图片`)
-      else toast.warning(`${data.total - failed} 张成功，${failed} 张失败`)
+      if (failed === 0) toast.success(i18n.t('upload.toast.uploadSuccess', { count: data.total }))
+      else toast.warning(i18n.t('upload.toast.uploadPartial', { ok: data.total - failed, fail: failed }))
     },
-    onError: () => toast.error('上传失败'),
+    onError: () => toast.error(i18n.t('upload.toast.uploadAllFailed')),
   })
 }
 
@@ -65,9 +66,9 @@ export function useDeleteImage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['images'] })
       refreshUser()
-      toast.success('图片已删除')
+      toast.success(i18n.t('images.toast.deleted'))
     },
-    onError: () => toast.error('删除失败'),
+    onError: () => toast.error(i18n.t('images.toast.deleteFailed')),
   })
 }
 
@@ -80,12 +81,12 @@ export function useToggleVisibility() {
       qc.invalidateQueries({ queryKey: ['images'] })
       qc.invalidateQueries({ queryKey: QUERY_KEYS.imageDetail(img.id) })
       if (img.visibility === 'private') {
-        toast.warning('已设为私密，公开链接将无法访问')
+        toast.warning(i18n.t('images.toast.setToPrivate'))
       } else {
-        toast.success('已设为公开')
+        toast.success(i18n.t('images.toast.setToPublic'))
       }
     },
-    onError: () => toast.error('切换失败'),
+    onError: () => toast.error(i18n.t('images.toast.toggleFailed')),
   })
 }
 
@@ -96,9 +97,9 @@ export function useIssueToken() {
       issueToken(vars.id, vars.ttlMs),
     onSuccess: (img) => {
       qc.invalidateQueries({ queryKey: QUERY_KEYS.imageDetail(img.id) })
-      toast.success('令牌已签发')
+      toast.success(i18n.t('images.toast.tokenIssued'))
     },
-    onError: () => toast.error('签发失败'),
+    onError: () => toast.error(i18n.t('images.toast.issueFailed')),
   })
 }
 
@@ -108,8 +109,8 @@ export function useRevokeToken() {
     mutationFn: (id: number) => revokeToken(id),
     onSuccess: (_data, id) => {
       qc.invalidateQueries({ queryKey: QUERY_KEYS.imageDetail(id) })
-      toast.success('令牌已吊销')
+      toast.success(i18n.t('images.toast.tokenRevoked'))
     },
-    onError: () => toast.error('吊销失败'),
+    onError: () => toast.error(i18n.t('images.toast.revokeFailed')),
   })
 }

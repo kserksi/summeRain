@@ -3,6 +3,7 @@
 
 import { IconX } from '@tabler/icons-react'
 import { useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
 
@@ -12,6 +13,7 @@ export interface LightboxProps {
 }
 
 export function Lightbox({ src, onClose }: LightboxProps) {
+  const { t } = useTranslation()
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
@@ -38,7 +40,7 @@ export function Lightbox({ src, onClose }: LightboxProps) {
         size="icon"
         className="absolute top-4 right-4 text-white hover:bg-white/10"
         onClick={onClose}
-        aria-label="关闭"
+        aria-label={t('images.shared.close')}
       >
         <IconX />
       </Button>

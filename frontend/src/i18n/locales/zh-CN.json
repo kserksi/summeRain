@@ -103,5 +103,122 @@
     },
     "retry": "重试",
     "retryAll": "重试全部失败（{{count}}）"
+  },
+  "auth": {
+    "loginSubtitle": "登录你的 {{appName}} 账号",
+    "registerSubtitle": "创建你的 {{appName}} 账号",
+    "bannedMessage": "你的账号已被管理员禁用。如有疑问请联系管理员。",
+    "noAccount": "还没有账号？",
+    "hasAccount": "已有账号？",
+    "registerNow": "立即注册",
+    "hidePassword": "隐藏密码",
+    "showPassword": "显示密码",
+    "registerSuccess": "注册成功，请登录",
+    "field": {
+      "username": "用户名",
+      "password": "密码",
+      "email": "邮箱",
+      "confirmPassword": "确认密码"
+    },
+    "validation": {
+      "usernameRequired": "请输入用户名",
+      "passwordMin6": "密码至少 6 位",
+      "usernameMin3": "用户名至少 3 个字符",
+      "usernameMax50": "用户名最多 50 个字符",
+      "emailInvalid": "请输入有效的邮箱地址",
+      "passwordMin8": "密码至少 8 位",
+      "confirmRequired": "请再次输入密码",
+      "passwordMismatch": "两次输入的密码不一致"
+    }
+  },
+  "captcha": {
+    "clickToVerify": "点击验证",
+    "protectedByRecaptcha": "受 reCAPTCHA 保护"
+  },
+  "images": {
+    "shared": {
+      "public": "公开",
+      "private": "私密",
+      "close": "关闭",
+      "copy": "复制",
+      "link": "链接",
+      "token": "令牌",
+      "format": "格式",
+      "dimensions": "尺寸",
+      "size": "大小",
+      "views": "浏览",
+      "uploadedAt": "上传时间",
+      "formatOriginal": "原图",
+      "formatWebp": "WebP",
+      "formatAvif": "AVIF",
+      "formatJpeg": "JPEG",
+      "formatPng": "PNG"
+    },
+    "list": {
+      "searchPlaceholder": "搜索图片…",
+      "filterAll": "全部",
+      "gridView": "网格视图",
+      "listView": "列表视图",
+      "select": "选择",
+      "selectedCount": "已选 {{count}} 张",
+      "selectAll": "全选",
+      "batchDelete": "批量删除",
+      "empty": "还没有上传过图片",
+      "confirmBatchDeleteTitle": "确认批量删除",
+      "confirmBatchDeleteDesc": "确定删除选中的 {{count}} 张图片？此操作不可恢复。",
+      "toast": {
+        "deleted": "已删除 {{count}} 张",
+        "deleteAllFailed": "删除失败（可能是后端外键约束，需先清理关联令牌）",
+        "deletePartial": "{{ok}} 张成功，{{fail}} 张失败",
+        "deleteFailedWithMsg": "删除失败: {{msg}}"
+      }
+    },
+    "detail": {
+      "zoom": "放大",
+      "zoomAria": "放大查看",
+      "privateHint": "仅通过令牌链接可访问",
+      "publicHint": "所有人可见",
+      "shareLinks": "分享链接",
+      "processingTitle": "图片处理与转换",
+      "processingHint": "基于 imgproxy 实时转换格式、尺寸与质量。",
+      "dimensionsPx": "尺寸 (px)",
+      "lockAspect": "锁定比例",
+      "widthAria": "宽度",
+      "heightAria": "高度",
+      "reset": "重置",
+      "quality": "质量",
+      "accessToken": "访问令牌",
+      "tokenHelp": "私密图片需要带令牌的链接才能访问。",
+      "tokenLink": "带令牌链接",
+      "tokenCopied": "令牌已复制",
+      "processedLinkCopied": "已复制处理链接",
+      "copyAriaLabel": "复制{{label}}",
+      "expiresAt": "过期时间：{{date}}",
+      "noActiveToken": "无活跃令牌",
+      "validity": "有效期",
+      "ttl10m": "10 分钟",
+      "ttl1h": "1 小时",
+      "ttl24h": "24 小时",
+      "ttl72h": "72 小时",
+      "issueToken": "签发令牌",
+      "reissueToken": "重新签发",
+      "revoke": "吊销",
+      "deleteImage": "删除图片",
+      "confirmDeleteTitle": "确认删除？",
+      "confirmDeleteDesc": "此操作不可撤销，图片将被永久删除。",
+      "confirmDelete": "确认删除",
+      "deleting": "删除中…"
+    },
+    "toast": {
+      "deleted": "图片已删除",
+      "deleteFailed": "删除失败",
+      "setToPrivate": "已设为私密，公开链接将无法访问",
+      "setToPublic": "已设为公开",
+      "toggleFailed": "切换失败",
+      "tokenIssued": "令牌已签发",
+      "issueFailed": "签发失败",
+      "tokenRevoked": "令牌已吊销",
+      "revokeFailed": "吊销失败"
+    }
   }
 }

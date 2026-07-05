@@ -8,6 +8,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { IconAlertCircle, IconEye, IconEyeOff, IconLoader2, IconLogin } from '@tabler/icons-react'
 import { useTranslation } from 'react-i18next'
+import i18n from '@/i18n'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -19,8 +20,8 @@ import { Captcha } from '@/features/captcha/components/Captcha'
 import type { CaptchaPayload } from '@/lib/types'
 
 const loginSchema = z.object({
-  username: z.string().min(1, '请输入用户名'),
-  password: z.string().min(6, '密码至少 6 位'),
+  username: z.string().min(1, i18n.t('auth.validation.usernameRequired')),
+  password: z.string().min(6, i18n.t('auth.validation.passwordMin6')),
 })
 
 type LoginFormData = z.infer<typeof loginSchema>
@@ -52,14 +53,14 @@ export default function LoginPage() {
       <Card className="w-full max-w-md rounded-3xl shadow-2xl">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-semibold">{t('common.login')}</CardTitle>
-          <CardDescription>登录你的 月兔图床 账号</CardDescription>
+          <CardDescription>{t('auth.loginSubtitle', { appName: t('common.appName') })}</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4" noValidate>
             {isBanned && (
               <Alert variant="destructive">
                 <IconAlertCircle />
-                <AlertDescription>你的账号已被管理员禁用。如有疑问请联系管理员。</AlertDescription>
+                <AlertDescription>{t('auth.bannedMessage')}</AlertDescription>
               </Alert>
             )}
             {login.isError && (
@@ -70,7 +71,7 @@ export default function LoginPage() {
             )}
 
             <div className="flex flex-col gap-2">
-              <Label htmlFor="username">用户名</Label>
+              <Label htmlFor="username">{t('auth.field.username')}</Label>
               <Input
                 id="username"
                 autoComplete="username"
@@ -83,7 +84,7 @@ export default function LoginPage() {
             </div>
 
             <div className="flex flex-col gap-2">
-              <Label htmlFor="password">密码</Label>
+              <Label htmlFor="password">{t('auth.field.password')}</Label>
               <div className="relative">
                 <Input
                   id="password"
@@ -99,7 +100,7 @@ export default function LoginPage() {
                   size="icon-sm"
                   className="absolute top-1/2 right-1 -translate-y-1/2"
                   onClick={() => setShowPassword((v) => !v)}
-                  aria-label={showPassword ? '隐藏密码' : '显示密码'}
+                  aria-label={showPassword ? t('auth.hidePassword') : t('auth.showPassword')}
                   tabIndex={-1}
                 >
                   {showPassword ? <IconEyeOff /> : <IconEye />}
@@ -123,12 +124,12 @@ export default function LoginPage() {
           </form>
 
           <p className="mt-4 text-center text-sm text-muted-foreground">
-            还没有账号？{' '}
+            {t('auth.noAccount')}{' '}
             <Link
               to={ROUTES.REGISTER}
               className="font-medium text-primary hover:underline"
             >
-              立即注册
+              {t('auth.registerNow')}
             </Link>
           </p>
         </CardContent>

@@ -3,6 +3,7 @@
 
 import { useEffect, useRef } from 'react'
 import { IconShield, IconShieldCheckFilled } from '@tabler/icons-react'
+import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -15,6 +16,7 @@ export interface CaptchaProps {
 }
 
 export function Captcha({ action, onVerified }: CaptchaProps) {
+  const { t } = useTranslation()
   const { provider, enabled, siteKey, getCaptchaPayload, containerRef } = useCaptcha(action)
   const verifiedRef = useRef(false)
 
@@ -57,7 +59,7 @@ export function Captcha({ action, onVerified }: CaptchaProps) {
         }}
       >
         <IconShieldCheckFilled className="size-4" />
-        点击验证
+        {t('captcha.clickToVerify')}
       </Button>
     )
   }
@@ -65,7 +67,7 @@ export function Captcha({ action, onVerified }: CaptchaProps) {
   return (
     <Badge variant="secondary" className={cn('gap-1 text-xs')}>
       <IconShield className="size-3" />
-      受 reCAPTCHA 保护
+      {t('captcha.protectedByRecaptcha')}
     </Badge>
   )
 }

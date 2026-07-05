@@ -11,6 +11,7 @@ import {
 } from '@tabler/icons-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import {
@@ -38,6 +39,7 @@ type View = 'grid' | 'list'
 type Visibility = 'all' | 'public' | 'private'
 
 export default function List() {
+  const { t } = useTranslation()
   const [search, setSearch] = useState('')
   const [visibility, setVisibility] = useState<Visibility>('all')
   const [view, setView] = useState<View>('grid')
@@ -125,9 +127,9 @@ export default function List() {
         qc.invalidateQueries({ queryKey: ['images'] })
         await refreshUser()
       }
-      if (failed === 0) toast.success(`已删除 ${succeeded} 张`)
-      else if (succeeded === 0) toast.error(`删除失败（可能是后端外键约束，需先清理关联令牌）`)
-      else toast.warning(`${succeeded} 张成功，${failed} 张失败`)
+      if (failed === 0) toast.success(t('images.list.toast.deleted', { count: succeeded }))
+      else if (succeeded === 0) toast.error(t('images.list.toast.deleteAllFailed'))
+      else toast.warning(t('images.list.toast.deletePartial', { ok: succeeded, fail: failed }))
       setSelectedIds(new Set())
       setSelectMode(false)
       const failedErr = results.find((r) => r.status === 'rejected')
@@ -135,8 +137,8 @@ export default function List() {
         console.error('delete error:', failedErr.reason)
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : '未知错误'
-      toast.error(`删除失败: ${msg}`)
+      const msg = err instanceof Error ? err.message : t('layout.unknownError')
+      toast.error(t('images.list.toast.deleteFailedWithMsg', { msg }))
       console.error('batch delete error:', err)
     } finally {
       setIsDeleting(false)
@@ -147,7 +149,7 @@ export default function List() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold">我的图片</h1>
+        <h1 className="text-2xl font-bold">{t('nav.images')}</h1>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -156,7 +158,7 @@ export default function List() {
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="搜索图片…"
+            placeholder={t('images.list.searchPlaceholder')}
             className="pl-9"
           />
         </div>
@@ -166,9 +168,9 @@ export default function List() {
           onValueChange={(v) => v && setVisibility(v as Visibility)}
           variant="outline"
         >
-          <ToggleGroupItem value="all">全部</ToggleGroupItem>
-          <ToggleGroupItem value="public">公开</ToggleGroupItem>
-          <ToggleGroupItem value="private">私密</ToggleGroupItem>
+          <ToggleGroupItem value="all">{t('images.list.filterAll')}</ToggleGroupItem>
+          <ToggleGroupItem value="public">{t('images.shared.public')}</ToggleGroupItem>
+          <ToggleGroupItem value="private">{t('images.shared.private')}</ToggleGroupItem>
         </ToggleGroup>
         <ToggleGroup
           type="single"
@@ -176,10 +178,10 @@ export default function List() {
           onValueChange={(v) => v && setView(v as View)}
           variant="outline"
         >
-          <ToggleGroupItem value="grid" aria-label="网格视图">
+          <ToggleGroupItem value="grid" aria-label={t('images.list.gridView')}>
             <IconLayoutGrid />
           </ToggleGroupItem>
-          <ToggleGroupItem value="list" aria-label="列表视图">
+          <ToggleGroupItem value="list" aria-label={t('images.list.listView')}>
             <IconList />
           </ToggleGroupItem>
         </ToggleGroup>
@@ -187,18 +189,18 @@ export default function List() {
           variant={selectMode ? 'default' : 'outline'}
           onClick={toggleSelectMode}
         >
-          选择
+          {t('images.list.select')}
         </Button>
       </div>
 
       {selectMode && selectedIds.size > 0 && (
         <div className="sticky top-0 z-20 flex flex-wrap items-center gap-3 rounded-2xl bg-card/95 p-3 ring-1 ring-border backdrop-blur">
           <span className="text-sm font-medium">
-            已选 {selectedIds.size} 张
+            {t('images.list.selectedCount', { count: selectedIds.size })}
           </span>
           <div className="ml-auto flex items-center gap-2">
             <Button size="sm" variant="outline" onClick={selectAll}>
-              全选
+              {t('images.list.selectAll')}
             </Button>
             <Button
               size="sm"
@@ -206,10 +208,10 @@ export default function List() {
               onClick={() => setDeleteOpen(true)}
             >
               <IconTrash />
-              批量删除
+              {t('images.list.batchDelete')}
             </Button>
             <Button size="sm" variant="ghost" onClick={cancelSelection}>
-              取消
+              {t('common.cancel')}
             </Button>
           </div>
         </div>
@@ -225,7 +227,7 @@ export default function List() {
         <div className="grid min-h-[40vh] place-items-center text-center text-muted-foreground">
           <div className="space-y-2">
             <IconPhoto className="mx-auto size-10 opacity-40" />
-            <p>还没有上传过图片</p>
+            <p>{t('images.list.empty')}</p>
           </div>
         </div>
       ) : (
@@ -258,13 +260,13 @@ export default function List() {
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>确认批量删除</AlertDialogTitle>
+            <AlertDialogTitle>{t('images.list.confirmBatchDeleteTitle')}</AlertDialogTitle>
             <AlertDialogDescription>
-              确定删除选中的 {selectedIds.size} 张图片？此操作不可恢复。
+              {t('images.list.confirmBatchDeleteDesc', { count: selectedIds.size })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting}>取消</AlertDialogCancel>
+            <AlertDialogCancel disabled={isDeleting}>{t('common.cancel')}</AlertDialogCancel>
             <AlertDialogAction
               variant="destructive"
               disabled={isDeleting}
@@ -274,7 +276,7 @@ export default function List() {
               }}
             >
               {isDeleting && <IconLoader2 className="animate-spin" />}
-              删除
+              {t('common.delete')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

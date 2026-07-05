@@ -14,6 +14,7 @@ import {
   IconUserPlus,
 } from '@tabler/icons-react'
 import { useTranslation } from 'react-i18next'
+import i18n from '@/i18n'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -28,14 +29,14 @@ const registerSchema = z
   .object({
     username: z
       .string()
-      .min(3, '用户名至少 3 个字符')
-      .max(50, '用户名最多 50 个字符'),
-    email: z.string().email('请输入有效的邮箱地址'),
-    password: z.string().min(8, '密码至少 8 位'),
-    confirmPassword: z.string().min(1, '请再次输入密码'),
+      .min(3, i18n.t('auth.validation.usernameMin3'))
+      .max(50, i18n.t('auth.validation.usernameMax50')),
+    email: z.string().email(i18n.t('auth.validation.emailInvalid')),
+    password: z.string().min(8, i18n.t('auth.validation.passwordMin8')),
+    confirmPassword: z.string().min(1, i18n.t('auth.validation.confirmRequired')),
   })
   .refine((data) => data.password === data.confirmPassword, {
-    message: '两次输入的密码不一致',
+    message: i18n.t('auth.validation.passwordMismatch'),
     path: ['confirmPassword'],
   })
 
@@ -71,7 +72,7 @@ export default function RegisterPage() {
       <Card className="w-full max-w-md rounded-3xl shadow-2xl">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-semibold">{t('common.register')}</CardTitle>
-          <CardDescription>创建你的 月兔图床 账号</CardDescription>
+          <CardDescription>{t('auth.registerSubtitle', { appName: t('common.appName') })}</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4" noValidate>
@@ -83,7 +84,7 @@ export default function RegisterPage() {
             )}
 
             <div className="flex flex-col gap-2">
-              <Label htmlFor="username">用户名</Label>
+              <Label htmlFor="username">{t('auth.field.username')}</Label>
               <Input
                 id="username"
                 autoComplete="username"
@@ -96,7 +97,7 @@ export default function RegisterPage() {
             </div>
 
             <div className="flex flex-col gap-2">
-              <Label htmlFor="email">邮箱</Label>
+              <Label htmlFor="email">{t('auth.field.email')}</Label>
               <Input
                 id="email"
                 type="email"
@@ -110,7 +111,7 @@ export default function RegisterPage() {
             </div>
 
             <div className="flex flex-col gap-2">
-              <Label htmlFor="password">密码</Label>
+              <Label htmlFor="password">{t('auth.field.password')}</Label>
               <div className="relative">
                 <Input
                   id="password"
@@ -126,7 +127,7 @@ export default function RegisterPage() {
                   size="icon-sm"
                   className="absolute top-1/2 right-1 -translate-y-1/2"
                   onClick={() => setShowPassword((v) => !v)}
-                  aria-label={showPassword ? '隐藏密码' : '显示密码'}
+                  aria-label={showPassword ? t('auth.hidePassword') : t('auth.showPassword')}
                   tabIndex={-1}
                 >
                   {showPassword ? <IconEyeOff /> : <IconEye />}
@@ -138,7 +139,7 @@ export default function RegisterPage() {
             </div>
 
             <div className="flex flex-col gap-2">
-              <Label htmlFor="confirmPassword">确认密码</Label>
+              <Label htmlFor="confirmPassword">{t('auth.field.confirmPassword')}</Label>
               <Input
                 id="confirmPassword"
                 type={showPassword ? 'text' : 'password'}
@@ -164,7 +165,7 @@ export default function RegisterPage() {
           </form>
 
           <p className="mt-4 text-center text-sm text-muted-foreground">
-            已有账号？{' '}
+            {t('auth.hasAccount')}{' '}
             <Link to={ROUTES.LOGIN} className="font-medium text-primary hover:underline">
               {t('common.login')}
             </Link>

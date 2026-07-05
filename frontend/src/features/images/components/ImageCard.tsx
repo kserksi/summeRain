@@ -9,6 +9,7 @@ import {
   IconWorld,
 } from '@tabler/icons-react'
 import { useNavigate } from 'react-router'
+import { useTranslation } from 'react-i18next'
 
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
@@ -28,6 +29,7 @@ export function ImageCard({
   onToggleSelect,
 }: ImageCardProps) {
   const navigate = useNavigate()
+  const { t } = useTranslation()
   const src = `/i/${image.unique_link}.webp?w=400`
   const isPrivate = image.visibility === 'private'
 
@@ -82,7 +84,7 @@ export function ImageCard({
             className="backdrop-blur"
           >
             {isPrivate ? <IconLock /> : <IconWorld />}
-            {isPrivate ? '私密' : '公开'}
+            {isPrivate ? t('images.shared.private') : t('images.shared.public')}
           </Badge>
         </div>
       )}
