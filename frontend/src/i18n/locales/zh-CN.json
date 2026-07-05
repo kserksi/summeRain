@@ -407,5 +407,114 @@
       "r2TestSuccess": "R2 连接测试成功",
       "r2TestFailed": "连接测试失败"
     }
+  },
+  "landing": {
+    "hero": {
+      "badge": "⚡ 极速 · 稳定 · 免费",
+      "titlePrefix": "你的图片",
+      "titleHighlight": "交给云端守护",
+      "subtitle": "高速稳定的图片托管服务，全球 CDN 加速，外链永久有效",
+      "uploadNow": "立即上传",
+      "registerFree": "免费注册"
+    },
+    "stats": {
+      "images": "托管图片",
+      "users": "注册用户",
+      "views": "累计浏览",
+      "storage": "存储容量"
+    },
+    "features": {
+      "fastTransfer": {
+        "title": "极速传输",
+        "desc": "全球 CDN 加速，上传下载快如闪电，毫秒级响应体验。"
+      },
+      "permanentLink": {
+        "title": "永久外链",
+        "desc": "稳定 HTTPS 直链，外链永久有效，可嵌入任意网站。"
+      },
+      "secure": {
+        "title": "安全可靠",
+        "desc": "私密图片支持访问令牌保护，杜绝未授权访问。"
+      },
+      "analytics": {
+        "title": "数据统计",
+        "desc": "实时浏览量分析，掌握每张图片的传播效果。"
+      },
+      "management": {
+        "title": "智能管理",
+        "desc": "公开与私密切换自如，相册式整理一目了然。"
+      },
+      "crossPlatform": {
+        "title": "全平台",
+        "desc": "网页、开放 API、桌面客户端，多端无缝协同。"
+      }
+    }
+  },
+  "dashboard": {
+    "title": "仪表盘",
+    "welcomeBack": "欢迎回来，{{name}}",
+    "subtitle": "查看你的图片与存储概况",
+    "uploadNow": "立即上传",
+    "statCards": {
+      "myImages": "我的图片",
+      "totalViews": "总浏览量",
+      "storageUsed": "已用存储",
+      "publicImages": "公开图片"
+    },
+    "storage": {
+      "title": "存储用量",
+      "remaining": "剩余 {{used}} / {{total}}"
+    },
+    "recent": {
+      "title": "最近上传",
+      "viewAll": "查看全部"
+    },
+    "empty": {
+      "title": "还没有上传过图片",
+      "desc": "上传你的第一张图片，开始使用图床服务"
+    },
+    "adminStats": {
+      "totalUsers": "总用户",
+      "totalImages": "图片总数",
+      "storageUsed": "存储用量",
+      "activeUsers": "活跃用户",
+      "totalSessions": "会话总数"
+    },
+    "adminSection": {
+      "title": "系统管理",
+      "subtitle": "系统运行数据一览",
+      "enterAdmin": "进入后台"
+    }
+  },
+  "notification": {
+    "title": "通知",
+    "markAllRead": "全部已读",
+    "clearAll": "清空全部",
+    "empty": "暂无通知",
+    "confirmClear": "确定要清空全部通知吗？",
+    "time": {
+      "justNow": "刚刚",
+      "minutesAgo": "{{count}}分钟前",
+      "hoursAgo": "{{count}}小时前",
+      "daysAgo": "{{count}}天前"
+    },
+    "actions": {
+      "markRead": "标记为已读",
+      "delete": "删除通知"
+    },
+    "toast": {
+      "markReadFailed": "标记已读失败",
+      "allMarkedRead": "已全部标记为已读",
+      "actionFailed": "操作失败",
+      "deleteFailed": "删除失败",
+      "allCleared": "已清空全部通知",
+      "clearFailed": "清空失败"
+    }
+  },
+  "api": {
+    "networkError": "网络错误，请检查连接",
+    "sessionExpired": "会话已过期",
+    "parseFailed": "响应解析失败",
+    "unknownError": "未知错误"
   }
 }

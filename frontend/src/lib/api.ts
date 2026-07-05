@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { API_BASE_URL } from '@/config/constants'
+import i18n from '@/i18n'
 import { getCsrfToken } from '@/lib/csrf'
 import { ApiError } from '@/lib/errors'
 
@@ -39,26 +40,26 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
   } catch {
     // 网络错误统一吞掉,不然用户看到 raw fetch error 会懵
     // FIXME: 这里其实应该区分 timeout 和 offline,后面再加
-    throw new ApiError(0, '网络错误，请检查连接')
+    throw new ApiError(0, i18n.t('api.networkError'))
   }
 
   if (resp.status === 401 && !skipAuthRedirect) {
     window.location.assign('/login')
-    throw new ApiError(4010, '会话已过期')
+    throw new ApiError(4010, i18n.t('api.sessionExpired'))
   }
 
   let json: { code: number; message: string; data?: T }
   try {
     json = await resp.json()
   } catch {
-    throw new ApiError(0, '响应解析失败')
+    throw new ApiError(0, i18n.t('api.parseFailed'))
   }
 
   if (json.code !== 0) {
     if (json.code === 4030 && !skipAuthRedirect) {
       window.location.assign('/login?reason=banned')
     }
-    throw new ApiError(json.code, json.message || '未知错误')
+    throw new ApiError(json.code, json.message || i18n.t('api.unknownError'))
   }
   return json.data as T
 }

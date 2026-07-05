@@ -8,7 +8,9 @@ import {
   IconTrash,
 } from '@tabler/icons-react'
 import { toast } from 'sonner'
+import { useTranslation } from 'react-i18next'
 
+import i18n from '@/i18n'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -35,12 +37,12 @@ function timeAgo(iso: string): string {
   if (Number.isNaN(then)) return ''
   const diff = Math.max(0, Date.now() - then)
   const sec = Math.floor(diff / 1000)
-  if (sec < 60) return '刚刚'
+  if (sec < 60) return i18n.t('notification.time.justNow')
   const min = Math.floor(sec / 60)
-  if (min < 60) return `${min}分钟前`
+  if (min < 60) return i18n.t('notification.time.minutesAgo', { count: min })
   const hr = Math.floor(min / 60)
-  if (hr < 24) return `${hr}小时前`
-  return `${Math.floor(hr / 24)}天前`
+  if (hr < 24) return i18n.t('notification.time.hoursAgo', { count: hr })
+  return i18n.t('notification.time.daysAgo', { count: Math.floor(hr / 24) })
 }
 
 type NotificationRowProps = {
@@ -58,6 +60,7 @@ function NotificationRow({
   markReadPending,
   deletePending,
 }: NotificationRowProps) {
+  const { t } = useTranslation()
   return (
     <DropdownMenuItem
       onSelect={(e) => e.preventDefault()}
@@ -87,7 +90,7 @@ function NotificationRow({
             <Button
               variant="ghost"
               size="icon-sm"
-              aria-label="标记为已读"
+              aria-label={t('notification.actions.markRead')}
               disabled={markReadPending}
               onClick={(e) => {
                 e.stopPropagation()
@@ -100,7 +103,7 @@ function NotificationRow({
           <Button
             variant="ghost"
             size="icon-sm"
-            aria-label="删除通知"
+            aria-label={t('notification.actions.delete')}
             disabled={deletePending}
             onClick={(e) => {
               e.stopPropagation()
@@ -116,6 +119,7 @@ function NotificationRow({
 }
 
 export function NotificationBell() {
+  const { t } = useTranslation()
   const { data, isLoading } = useNotifications()
   const markReadMut = useMarkRead()
   const markAllReadMut = useMarkAllRead()
@@ -128,29 +132,29 @@ export function NotificationBell() {
 
   const handleMarkRead = (id: number) => {
     markReadMut.mutate(id, {
-      onError: () => toast.error('标记已读失败'),
+      onError: () => toast.error(t('notification.toast.markReadFailed')),
     })
   }
 
   const handleMarkAllRead = () => {
     markAllReadMut.mutate(undefined, {
-      onSuccess: () => toast.success('已全部标记为已读'),
-      onError: () => toast.error('操作失败'),
+      onSuccess: () => toast.success(t('notification.toast.allMarkedRead')),
+      onError: () => toast.error(t('notification.toast.actionFailed')),
     })
   }
 
   const handleDelete = (id: number) => {
     deleteMut.mutate(id, {
-      onError: () => toast.error('删除失败'),
+      onError: () => toast.error(t('notification.toast.deleteFailed')),
     })
   }
 
   const handleClearAll = () => {
     if (notifications.length === 0) return
-    if (!window.confirm('确定要清空全部通知吗？')) return
+    if (!window.confirm(t('notification.confirmClear'))) return
     clearMut.mutate(undefined, {
-      onSuccess: () => toast.success('已清空全部通知'),
-      onError: () => toast.error('清空失败'),
+      onSuccess: () => toast.success(t('notification.toast.allCleared')),
+      onError: () => toast.error(t('notification.toast.clearFailed')),
     })
   }
 
@@ -159,7 +163,7 @@ export function NotificationBell() {
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          aria-label="通知"
+          aria-label={t('notification.title')}
           className="relative grid size-11 place-items-center rounded-xl border border-border bg-card text-foreground transition hover:border-primary hover:text-primary"
         >
           <IconBell className="size-5" />
@@ -171,7 +175,7 @@ export function NotificationBell() {
 
       <DropdownMenuContent align="end" className="w-80 p-0">
         <div className="flex items-center justify-between px-3 py-2">
-          <span className="text-sm font-medium">通知</span>
+          <span className="text-sm font-medium">{t('notification.title')}</span>
           <Button
             variant="ghost"
             size="xs"
@@ -179,7 +183,7 @@ export function NotificationBell() {
             onClick={handleMarkAllRead}
           >
             <IconCheck className="size-3.5" />
-            全部已读
+            {t('notification.markAllRead')}
           </Button>
         </div>
         <DropdownMenuSeparator className="my-0" />
@@ -197,7 +201,7 @@ export function NotificationBell() {
         ) : notifications.length === 0 ? (
           <div className="flex flex-col items-center gap-2 px-3 py-10 text-muted-foreground">
             <IconBellOff className="size-6" />
-            <span className="text-sm">暂无通知</span>
+            <span className="text-sm">{t('notification.empty')}</span>
           </div>
         ) : (
           <ScrollArea className="h-80">
@@ -226,7 +230,7 @@ export function NotificationBell() {
             onClick={handleClearAll}
           >
             <IconTrash className="size-4" />
-            清空全部
+            {t('notification.clearAll')}
           </Button>
         </div>
       </DropdownMenuContent>

@@ -3,6 +3,7 @@
 
 import { Link } from "react-router"
 import { useQuery } from "@tanstack/react-query"
+import { useTranslation } from "react-i18next"
 import {
   IconArrowRight,
   IconBolt,
@@ -39,37 +40,38 @@ function formatNumber(n: number): string {
 const FEATURES = [
   {
     icon: IconBolt,
-    title: "极速传输",
-    desc: "全球 CDN 加速，上传下载快如闪电，毫秒级响应体验。",
+    titleKey: "landing.features.fastTransfer.title",
+    descKey: "landing.features.fastTransfer.desc",
   },
   {
     icon: IconLink,
-    title: "永久外链",
-    desc: "稳定 HTTPS 直链，外链永久有效，可嵌入任意网站。",
+    titleKey: "landing.features.permanentLink.title",
+    descKey: "landing.features.permanentLink.desc",
   },
   {
     icon: IconShieldLock,
-    title: "安全可靠",
-    desc: "私密图片支持访问令牌保护，杜绝未授权访问。",
+    titleKey: "landing.features.secure.title",
+    descKey: "landing.features.secure.desc",
   },
   {
     icon: IconChartBar,
-    title: "数据统计",
-    desc: "实时浏览量分析，掌握每张图片的传播效果。",
+    titleKey: "landing.features.analytics.title",
+    descKey: "landing.features.analytics.desc",
   },
   {
     icon: IconFolder,
-    title: "智能管理",
-    desc: "公开与私密切换自如，相册式整理一目了然。",
+    titleKey: "landing.features.management.title",
+    descKey: "landing.features.management.desc",
   },
   {
     icon: IconDevices,
-    title: "全平台",
-    desc: "网页、开放 API、桌面客户端，多端无缝协同。",
+    titleKey: "landing.features.crossPlatform.title",
+    descKey: "landing.features.crossPlatform.desc",
   },
 ] as const
 
 export default function LandingPage() {
+  const { t } = useTranslation()
   const user = useAuthStore((s) => s.user)
   const uploadHref = user ? "/upload" : "/login"
 
@@ -85,10 +87,10 @@ export default function LandingPage() {
   })
 
   const STATS = [
-    { value: stats ? formatNumber(stats.images) : "—", label: "托管图片" },
-    { value: stats ? formatNumber(stats.users) : "—", label: "注册用户" },
-    { value: stats ? formatNumber(stats.views) : "—", label: "累计浏览" },
-    { value: stats ? formatBytes(stats.storage_used) : "—", label: "存储容量" },
+    { value: stats ? formatNumber(stats.images) : "—", label: t("landing.stats.images") },
+    { value: stats ? formatNumber(stats.users) : "—", label: t("landing.stats.users") },
+    { value: stats ? formatNumber(stats.views) : "—", label: t("landing.stats.views") },
+    { value: stats ? formatBytes(stats.storage_used) : "—", label: t("landing.stats.storage") },
   ]
 
   return (
@@ -97,18 +99,18 @@ export default function LandingPage() {
       <section className="overflow-hidden rounded-3xl bg-gradient-to-br from-[#4A3426] to-[#8B5E3C] px-6 py-16 text-center shadow-xl sm:px-10 sm:py-20">
         <div className="mx-auto flex max-w-2xl flex-col items-center">
           <Badge className="h-auto border-white/20 bg-white/10 px-4 py-1.5 text-sm font-medium text-white backdrop-blur-sm">
-            ⚡ 极速 · 稳定 · 免费
+            {t("landing.hero.badge")}
           </Badge>
 
           <h1 className="mt-6 font-heading text-4xl font-bold tracking-tight text-white sm:text-5xl md:text-6xl">
-            你的图片
+            {t("landing.hero.titlePrefix")}
             <span className="bg-gradient-to-r from-amber-100 to-amber-300 bg-clip-text text-transparent">
-              交给云端守护
+              {t("landing.hero.titleHighlight")}
             </span>
           </h1>
 
           <p className="mt-5 max-w-xl text-base text-white/80 sm:text-lg">
-            高速稳定的图片托管服务，全球 CDN 加速，外链永久有效
+            {t("landing.hero.subtitle")}
           </p>
 
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
@@ -119,7 +121,7 @@ export default function LandingPage() {
             >
               <Link to={uploadHref}>
                 <IconUpload className="size-4" />
-                立即上传
+                {t("landing.hero.uploadNow")}
                 <IconArrowRight className="size-4" />
               </Link>
             </Button>
@@ -131,7 +133,7 @@ export default function LandingPage() {
             >
               <Link to="/register">
                 <IconUserPlus className="size-4" />
-                免费注册
+                {t("landing.hero.registerFree")}
               </Link>
             </Button>
           </div>
@@ -153,17 +155,17 @@ export default function LandingPage() {
 
       {/* Features Bento */}
       <section className="mt-10 grid grid-cols-1 gap-5 md:grid-cols-3">
-        {FEATURES.map(({ icon: Icon, title, desc }) => (
+        {FEATURES.map(({ icon: Icon, titleKey, descKey }) => (
           <Card
-            key={title}
+            key={titleKey}
             className="gap-4 p-6 transition-all duration-200 hover:-translate-y-1 hover:shadow-lg"
           >
             <div className="flex size-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
               <Icon className="size-6" />
             </div>
             <div className="space-y-1.5">
-              <h3 className="font-heading text-base font-semibold">{title}</h3>
-              <p className="text-sm text-muted-foreground">{desc}</p>
+              <h3 className="font-heading text-base font-semibold">{t(titleKey)}</h3>
+              <p className="text-sm text-muted-foreground">{t(descKey)}</p>
             </div>
           </Card>
         ))}

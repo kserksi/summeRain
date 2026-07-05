@@ -3,6 +3,7 @@
 
 import { useMemo } from 'react'
 import { Link } from 'react-router'
+import { useTranslation } from 'react-i18next'
 import {
   IconPhoto,
   IconEye,
@@ -78,23 +79,24 @@ function StatCard({
 
 const ADMIN_STATS: {
   key: keyof SystemStats
-  label: string
+  labelKey: string
   icon: IconType
   format: (v: number) => string
 }[] = [
-  { key: 'total_users', label: '总用户', icon: IconUsers, format: (v) => v.toLocaleString() },
-  { key: 'total_images', label: '图片总数', icon: IconPhoto, format: (v) => v.toLocaleString() },
-  { key: 'storage_used', label: '存储用量', icon: IconDeviceFloppy, format: formatBytes },
-  { key: 'active_users', label: '活跃用户', icon: IconChartPie, format: (v) => v.toLocaleString() },
+  { key: 'total_users', labelKey: 'dashboard.adminStats.totalUsers', icon: IconUsers, format: (v) => v.toLocaleString() },
+  { key: 'total_images', labelKey: 'dashboard.adminStats.totalImages', icon: IconPhoto, format: (v) => v.toLocaleString() },
+  { key: 'storage_used', labelKey: 'dashboard.adminStats.storageUsed', icon: IconDeviceFloppy, format: formatBytes },
+  { key: 'active_users', labelKey: 'dashboard.adminStats.activeUsers', icon: IconChartPie, format: (v) => v.toLocaleString() },
   {
     key: 'total_sessions',
-    label: '会话总数',
+    labelKey: 'dashboard.adminStats.totalSessions',
     icon: IconShieldCheck,
     format: (v) => v.toLocaleString(),
   },
 ]
 
 function AdminSection() {
+  const { t } = useTranslation()
   const { data, isLoading } = useAdminStats()
 
   return (
@@ -102,13 +104,13 @@ function AdminSection() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-lg">
           <IconShieldCheck className="size-4 text-primary" />
-          系统管理
+          {t('dashboard.adminSection.title')}
         </CardTitle>
-        <CardDescription>系统运行数据一览</CardDescription>
+        <CardDescription>{t('dashboard.adminSection.subtitle')}</CardDescription>
         <CardAction>
           <Button asChild variant="outline" size="sm">
             <Link to={ROUTES.ADMIN}>
-              进入后台
+              {t('dashboard.adminSection.enterAdmin')}
               <IconArrowRight />
             </Link>
           </Button>
@@ -129,7 +131,7 @@ function AdminSection() {
                 ) : (
                   <div className="text-xl font-bold tabular-nums">{value}</div>
                 )}
-                <div className="text-xs text-muted-foreground">{stat.label}</div>
+                <div className="text-xs text-muted-foreground">{t(stat.labelKey)}</div>
               </div>
             )
           })}
@@ -140,6 +142,7 @@ function AdminSection() {
 }
 
 function RecentImage({ image }: { image: Image }) {
+  const { t } = useTranslation()
   const isPrivate = image.visibility === 'private'
   return (
     <Link
@@ -157,7 +160,7 @@ function RecentImage({ image }: { image: Image }) {
       <div className="absolute top-2 left-2">
         <Badge variant={isPrivate ? 'secondary' : 'default'} className="backdrop-blur">
           {isPrivate ? <IconLock /> : <IconWorld />}
-          {isPrivate ? '私密' : '公开'}
+          {isPrivate ? t('images.shared.private') : t('images.shared.public')}
         </Badge>
       </div>
       <div className="p-2.5">
@@ -168,6 +171,7 @@ function RecentImage({ image }: { image: Image }) {
 }
 
 function EmptyImages() {
+  const { t } = useTranslation()
   return (
     <Card className="rounded-3xl">
       <CardContent className="flex flex-col items-center justify-center gap-3 py-12 text-center">
@@ -175,13 +179,13 @@ function EmptyImages() {
           <IconCloudUpload className="size-7" />
         </div>
         <div className="space-y-1">
-          <p className="font-medium">还没有上传过图片</p>
-          <p className="text-sm text-muted-foreground">上传你的第一张图片，开始使用图床服务</p>
+          <p className="font-medium">{t('dashboard.empty.title')}</p>
+          <p className="text-sm text-muted-foreground">{t('dashboard.empty.desc')}</p>
         </div>
         <Button asChild>
           <Link to={ROUTES.UPLOAD}>
             <IconUpload />
-            立即上传
+            {t('dashboard.uploadNow')}
           </Link>
         </Button>
       </CardContent>
@@ -190,6 +194,7 @@ function EmptyImages() {
 }
 
 export default function DashboardPage() {
+  const { t } = useTranslation()
   const user = useAuthStore((s) => s.user)
   const { data: profile, isLoading: profileLoading } = useProfile()
   const { data: imagesData, isLoading: imagesLoading } = useImages({ limit: 6 })
@@ -214,9 +219,9 @@ export default function DashboardPage() {
       <div className="flex items-center justify-between gap-4">
         <div>
           <h1 className="font-heading text-2xl font-semibold">
-            {profile ? `欢迎回来，${profile.username}` : '仪表盘'}
+            {profile ? t('dashboard.welcomeBack', { name: profile.username }) : t('dashboard.title')}
           </h1>
-          <p className="mt-1 text-sm text-muted-foreground">查看你的图片与存储概况</p>
+          <p className="mt-1 text-sm text-muted-foreground">{t('dashboard.subtitle')}</p>
         </div>
         <Avatar size="lg">
           {profile?.avatar_url ? (
@@ -229,25 +234,25 @@ export default function DashboardPage() {
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <StatCard
           icon={IconPhoto}
-          label="我的图片"
+          label={t('dashboard.statCards.myImages')}
           value={(profile?.image_count ?? 0).toLocaleString()}
           loading={profileLoading}
         />
         <StatCard
           icon={IconEye}
-          label="总浏览量"
+          label={t('dashboard.statCards.totalViews')}
           value={totalViews.toLocaleString()}
           loading={imagesLoading}
         />
         <StatCard
           icon={IconDeviceFloppy}
-          label="已用存储"
+          label={t('dashboard.statCards.storageUsed')}
           value={formatBytes(profile?.storage_used ?? 0)}
           loading={profileLoading}
         />
         <StatCard
           icon={IconWorld}
-          label="公开图片"
+          label={t('dashboard.statCards.publicImages')}
           value={publicCount.toLocaleString()}
           loading={imagesLoading}
         />
@@ -257,7 +262,7 @@ export default function DashboardPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <IconDeviceFloppy className="size-4 text-primary" />
-            存储用量
+            {t('dashboard.storage.title')}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -274,8 +279,10 @@ export default function DashboardPage() {
                   {profile.storage_percent.toFixed(1)}%
                 </span>
                 <span>
-                  剩余 {formatBytes(Math.max(profile.storage_quota - profile.storage_used, 0))} /{' '}
-                  {formatBytes(profile.storage_quota)}
+                  {t('dashboard.storage.remaining', {
+                    used: formatBytes(Math.max(profile.storage_quota - profile.storage_used, 0)),
+                    total: formatBytes(profile.storage_quota),
+                  })}
                 </span>
               </div>
             </>
@@ -287,12 +294,12 @@ export default function DashboardPage() {
         <div className="flex items-center justify-between">
           <h2 className="flex items-center gap-2 font-heading text-lg font-semibold">
             <IconPhoto className="size-5 text-primary" />
-            最近上传
+            {t('dashboard.recent.title')}
           </h2>
           {hasImages && (
             <Button asChild variant="ghost" size="sm">
               <Link to={ROUTES.IMAGES}>
-                查看全部
+                {t('dashboard.recent.viewAll')}
                 <IconArrowRight />
               </Link>
             </Button>
