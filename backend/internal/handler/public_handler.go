@@ -6,16 +6,19 @@ package handler
 import (
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
 	"github.com/summerain/image-gallery/internal/config"
+	"github.com/summerain/image-gallery/internal/model"
 	"github.com/summerain/image-gallery/internal/pkg/errcode"
 	"github.com/summerain/image-gallery/internal/pkg/imgproxy"
 	"github.com/summerain/image-gallery/internal/pkg/response"
@@ -25,6 +28,8 @@ import (
 type sessionResolver interface {
 	Resolve(c *gin.Context) (userID uint64, role string, ok bool)
 }
+
+var bgFormatInFlight sync.Map
 
 type PublicHandler struct {
 	imageSvc            *service.ImageService
@@ -173,6 +178,39 @@ func (h *PublicHandler) ServeImage(c *gin.Context) {
 		height = maxDim
 	}
 
+	// Fast path: serve pre-processed file from disk when no resize is requested.
+	// Pre-processed files were generated at upload time at original dimensions.
+	if width == 0 && height == 0 {
+		diskPath := filepath.Join(h.storageCfg.BasePath, "processed", imageFile.FileHash[:16]+"."+format)
+		if _, err := os.Stat(diskPath); err == nil {
+			applyImageCacheHeaders(c, isPrivate)
+			c.Header("Content-Type", "image/"+format)
+			c.Header("X-Content-Type-Options", "nosniff")
+			c.File(diskPath)
+			return
+		}
+
+		// AVIF progressive enhancement: degrade to WebP, trigger background AVIF generation.
+		if format == "avif" {
+			webpDiskPath := filepath.Join(h.storageCfg.BasePath, "processed", imageFile.FileHash[:16]+".webp")
+			if _, err := os.Stat(webpDiskPath); err == nil {
+				bgSource := "local:///images/" + imageFile.OriginalPath
+				h.triggerBackgroundFormat(imageFile, "avif", quality, bgSource)
+
+				c.Header("Content-Type", "image/webp")
+				c.Header("X-Content-Type-Options", "nosniff")
+				if isPrivate {
+					c.Header("Cache-Control", "no-store, no-cache, must-revalidate, private")
+				} else {
+					c.Header("Cache-Control", "public, max-age=10, must-revalidate")
+					c.Header("X-Accel-Expires", "10")
+				}
+				c.File(webpDiskPath)
+				return
+			}
+		}
+	}
+
 	var source string
 	if h.imageSvc.IsR2Enabled() {
 		source = h.imageSvc.R2PublicURL(imageFile.OriginalPath)
@@ -275,4 +313,51 @@ func extractToken(c *gin.Context) string {
 		return strings.TrimPrefix(auth, "Bearer ")
 	}
 	return ""
+}
+
+func (h *PublicHandler) triggerBackgroundFormat(imageFile *model.ImageFile, format string, quality int, source string) {
+	key := imageFile.FileHash + ":" + format
+	if _, loaded := bgFormatInFlight.LoadOrStore(key, true); loaded {
+		return
+	}
+	go func() {
+		defer bgFormatInFlight.Delete(key)
+
+		diskPath := filepath.Join(h.storageCfg.BasePath, "processed", imageFile.FileHash[:16]+"."+format)
+		if _, err := os.Stat(diskPath); err == nil {
+			return
+		}
+
+		path := fmt.Sprintf("/q:%d/f:%s/plain/%s", quality, format, source)
+		if wm := h.publicConfigService.GetWatermark(); wm != nil && wm.Enabled {
+			path = strings.Replace(path, "/plain/", fmt.Sprintf("/wm:%s:%s/plain/", wm.Opacity, wm.Position), 1)
+		}
+
+		signedPath := h.signer.SignPath(path)
+		resp, err := h.client.Get(h.imgproxyURL + signedPath)
+		if err != nil {
+			log.Printf("[bg-%s] imgproxy request failed for %s: %v", format, imageFile.FileHash[:16], err)
+			return
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != 200 {
+			log.Printf("[bg-%s] imgproxy returned %d for %s", format, resp.StatusCode, imageFile.FileHash[:16])
+			return
+		}
+
+		data, err := io.ReadAll(resp.Body)
+		if err != nil {
+			log.Printf("[bg-%s] read body failed for %s: %v", format, imageFile.FileHash[:16], err)
+			return
+		}
+
+		processedDir := filepath.Join(h.storageCfg.BasePath, "processed")
+		os.MkdirAll(processedDir, 0755)
+		if err := os.WriteFile(diskPath, data, 0644); err != nil {
+			log.Printf("[bg-%s] write to disk failed for %s: %v", format, imageFile.FileHash[:16], err)
+			return
+		}
+		log.Printf("[bg-%s] generated %s (%d bytes)", format, diskPath, len(data))
+	}()
 }
