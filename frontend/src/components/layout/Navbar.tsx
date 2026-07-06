@@ -51,9 +51,9 @@ export function Navbar() {
           {user ? (
             <div className="flex items-center gap-2">
               <NotificationBell />
-              <div className="grid size-10 place-items-center rounded-full bg-gradient-to-br from-primary to-accent font-bold text-white">
+              <Link to="/profile" className="grid size-10 place-items-center rounded-full bg-gradient-to-br from-primary to-accent font-bold text-white transition hover:opacity-80">
                 {user.username.charAt(0).toUpperCase()}
-              </div>
+              </Link>
             </div>
           ) : (
             <Link to="/login" className="text-sm font-medium text-muted-foreground hover:text-primary">{t('common.login')}</Link>
