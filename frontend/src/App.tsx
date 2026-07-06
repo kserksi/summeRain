@@ -4,6 +4,7 @@
 import { lazy, Suspense, useEffect } from 'react'
 import { Routes, Route, Navigate, Outlet } from 'react-router'
 import { useTranslation } from 'react-i18next'
+import i18n from '@/i18n'
 import { Navbar } from '@/components/layout/Navbar'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { useAuthStore } from '@/store/auth-store'
@@ -76,6 +77,14 @@ export default function App() {
   useEffect(() => {
     hydrate()
   }, [hydrate])
+
+  useEffect(() => {
+    import('@/features/captcha/api').then(({ getPublicConfig }) => {
+      getPublicConfig().then((cfg) => {
+        if (cfg.site_language) i18n.changeLanguage(cfg.site_language)
+      }).catch(() => {})
+    })
+  }, [])
 
   return (
     <ErrorBoundary>

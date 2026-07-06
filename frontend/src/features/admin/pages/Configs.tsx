@@ -47,6 +47,7 @@ const CFG = {
   R2_SECRET_KEY: 'r2_secret_key',
   R2_BUCKET: 'r2_bucket',
   R2_PUBLIC_URL: 'r2_public_url',
+  SITE_LANGUAGE: 'site_language',
 } as const
 
 const PROVIDER_LABELS: Record<string, string> = {
@@ -70,6 +71,7 @@ const WATERMARK_POSITIONS = [
 ] as const
 
 type FormState = {
+  siteLanguage: string
   provider: string
   siteKey: string
   secret: string
@@ -89,6 +91,7 @@ type FormState = {
 }
 
 const DEFAULTS: FormState = {
+  siteLanguage: 'zh-CN',
   provider: 'none',
   siteKey: '',
   secret: '',
@@ -110,6 +113,7 @@ const DEFAULTS: FormState = {
 function fromConfigs(configs: SystemConfig[]): FormState {
   const map = new Map(configs.map((c) => [c.config_key, c.config_value]))
   return {
+    siteLanguage: map.get(CFG.SITE_LANGUAGE) ?? DEFAULTS.siteLanguage,
     provider: map.get(CFG.CAPTCHA_PROVIDER) ?? DEFAULTS.provider,
     siteKey: map.get(CFG.CAPTCHA_SITE_KEY) ?? '',
     secret: map.get(CFG.CAPTCHA_SECRET) ?? '',
@@ -130,6 +134,7 @@ function fromConfigs(configs: SystemConfig[]): FormState {
 }
 
 const CFG_MAP: Record<keyof FormState, string> = {
+  siteLanguage: CFG.SITE_LANGUAGE,
   provider: CFG.CAPTCHA_PROVIDER,
   siteKey: CFG.CAPTCHA_SITE_KEY,
   secret: CFG.CAPTCHA_SECRET,
@@ -215,6 +220,33 @@ export default function Configs() {
       </div>
 
       <div className="flex-1 space-y-6">
+        <Card className="rounded-3xl">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <CardTitle>{t('admin.configs.siteLanguageTitle')}</CardTitle>
+            </div>
+            <CardDescription>{t('admin.configs.siteLanguageDesc')}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <Label>{t('admin.configs.siteLanguageLabel')}</Label>
+              {isLoading ? (
+                <Skeleton className="h-9 w-full max-w-xs" />
+              ) : (
+                <Select value={form.siteLanguage} onValueChange={(v) => setField('siteLanguage', v)}>
+                  <SelectTrigger className="w-full max-w-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="zh-CN">中文</SelectItem>
+                    <SelectItem value="ja-JP">日本語</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
         <Card className="rounded-3xl">
           <CardHeader>
             <div className="flex items-center gap-2">

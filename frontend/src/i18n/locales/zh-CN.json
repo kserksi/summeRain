@@ -379,6 +379,9 @@
     "configs": {
       "title": "系统配置",
       "subtitle": "人机验证、图片访问令牌与水印设置",
+      "siteLanguageTitle": "站点语言",
+      "siteLanguageDesc": "设置全站默认界面语言，对所有访客生效",
+      "siteLanguageLabel": "界面语言",
       "captchaTitle": "人机验证",
       "captchaDesc": "配置注册与登录流程的验证码服务",
       "providerLabel": "验证服务提供商",

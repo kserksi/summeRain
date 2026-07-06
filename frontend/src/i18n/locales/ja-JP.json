@@ -379,6 +379,9 @@
     "configs": {
       "title": "システム設定",
       "subtitle": "ボット認証・画像アクセストークン・透かしの設定",
+      "siteLanguageTitle": "サイト言語",
+      "siteLanguageDesc": "サイト全体のデフォルト表示言語を設定します。すべての訪問者に適用されます。",
+      "siteLanguageLabel": "表示言語",
       "captchaTitle": "ボット認証",
       "captchaDesc": "登録・ログイン時のCAPTCHAサービスを設定",
       "providerLabel": "認証サービスプロバイダー",

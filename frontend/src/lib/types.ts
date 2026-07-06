@@ -95,6 +95,7 @@ export interface Notification {
 export interface PublicConfig {
   captcha_provider: string
   captcha_site_key: string
+  site_language: string
 }
 
 export interface SystemConfig {

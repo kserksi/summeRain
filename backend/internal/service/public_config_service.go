@@ -32,10 +32,11 @@ func NewPublicConfigService(configReader PublicConfigReader, captcha config.Capt
 type PublicConfigResult struct {
 	CaptchaProvider string `json:"captcha_provider"`
 	CaptchaSiteKey  string `json:"captcha_site_key"`
+	SiteLanguage    string `json:"site_language"`
 }
 
 func (s *PublicConfigService) Get() (*PublicConfigResult, *errcode.AppError) {
-	result := &PublicConfigResult{CaptchaProvider: "none", CaptchaSiteKey: ""}
+	result := &PublicConfigResult{CaptchaProvider: "none", CaptchaSiteKey: "", SiteLanguage: "zh-CN"}
 	if s != nil {
 		result.CaptchaProvider = s.captcha.Provider
 		result.CaptchaSiteKey = providerSiteKey(s.captcha)
@@ -66,6 +67,10 @@ func (s *PublicConfigService) Get() (*PublicConfigResult, *errcode.AppError) {
 		case "geetest_captcha_id":
 			if result.CaptchaProvider == "geetest_v4" && value != "" {
 				result.CaptchaSiteKey = value
+			}
+		case "site_language":
+			if value != "" {
+				result.SiteLanguage = value
 			}
 		}
 	}
