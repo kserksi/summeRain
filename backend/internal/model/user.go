@@ -12,7 +12,7 @@ type User struct {
 	PasswordHash string    `gorm:"size:255;not null" json:"-"`
 	Role         string    `gorm:"size:10;default:user;not null" json:"role"`
 	Status       string    `gorm:"size:20;default:active;not null" json:"status"`
-	AvatarURL    *string   `gorm:"size:500" json:"avatar_url"`
+	AvatarURL    *string   `gorm:"type:mediumtext" json:"avatar_url"`
 	StorageUsed  int64     `gorm:"default:0;not null" json:"storage_used"`
 	StorageQuota int64     `gorm:"default:524288000;not null" json:"storage_quota"`
 	ImageCount   int       `gorm:"default:0;not null" json:"image_count"`
