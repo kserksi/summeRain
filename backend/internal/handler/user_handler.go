@@ -4,6 +4,8 @@
 package handler
 
 import (
+	"strings"
+
 	"github.com/gin-gonic/gin"
 	"github.com/summerain/image-gallery/internal/middleware"
 	"github.com/summerain/image-gallery/internal/pkg/errcode"
@@ -50,4 +52,34 @@ func (h *UserHandler) ChangePassword(c *gin.Context) {
 	}
 
 	response.Success(c, nil)
+}
+
+type updateAvatarReq struct {
+	AvatarURL string `json:"avatar_url" binding:"required"`
+}
+
+func (h *UserHandler) UpdateAvatar(c *gin.Context) {
+	var req updateAvatarReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, errcode.New(3001, "参数验证失败", 400))
+		return
+	}
+
+	if req.AvatarURL != "" && !strings.HasPrefix(req.AvatarURL, "data:image/") {
+		response.Error(c, errcode.New(3000, "头像必须是图片数据", 400))
+		return
+	}
+
+	if len(req.AvatarURL) > 200*1024 {
+		response.Error(c, errcode.New(3002, "头像文件过大", 400))
+		return
+	}
+
+	userID := middleware.GetUserID(c)
+	if appErr := h.userService.UpdateAvatar(userID, req.AvatarURL); appErr != nil {
+		response.Error(c, appErr)
+		return
+	}
+
+	response.Success(c, gin.H{"avatar_url": req.AvatarURL})
 }

@@ -51,8 +51,14 @@ export function Navbar() {
           {user ? (
             <div className="flex items-center gap-2">
               <NotificationBell />
-              <Link to="/profile" className="grid size-10 place-items-center rounded-full bg-gradient-to-br from-primary to-accent font-bold text-white transition hover:opacity-80">
-                {user.username.charAt(0).toUpperCase()}
+              <Link to="/profile" className="size-10 overflow-hidden rounded-full bg-gradient-to-br from-primary to-accent transition hover:opacity-80">
+                {user.avatar_url ? (
+                  <img src={user.avatar_url} alt={user.username} className="size-full object-cover" />
+                ) : (
+                  <span className="grid size-full place-items-center font-bold text-white">
+                    {user.username.charAt(0).toUpperCase()}
+                  </span>
+                )}
               </Link>
             </div>
           ) : (

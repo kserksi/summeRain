@@ -104,3 +104,10 @@ func (s *UserService) ChangePassword(userID uint64, oldPassword, newPassword, ip
 
 	return nil
 }
+
+func (s *UserService) UpdateAvatar(userID uint64, avatarURL string) *errcode.AppError {
+	if err := s.db.Model(&model.User{}).Where("id = ?", userID).Update("avatar_url", avatarURL).Error; err != nil {
+		return errcode.ErrDatabase
+	}
+	return nil
+}

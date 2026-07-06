@@ -1,6 +1,7 @@
 // Copyright 2026 kserks
 // SPDX-License-Identifier: Apache-2.0
 
+import { useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -15,6 +16,8 @@ import {
   IconLock,
   IconDeviceFloppy,
   IconLanguage,
+  IconPhotoUp,
+  IconX,
 } from '@tabler/icons-react'
 import {
   Card,
@@ -41,6 +44,9 @@ import { USER_ROLES, USER_STATUS } from '@/config/constants'
 import { ApiError } from '@/lib/errors'
 import type { UserProfile } from '@/lib/types'
 import { useProfile, useChangePassword } from '../hooks'
+import { updateAvatar } from '../api'
+import { useAuthStore } from '@/store/auth-store'
+import { AvatarCropDialog } from '../components/AvatarCropDialog'
 
 const passwordSchema = z
   .object({
@@ -285,6 +291,97 @@ function PasswordCard() {
   )
 }
 
+function AvatarCard() {
+  const { t } = useTranslation()
+  const user = useAuthStore((s) => s.user)
+  const refreshUser = useAuthStore((s) => s.refreshUser)
+  const [cropOpen, setCropOpen] = useState(false)
+  const [imageSrc, setImageSrc] = useState('')
+  const [saving, setSaving] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error(t('profile.avatar.tooLarge'))
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = () => {
+      setImageSrc(reader.result as string)
+      setCropOpen(true)
+    }
+    reader.readAsDataURL(file)
+    e.target.value = ''
+  }
+
+  const handleConfirm = async (dataUrl: string) => {
+    setCropOpen(false)
+    setSaving(true)
+    try {
+      await updateAvatar(dataUrl)
+      await refreshUser()
+      toast.success(t('profile.avatar.updated'))
+    } catch {
+      toast.error(t('profile.avatar.updateFailed'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleRemove = async () => {
+    setSaving(true)
+    try {
+      await updateAvatar('')
+      await refreshUser()
+      toast.success(t('profile.avatar.removed'))
+    } catch {
+      toast.error(t('profile.avatar.updateFailed'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Card className="rounded-3xl">
+      <CardHeader>
+        <CardTitle className="text-lg">{t('profile.avatar.title')}</CardTitle>
+      </CardHeader>
+      <CardContent className="flex items-center gap-4">
+        <div className="size-20 shrink-0 overflow-hidden rounded-full bg-gradient-to-br from-primary to-accent ring-2 ring-border">
+          {user?.avatar_url ? (
+            <img src={user.avatar_url} alt={user.username} className="size-full object-cover" />
+          ) : (
+            <div className="grid size-full place-items-center text-2xl font-bold text-white">
+              {user?.username.charAt(0).toUpperCase()}
+            </div>
+          )}
+        </div>
+        <div className="flex flex-col gap-2">
+          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
+          <Button size="sm" variant="outline" disabled={saving} onClick={() => fileRef.current?.click()}>
+            <IconPhotoUp className="size-4" />
+            {t('profile.avatar.change')}
+          </Button>
+          {user?.avatar_url && (
+            <Button size="sm" variant="ghost" disabled={saving} onClick={handleRemove}>
+              <IconX className="size-4" />
+              {t('profile.avatar.remove')}
+            </Button>
+          )}
+        </div>
+      </CardContent>
+      <AvatarCropDialog
+        open={cropOpen}
+        imageSrc={imageSrc}
+        onClose={() => setCropOpen(false)}
+        onConfirm={handleConfirm}
+      />
+    </Card>
+  )
+}
+
 function LanguageCard() {
   const { t } = useTranslation()
   return (
@@ -323,6 +420,7 @@ export default function ProfilePage() {
         <p className="mt-1 text-sm text-muted-foreground">{t('profile.subtitle')}</p>
       </div>
       <AccountCard />
+      <AvatarCard />
       <PasswordCard />
       <LanguageCard />
     </div>

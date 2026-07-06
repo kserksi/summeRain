@@ -182,6 +182,7 @@ func main() {
 	{
 		user.GET("/profile", userHandler.GetProfile)
 		user.PATCH("/password", csrfMw.Validate(), userHandler.ChangePassword)
+		user.PATCH("/avatar", csrfMw.Validate(), userHandler.UpdateAvatar)
 	}
 
 	notifications := api.Group("/notifications", authMw.Required())

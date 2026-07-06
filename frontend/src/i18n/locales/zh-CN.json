@@ -229,6 +229,17 @@
       "language": "界面语言",
       "languageDesc": "选择界面显示语言"
     },
+    "avatar": {
+      "title": "头像",
+      "change": "更换头像",
+      "remove": "移除头像",
+      "cropTitle": "裁剪头像",
+      "zoom": "缩放",
+      "tooLarge": "图片不能超过 5MB",
+      "updated": "头像已更新",
+      "removed": "头像已移除",
+      "updateFailed": "头像更新失败，请重试"
+    },
     "account": {
       "title": "账户信息",
       "description": "查看你的账户与存储使用情况",

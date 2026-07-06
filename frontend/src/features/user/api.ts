@@ -14,3 +14,7 @@ export function changePassword(data: {
 }): Promise<void> {
   return api.patch<void>('/user/password', data)
 }
+
+export function updateAvatar(avatarUrl: string): Promise<{ avatar_url: string }> {
+  return api.patch<{ avatar_url: string }>('/user/avatar', { avatar_url: avatarUrl })
+}

@@ -229,6 +229,17 @@
       "language": "インターフェース言語",
       "languageDesc": "表示言語を選択してください"
     },
+    "avatar": {
+      "title": "アバター",
+      "change": "アバターを変更",
+      "remove": "アバターを削除",
+      "cropTitle": "アバターを切り抜き",
+      "zoom": "ズーム",
+      "tooLarge": "画像サイズは5MB以下にしてください",
+      "updated": "アバターを更新しました",
+      "removed": "アバターを削除しました",
+      "updateFailed": "アバターの更新に失敗しました。再試行してください"
+    },
     "account": {
       "title": "アカウント情報",
       "description": "アカウントとストレージの使用状況",
