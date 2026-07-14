@@ -1,4 +1,4 @@
-// Copyright 2026 kserks
+// Copyright 2026 The summeRain Authors
 // SPDX-License-Identifier: Apache-2.0
 
 package service
@@ -11,7 +11,7 @@ import (
 )
 
 func TestGenerateWatermarkSVG(t *testing.T) {
-	svg := GenerateWatermarkSVG("kserks", "66ccff", "64")
+	svg := GenerateWatermarkSVG("summeRain", "66ccff", "64")
 	if !strings.Contains(svg, "<svg") {
 		t.Fatal("missing <svg tag")
 	}
@@ -21,7 +21,7 @@ func TestGenerateWatermarkSVG(t *testing.T) {
 	if !strings.Contains(svg, `font-size="64"`) {
 		t.Fatal("missing font-size")
 	}
-	if !strings.Contains(svg, ">kserks<") {
+	if !strings.Contains(svg, ">summeRain<") {
 		t.Fatal("missing text content")
 	}
 }

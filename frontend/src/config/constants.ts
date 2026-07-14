@@ -1,4 +1,4 @@
-// Copyright 2026 kserks
+// Copyright 2026 The summeRain Authors
 // SPDX-License-Identifier: Apache-2.0
 
 export const API_BASE_URL = '/api/v1'

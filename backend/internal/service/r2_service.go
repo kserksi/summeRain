@@ -1,4 +1,4 @@
-// Copyright 2026 kserks
+// Copyright 2026 The summeRain Authors
 // SPDX-License-Identifier: Apache-2.0
 
 package service
@@ -16,7 +16,7 @@ import (
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/summerain/image-gallery/internal/repository"
+	"github.com/kserksi/summerain/internal/repository"
 )
 
 type R2Service struct {

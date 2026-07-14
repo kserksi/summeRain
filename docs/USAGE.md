@@ -1,4 +1,4 @@
-# ImgCloud 部署与使用文档
+# summeRain 部署与使用文档
 
 > 本文档基于 `backend/` 源码与部署配置生成，覆盖**部署、配置、运维与日常使用**。
 > 接口契约详见 [`API.md`](./API.md)。
@@ -20,7 +20,7 @@
 
 ## 1. 项目概述
 
-ImgCloud 是一个自托管的图床 / 图片相册服务。
+summeRain 是一个自托管的图床 / 图片相册服务。
 
 - **后端**：Go 1.23 + Gin + GORM（MySQL）+ Redis + imgproxy
 - **前端**：Flutter Web（构建产物以只读卷挂载，由后端 `NoRoute` 兜底托管）
@@ -193,7 +193,7 @@ backend ──> MySQL / Redis / imgproxy（Docker 内网）
 ### 5.3 日志
 
 - 应用日志：`docker logs summerain-backend`（标准输出）。
-- nginx：`/var/log/nginx/image.kserks.org.*.log`。
+- nginx：`/var/log/nginx/your-domain.*.log`。
 
 ### 5.4 镜像更新 / 回滚
 

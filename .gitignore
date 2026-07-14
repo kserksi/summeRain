@@ -46,3 +46,6 @@ mockup/
 /捕获.PNG
 /*.PNG
 /*.png
+
+# AI assistant local plans
+.zcode/

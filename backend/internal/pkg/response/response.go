@@ -1,11 +1,11 @@
-// Copyright 2026 kserks
+// Copyright 2026 The summeRain Authors
 // SPDX-License-Identifier: Apache-2.0
 
 package response
 
 import (
 	"github.com/gin-gonic/gin"
-	"github.com/summerain/image-gallery/internal/pkg/errcode"
+	"github.com/kserksi/summerain/internal/pkg/errcode"
 )
 
 type Response struct {

@@ -1,4 +1,4 @@
-// Copyright 2026 kserks
+// Copyright 2026 The summeRain Authors
 // SPDX-License-Identifier: Apache-2.0
 
 package middleware
@@ -7,10 +7,10 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/summerain/image-gallery/internal/pkg/errcode"
-	"github.com/summerain/image-gallery/internal/pkg/response"
-	"github.com/summerain/image-gallery/internal/pkg/token"
-	"github.com/summerain/image-gallery/internal/repository"
+	"github.com/kserksi/summerain/internal/pkg/errcode"
+	"github.com/kserksi/summerain/internal/pkg/response"
+	"github.com/kserksi/summerain/internal/pkg/token"
+	"github.com/kserksi/summerain/internal/repository"
 )
 
 type CSRFMiddleware struct {

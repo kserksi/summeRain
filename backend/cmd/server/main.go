@@ -1,4 +1,4 @@
-// Copyright 2026 kserks
+// Copyright 2026 The summeRain Authors
 // SPDX-License-Identifier: Apache-2.0
 
 package main
@@ -17,16 +17,16 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/summerain/image-gallery/internal/config"
-	"github.com/summerain/image-gallery/internal/handler"
-	"github.com/summerain/image-gallery/internal/middleware"
-	"github.com/summerain/image-gallery/internal/model"
-	"github.com/summerain/image-gallery/internal/pkg/errcode"
-	"github.com/summerain/image-gallery/internal/pkg/imgproxy"
-	"github.com/summerain/image-gallery/internal/pkg/response"
-	"github.com/summerain/image-gallery/internal/repository"
-	"github.com/summerain/image-gallery/internal/service"
-	"github.com/summerain/image-gallery/internal/worker"
+	"github.com/kserksi/summerain/internal/config"
+	"github.com/kserksi/summerain/internal/handler"
+	"github.com/kserksi/summerain/internal/middleware"
+	"github.com/kserksi/summerain/internal/model"
+	"github.com/kserksi/summerain/internal/pkg/errcode"
+	"github.com/kserksi/summerain/internal/pkg/imgproxy"
+	"github.com/kserksi/summerain/internal/pkg/response"
+	"github.com/kserksi/summerain/internal/repository"
+	"github.com/kserksi/summerain/internal/service"
+	"github.com/kserksi/summerain/internal/worker"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 )
@@ -39,7 +39,7 @@ func main() {
 		log.Fatalf("failed to connect database: %v", err)
 	}
 
-	// 兼容老版本 token 数据,上线时一定要跑一次,不然老用户的私密图全打不开
+	// 迁移老版本 token 数据,确保历史私密图访问令牌可用.
 	repository.MigrateLegacyTokens(db)
 
 	if err := db.AutoMigrate(

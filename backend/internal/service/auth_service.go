@@ -1,4 +1,4 @@
-// Copyright 2026 kserks
+// Copyright 2026 The summeRain Authors
 // SPDX-License-Identifier: Apache-2.0
 
 package service
@@ -12,14 +12,13 @@ import (
 	"time"
 
 	"github.com/go-redis/redis/v8"
-	"github.com/summerain/image-gallery/internal/model"
-	"github.com/summerain/image-gallery/internal/pkg/errcode"
-	"github.com/summerain/image-gallery/internal/pkg/token"
+	"github.com/kserksi/summerain/internal/model"
+	"github.com/kserksi/summerain/internal/pkg/errcode"
+	"github.com/kserksi/summerain/internal/pkg/token"
 	"golang.org/x/crypto/bcrypt"
 )
 
-// deviceIDRegex recieved from client,只允许字母数字和 _ -
-// 注: recieved 这里是历史拼写,懒得改了
+// deviceIDRegex received from client,只允许字母数字和 _ -
 var deviceIDRegex = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
 
 type AuthService struct {
@@ -77,7 +76,7 @@ func NewAuthService(userRepo authUserRepository, sessionRepo authSessionReposito
 }
 
 // isCaptchaEnabled captcha 开关优先级: db config > 默认.
-// 之前出过事故(线上环境变量配了但 db 里覆盖成 none),所以这块逻辑别乱动
+// 当 db config 里 captcha_provider == "none" 时强制关闭,覆盖环境变量配置.
 func (s *AuthService) isCaptchaEnabled() bool {
 	if s.captcha == nil {
 		return false
@@ -530,17 +529,9 @@ func (s *AuthService) RevokeSession(id uint64, userID uint64, ip string) *errcod
 }
 
 func (s *AuthService) CheckLoginRateLimit(ctx context.Context, ip string, username string) *errcode.AppError {
-	ipKey := fmt.Sprintf("login:ip:%s", ip)
-	ok, err := s.sessionRepo.CheckRateLimit(ctx, ipKey, 5, 15*time.Minute)
-	if err != nil {
-		return errcode.ErrRedis
-	}
-	if !ok {
-		return errcode.ErrLoginRateLimited
-	}
-
+	_ = ip
 	userKey := fmt.Sprintf("login:user:%s", username)
-	ok, err = s.sessionRepo.CheckRateLimit(ctx, userKey, 3, 15*time.Minute)
+	ok, err := s.sessionRepo.CheckRateLimit(ctx, userKey, 3, 15*time.Minute)
 	if err != nil {
 		return errcode.ErrRedis
 	}

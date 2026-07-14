@@ -1,4 +1,4 @@
-// Copyright 2026 kserks
+// Copyright 2026 The summeRain Authors
 // SPDX-License-Identifier: Apache-2.0
 
 package handler
@@ -9,9 +9,9 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"github.com/summerain/image-gallery/internal/config"
-	"github.com/summerain/image-gallery/internal/model"
-	"github.com/summerain/image-gallery/internal/service"
+	"github.com/kserksi/summerain/internal/config"
+	"github.com/kserksi/summerain/internal/model"
+	"github.com/kserksi/summerain/internal/service"
 )
 
 func TestPublicConfigExposesProviderAndSiteKeyWithoutSecret(t *testing.T) {

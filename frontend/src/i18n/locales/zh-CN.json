@@ -1,6 +1,6 @@
 {
   "common": {
-    "appName": "月兔图床",
+    "appName": "summeRain",
     "loading": "加载中…",
     "error": "出错了",
     "retry": "重试",
@@ -399,7 +399,7 @@
       "watermarkDesc": "启用后，所有经 imgproxy 处理的图片将自动添加水印",
       "enableWatermark": "启用水印",
       "watermarkText": "水印文字",
-      "watermarkTextPlaceholder": "例如 © kserks",
+      "watermarkTextPlaceholder": "例如 © summeRain",
       "opacityLabel": "不透明度（0.0–1.0）",
       "opacityHint": "推荐 0.3–0.7，值越大越不透明",
       "sizeLabel": "字体大小（px）",

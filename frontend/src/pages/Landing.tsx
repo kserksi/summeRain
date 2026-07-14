@@ -1,4 +1,4 @@
-// Copyright 2026 kserks
+// Copyright 2026 The summeRain Authors
 // SPDX-License-Identifier: Apache-2.0
 
 import { Link } from "react-router"
@@ -193,7 +193,7 @@ export default function LandingPage() {
             GitHub
           </a>
         </div>
-        <p>© kserks 2026</p>
+        <p>© 2026 The summeRain Authors</p>
       </footer>
     </div>
   )

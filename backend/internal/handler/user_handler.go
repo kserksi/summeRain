@@ -1,4 +1,4 @@
-// Copyright 2026 kserks
+// Copyright 2026 The summeRain Authors
 // SPDX-License-Identifier: Apache-2.0
 
 package handler
@@ -7,10 +7,10 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/summerain/image-gallery/internal/middleware"
-	"github.com/summerain/image-gallery/internal/pkg/errcode"
-	"github.com/summerain/image-gallery/internal/pkg/response"
-	"github.com/summerain/image-gallery/internal/service"
+	"github.com/kserksi/summerain/internal/middleware"
+	"github.com/kserksi/summerain/internal/pkg/errcode"
+	"github.com/kserksi/summerain/internal/pkg/response"
+	"github.com/kserksi/summerain/internal/service"
 )
 
 type UserHandler struct {

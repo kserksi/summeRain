@@ -36,7 +36,7 @@ services:
       - "3306:3306"
     environment:
       MYSQL_ROOT_PASSWORD_FILE: /run/secrets/mysql_password
-      MYSQL_DATABASE: image_gallery
+      MYSQL_DATABASE: summerain
     volumes:
       - mysql_data:/var/lib/mysql
     secrets:
@@ -75,10 +75,11 @@ services:
       - IMGPROXY_MAX_SRC_RESOLUTION=50
       - IMGPROXY_MAX_ANIMATION_FRAMES=100
       - IMGPROXY_TTL=31536000
+      # 水印图源: watermark.go 生成的 SVG 存到 STORAGE_PATH,imgproxy 读它叠加水印
+      - IMGPROXY_WATERMARK_PATH=/data/images/watermark.svg
     volumes:
       - image_storage:/data/images:ro
       - temp_storage:/data/temp:ro
-      - ./fonts/GoogleSans-ASCII.ttf:/fonts/custom.ttf:ro
     deploy:
       resources:
         limits:

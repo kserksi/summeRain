@@ -1,4 +1,4 @@
-// Copyright 2026 kserks
+// Copyright 2026 The summeRain Authors
 // SPDX-License-Identifier: Apache-2.0
 
 package repository
@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/go-redis/redis/v8"
-	"github.com/summerain/image-gallery/internal/model"
+	"github.com/kserksi/summerain/internal/model"
 	"gorm.io/gorm"
 )
 

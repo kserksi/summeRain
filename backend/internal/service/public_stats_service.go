@@ -1,11 +1,11 @@
-// Copyright 2026 kserks
+// Copyright 2026 The summeRain Authors
 // SPDX-License-Identifier: Apache-2.0
 
 package service
 
 import (
-	"github.com/summerain/image-gallery/internal/model"
-	"github.com/summerain/image-gallery/internal/pkg/errcode"
+	"github.com/kserksi/summerain/internal/model"
+	"github.com/kserksi/summerain/internal/pkg/errcode"
 	"gorm.io/gorm"
 )
 

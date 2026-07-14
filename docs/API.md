@@ -1,4 +1,4 @@
-# ImgCloud 后端 API 文档
+# summeRain 后端 API 文档
 
 > 本文档基于 `backend/` 源码（Go + Gin + GORM/MySQL + Redis + imgproxy）逐文件核对生成，作为前后端对接契约。
 >

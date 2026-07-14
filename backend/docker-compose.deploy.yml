@@ -85,6 +85,8 @@ services:
       - IMGPROXY_TTL=31536000
       - IMGPROXY_KEY=${IMGPROXY_KEY}
       - IMGPROXY_SALT=${IMGPROXY_SALT}
+      # 水印图源: watermark.go 生成的 SVG 存到 STORAGE_PATH,imgproxy 读它叠加水印
+      - IMGPROXY_WATERMARK_PATH=/data/images/watermark.svg
     volumes:
       - image_storage:/data/images:ro
       - temp_storage:/data/temp:ro

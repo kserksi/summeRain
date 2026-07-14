@@ -1,4 +1,4 @@
-// Copyright 2026 kserks
+// Copyright 2026 The summeRain Authors
 // SPDX-License-Identifier: Apache-2.0
 
 package service
@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/summerain/image-gallery/internal/model"
+	"github.com/kserksi/summerain/internal/model"
 )
 
 func TestClampTTLms(t *testing.T) {

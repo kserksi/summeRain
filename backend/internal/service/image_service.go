@@ -1,4 +1,4 @@
-// Copyright 2026 kserks
+// Copyright 2026 The summeRain Authors
 // SPDX-License-Identifier: Apache-2.0
 
 package service
@@ -23,11 +23,11 @@ import (
 	"time"
 
 	"github.com/go-redis/redis/v8"
-	"github.com/summerain/image-gallery/internal/config"
-	"github.com/summerain/image-gallery/internal/model"
-	"github.com/summerain/image-gallery/internal/pkg/errcode"
-	"github.com/summerain/image-gallery/internal/pkg/token"
-	"github.com/summerain/image-gallery/internal/repository"
+	"github.com/kserksi/summerain/internal/config"
+	"github.com/kserksi/summerain/internal/model"
+	"github.com/kserksi/summerain/internal/pkg/errcode"
+	"github.com/kserksi/summerain/internal/pkg/token"
+	"github.com/kserksi/summerain/internal/repository"
 	"gorm.io/gorm"
 )
 
@@ -59,8 +59,7 @@ func (s *ImageService) MigrateToR2() (int, error) {
 	if s.r2 == nil {
 		return 0, fmt.Errorf("R2 not initialized")
 	}
-	// XXX: 大量文件时这个同步迁移会卡住整个请求,理想是丢到 worker 异步跑
-	// 目前先用着,文件少的时候没问题
+	// TODO: 大量文件时同步迁移会阻塞请求,应改为 worker 异步执行.
 	total := 0
 	for _, sub := range []string{"original", "thumbnail", "processed"} {
 		// 三个子目录都要传,少一个迁移完不完整
@@ -202,7 +201,7 @@ func (s *ImageService) Upload(userID uint64, files []*multipart.FileHeader, visi
 	}
 
 	if successSize > 0 {
-		// 这里 Updates 的 err 没接,理论上配额会算错,但前台会重新拉 profile,影响不大,先这样
+		// TODO: 此处 Updates 的 err 未处理,配额可能短暂不准;前端会重新拉 profile 自愈.
 		s.db.Model(&model.User{}).Where("id = ?", userID).
 			Updates(map[string]interface{}{
 				"storage_used": gorm.Expr("storage_used + ?", successSize),

@@ -1,4 +1,4 @@
-// Copyright 2026 kserks
+// Copyright 2026 The summeRain Authors
 // SPDX-License-Identifier: Apache-2.0
 
 package worker
@@ -9,7 +9,7 @@ import (
 	"sync"
 
 	"github.com/go-redis/redis/v8"
-	"github.com/summerain/image-gallery/internal/config"
+	"github.com/kserksi/summerain/internal/config"
 	"gorm.io/gorm"
 )
 

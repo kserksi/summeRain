@@ -1,4 +1,4 @@
-// Copyright 2026 kserks
+// Copyright 2026 The summeRain Authors
 // SPDX-License-Identifier: Apache-2.0
 
 import { useMemo, useState } from 'react'
@@ -500,7 +500,7 @@ export default function Configs() {
               <Label htmlFor="r2-public">{t('admin.configs.publicUrlLabel')}</Label>
               <Input
                 id="r2-public"
-                placeholder="https://r2.kserks.org"
+                placeholder="https://r2.example.com"
                 value={form.r2PublicURL}
                 disabled={!form.r2Enabled || isLoading}
                 onChange={(e) => setField('r2PublicURL', e.target.value)}

@@ -1,4 +1,4 @@
-﻿# ImgCloud
+﻿# summeRain
 
 > 自托管图片托管与相册服务。原生 AVIF/WebP 转码、文字水印、自适应尺寸、多存储后端、多端鉴权。
 
@@ -51,7 +51,7 @@ imgcloud/
 
 | 项目 | AVIF | 文字水印 | 自适应尺寸 | 现代栈 | 维护状态 | 协议 |
 |------|:----:|:-------:|:---------:|:------:|:-------:|------|
-| **ImgCloud** | 是 | 是 | 是 | 是 | 活跃 | Apache-2.0 |
+| **summeRain** | 是 | 是 | 是 | 是 | 活跃 | Apache-2.0 |
 | EasyImages2.0 | 限制 | 是 | 是 | 一般 | 放缓 | GPL-2.0 |
 | Lsky Pro | 否 | 是 | 是 | 一般 | 开源版停维 | GPL-3.0 |
 | modern-images | 是 | 否 | 需 CDN | 是 | 活跃 | 未声明 |
@@ -124,7 +124,7 @@ npm run build  # 输出到 ../backend/web/
 
 ## License
 
-Copyright 2026 kserks
+Copyright 2026 The summeRain Authors
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.

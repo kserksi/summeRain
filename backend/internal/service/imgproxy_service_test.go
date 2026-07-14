@@ -1,4 +1,4 @@
-// Copyright 2026 kserks
+// Copyright 2026 The summeRain Authors
 // SPDX-License-Identifier: Apache-2.0
 
 package service
@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/summerain/image-gallery/internal/config"
+	"github.com/kserksi/summerain/internal/config"
 )
 
 func TestImgproxyServiceProcessTimesOut(t *testing.T) {
@@ -58,7 +58,7 @@ func TestProcessedURLWatermarkFormat(t *testing.T) {
 		Key:     "8ddf4ab32a5dcd73b87329545c0fc19bf901d8e8d761d7561ae1a165bab1720e",
 		Salt:    "f237c63b2c909f3aa8b6b1acadc1b80670207841b6da4a5eb78826a62ac45f84",
 	})
-	url := svc.ProcessedURL("temp/test.jpg", true, "kserks", "0.7", "ce", "64", "66ccff")
+	url := svc.ProcessedURL("temp/test.jpg", true, "summeRain", "0.7", "ce", "64", "66ccff")
 
 	if strings.Contains(url, "/wmt:") {
 		t.Fatalf("URL should not contain /wmt: (PRO-only), got %s", url)

@@ -1,4 +1,4 @@
-// Copyright 2026 kserks
+// Copyright 2026 The summeRain Authors
 // SPDX-License-Identifier: Apache-2.0
 
 package service
@@ -10,8 +10,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/summerain/image-gallery/internal/config"
-	"github.com/summerain/image-gallery/internal/pkg/errcode"
+	"github.com/kserksi/summerain/internal/config"
+	"github.com/kserksi/summerain/internal/pkg/errcode"
 )
 
 func TestTurnstileAcceptsSuccess(t *testing.T) {

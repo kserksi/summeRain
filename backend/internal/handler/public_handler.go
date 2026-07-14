@@ -1,4 +1,4 @@
-// Copyright 2026 kserks
+// Copyright 2026 The summeRain Authors
 // SPDX-License-Identifier: Apache-2.0
 
 package handler
@@ -17,12 +17,12 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
-	"github.com/summerain/image-gallery/internal/config"
-	"github.com/summerain/image-gallery/internal/model"
-	"github.com/summerain/image-gallery/internal/pkg/errcode"
-	"github.com/summerain/image-gallery/internal/pkg/imgproxy"
-	"github.com/summerain/image-gallery/internal/pkg/response"
-	"github.com/summerain/image-gallery/internal/service"
+	"github.com/kserksi/summerain/internal/config"
+	"github.com/kserksi/summerain/internal/model"
+	"github.com/kserksi/summerain/internal/pkg/errcode"
+	"github.com/kserksi/summerain/internal/pkg/imgproxy"
+	"github.com/kserksi/summerain/internal/pkg/response"
+	"github.com/kserksi/summerain/internal/service"
 )
 
 type sessionResolver interface {

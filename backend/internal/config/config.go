@@ -1,4 +1,4 @@
-// Copyright 2026 kserks
+// Copyright 2026 The summeRain Authors
 // SPDX-License-Identifier: Apache-2.0
 
 package config
@@ -93,7 +93,7 @@ func Load() *Config {
 			Port:     getEnv("DB_PORT", "3306"),
 			User:     getEnv("DB_USER", "root"),
 			Password: getEnv("DB_PASSWORD", ""),
-			DBName:   getEnv("DB_NAME", "image_gallery"),
+			DBName:   getEnv("DB_NAME", "summerain"),
 		},
 		Redis: RedisConfig{
 			Addr:     getEnv("REDIS_ADDR", "redis:6379"),

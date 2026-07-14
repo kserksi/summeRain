@@ -1,4 +1,4 @@
-# 设计系统 · MASTER（ImgCloud）
+# 设计系统 · MASTER（summeRain）
 
 > 前端 UI/UX 的**单一真相源**。所有页面（[10-pages-ui-ux.md](../10-pages-ui-ux.md)）据此派生；页面级例外放 `design-system/pages/<page>.md`，优先级高于本文件。本系统已在 `mockup/index.html` 原型验证通过。
 
