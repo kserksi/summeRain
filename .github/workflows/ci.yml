@@ -47,10 +47,6 @@ jobs:
             version_changed=true
           fi
 
-          if [ "$version_changed" != "true" ]; then
-            exit 0
-          fi
-
           version="$(tr -d '[:space:]' < VERSION)"
           if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$ ]]; then
             echo "::error::VERSION must be SemVer, for example 1.2.3 or 1.2.3-rc.1"
@@ -59,9 +55,13 @@ jobs:
 
           tag="v${version}"
           existing_sha="$(git ls-remote --refs origin "refs/tags/${tag}" | awk '{print $1}')"
-          if [ -n "$existing_sha" ] && [ "$existing_sha" != "$CURRENT_SHA" ]; then
-            echo "::error::${tag} already points to ${existing_sha}; release tags are immutable"
-            exit 1
+          if [ "$version_changed" = "true" ]; then
+            if [ -n "$existing_sha" ]; then
+              echo "::error::${tag} already exists; increment VERSION instead of reusing a release tag"
+              exit 1
+            fi
+          elif [ -n "$existing_sha" ]; then
+            exit 0
           fi
 
           prerelease=false
@@ -147,6 +147,18 @@ jobs:
         run: |
           test -n "$DOCKERHUB_USERNAME" || { echo "::error::DOCKERHUB_USERNAME secret is not configured"; exit 1; }
           test -n "$DOCKERHUB_TOKEN" || { echo "::error::DOCKERHUB_TOKEN secret is not configured"; exit 1; }
+
+      - name: Prepare Docker Hub tag policy
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          IS_RELEASE: ${{ needs.release_info.outputs.is_release }}
+        run: |
+          mode=release
+          if [ "$IS_RELEASE" = "true" ]; then
+            mode=mutable
+          fi
+          bash .github/scripts/set-dockerhub-tag-policy.sh "$mode"
 
       - uses: docker/setup-qemu-action@v4
 
@@ -237,28 +249,11 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Enable immutable release tags
+      - name: Enforce immutable release tags
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-        run: |
-          auth_payload="$(jq -nc \
-            --arg identifier "$DOCKERHUB_USERNAME" \
-            --arg secret "$DOCKERHUB_TOKEN" \
-            '{identifier: $identifier, secret: $secret}')"
-          auth_response="$(curl --fail-with-body --silent --show-error \
-            --request POST \
-            --header 'Content-Type: application/json' \
-            --data "$auth_payload" \
-            https://hub.docker.com/v2/auth/token)"
-          hub_token="$(jq -er '.access_token' <<< "$auth_response")"
-
-          curl --fail-with-body --silent --show-error \
-            --request PATCH \
-            --header "Authorization: Bearer ${hub_token}" \
-            --header 'Content-Type: application/json' \
-            --data '{"immutable_tags":true,"immutable_tags_rules":["^v?[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$"]}' \
-            https://hub.docker.com/v2/namespaces/jaykserks/repositories/summerain/immutabletags
+        run: bash .github/scripts/set-dockerhub-tag-policy.sh release
 
       - name: Update Docker Hub description
         uses: peter-evans/dockerhub-description@v5
