@@ -160,27 +160,24 @@ npm run build
 
 构建产物输出到 `backend/web/`。从 `backend/` 目录启动 Go 服务后，未知的非 API 路由会回退到 `web/index.html`，因此 SPA 深链刷新可用。
 
-### 4. 构建并发布容器镜像
+### 4. 通过 GitHub Actions 发布容器镜像
 
-根目录的多阶段 Dockerfile 会先构建 React 前端和 Go 后端，再将两者复制到非 root Alpine 运行时镜像中。
+推送到 `main` 或 `master` 后，GitHub Actions 会先运行前后端检查，再使用根目录的多阶段 Dockerfile 在 GitHub Runner 上构建 `linux/amd64` 和 `linux/arm64` 镜像，并推送到 GHCR。整个发布过程不需要在本地构建镜像。
 
-```bash
-docker build -t <dockerhub-user>/summerain:latest .
-docker push <dockerhub-user>/summerain:latest
-```
+分支构建会发布 `latest` 和 `sha-<commit>` 标签。推送 `v1.0.0` 形式的 Git 标签时，还会发布 `v1.0.0`、`1.0.0`、`1.0` 和 `1` 等版本标签。
 
-发布正式版本时建议同时推送版本标签：
+正式版本只需创建并推送 Git 标签：
 
 ```bash
-docker tag <dockerhub-user>/summerain:latest <dockerhub-user>/summerain:v1.0.0
-docker push <dockerhub-user>/summerain:v1.0.0
+git tag v1.0.0
+git push origin v1.0.0
 ```
 
 Compose 可通过 `DOCKER_IMAGE` 选择远程镜像。部署机拉取镜像后，可用 `--no-build` 阻止本地重新构建：
 
 ```bash
-DOCKER_IMAGE=<dockerhub-user>/summerain:v1.0.0 docker compose -f backend/docker-compose.deploy.yml pull
-DOCKER_IMAGE=<dockerhub-user>/summerain:v1.0.0 docker compose -f backend/docker-compose.deploy.yml up -d --no-build
+DOCKER_IMAGE=ghcr.io/kserksi/summerain:1.0.0 docker compose -f backend/docker-compose.deploy.yml pull
+DOCKER_IMAGE=ghcr.io/kserksi/summerain:1.0.0 docker compose -f backend/docker-compose.deploy.yml up -d --no-build
 ```
 
 生产环境的 nginx/Cloudflare 前置和回滚流程见 [部署与使用文档](docs/USAGE.md)。
