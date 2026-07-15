@@ -17,7 +17,7 @@ import (
 
 func TestRevokeSessionRejectsOtherUsersSession(t *testing.T) {
 	sessionRepo := newFakeAuthSessionRepo(seedAuthSession(1, 2, "session"))
-	svc := NewAuthService(&fakeAuthUserRepo{}, sessionRepo, nil, nil)
+	svc := NewAuthService(&fakeAuthUserRepo{}, sessionRepo, nil, nil, nil)
 
 	appErr := svc.RevokeSession(1, 1, "127.0.0.1")
 
@@ -31,7 +31,7 @@ func TestRevokeSessionRejectsOtherUsersSession(t *testing.T) {
 
 func TestRevokeSessionRejectsIdentityToken(t *testing.T) {
 	sessionRepo := newFakeAuthSessionRepo(seedAuthSession(1, 1, "identity"))
-	svc := NewAuthService(&fakeAuthUserRepo{}, sessionRepo, nil, nil)
+	svc := NewAuthService(&fakeAuthUserRepo{}, sessionRepo, nil, nil, nil)
 
 	appErr := svc.RevokeSession(1, 1, "127.0.0.1")
 
@@ -45,7 +45,7 @@ func TestRevokeSessionRejectsIdentityToken(t *testing.T) {
 
 func TestRevokeSessionWritesAuditOnSuccess(t *testing.T) {
 	sessionRepo := newFakeAuthSessionRepo(seedAuthSession(1, 1, "session"))
-	svc := NewAuthService(&fakeAuthUserRepo{}, sessionRepo, nil, nil)
+	svc := NewAuthService(&fakeAuthUserRepo{}, sessionRepo, nil, nil, nil)
 
 	appErr := svc.RevokeSession(1, 1, "127.0.0.1")
 
@@ -66,7 +66,7 @@ func TestRevokeSessionWritesAuditOnSuccess(t *testing.T) {
 
 func TestDeviceShutdownRejectsOtherUsersSession(t *testing.T) {
 	sessionRepo := newFakeAuthSessionRepo(seedAuthSession(1, 2, "session"))
-	svc := NewAuthService(&fakeAuthUserRepo{}, sessionRepo, nil, nil)
+	svc := NewAuthService(&fakeAuthUserRepo{}, sessionRepo, nil, nil, nil)
 
 	appErr := svc.DeviceShutdown(1, 1, "127.0.0.1")
 
@@ -94,7 +94,7 @@ func TestLoginResponseDoesNotMarshalTokens(t *testing.T) {
 
 func TestRegisterStopsBeforeUserLookupWhenRecaptchaFails(t *testing.T) {
 	userRepo := &fakeAuthUserRepo{failOnLookup: true}
-	svc := NewAuthService(userRepo, newFakeAuthSessionRepo(), nil, &fakeCaptchaVerifier{err: errcode.ErrRecaptchaFailed})
+	svc := NewAuthService(userRepo, newFakeAuthSessionRepo(), nil, &fakeCaptchaVerifier{err: errcode.ErrRecaptchaFailed}, nil)
 
 	_, appErr := svc.Register(context.Background(), &RegisterInput{Username: "alice", Email: "alice@example.com", Password: "password123", Captcha: CaptchaPayload{Token: "bad", Action: "register"}}, "127.0.0.1", "example.com")
 
@@ -108,7 +108,7 @@ func TestRegisterStopsBeforeUserLookupWhenRecaptchaFails(t *testing.T) {
 
 func TestLoginStopsBeforeUserLookupWhenRecaptchaFails(t *testing.T) {
 	userRepo := &fakeAuthUserRepo{failOnLookup: true}
-	svc := NewAuthService(userRepo, newFakeAuthSessionRepo(), nil, &fakeCaptchaVerifier{err: errcode.ErrRecaptchaFailed})
+	svc := NewAuthService(userRepo, newFakeAuthSessionRepo(), nil, &fakeCaptchaVerifier{err: errcode.ErrRecaptchaFailed}, nil)
 
 	_, appErr := svc.Login(context.Background(), &LoginInput{Username: "alice", Password: "password123", Captcha: CaptchaPayload{Token: "bad", Action: "login"}}, "127.0.0.1", "ua", "example.com")
 
