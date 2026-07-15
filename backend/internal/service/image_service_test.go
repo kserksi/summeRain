@@ -259,6 +259,10 @@ func (f *fakeImageRepo) FindByUserID(userID uint64, cursor string, limit int, so
 	return []*model.Image{f.foundImage}, "", f.findErr
 }
 
+func (f *fakeImageRepo) FindOriginalPathsByUserID(userID uint64) ([]*model.Image, error) {
+	return []*model.Image{f.foundImage}, f.findErr
+}
+
 func (f *fakeImageRepo) Delete(id uint64) error { return nil }
 
 func (f *fakeImageRepo) UpdateVisibility(id uint64, visibility string) error { return nil }
