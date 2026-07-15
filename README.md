@@ -169,14 +169,20 @@ npm run build
 
 工作流还会把仓库根目录的 `README.md` 同步到 Docker Hub 仓库说明。GitHub 仓库需要配置 Actions Secrets：`DOCKERHUB_USERNAME`（值为 `Jaykserks`）以及具有 `read/write/delete` 权限的 `DOCKERHUB_TOKEN`。
 
-分支构建会发布 `latest` 和 `sha-<commit>` 标签。推送 `v1.0.0` 形式的 Git 标签时，还会发布 `v1.0.0`、`1.0.0`、`1.0` 和 `1` 等版本标签。
+普通分支构建会发布 `edge` 和 `sha-<commit>`，不会覆盖稳定版 `latest`。修改根目录 `VERSION` 才会触发正式发布，并自动创建同名 Git Tag 和 GitHub Release。
 
-正式版本只需创建并推送 Git 标签：
+稳定版 `1.2.3` 会发布 `v1.2.3`、`1.2.3`、`1.2`、`1`、`latest` 和提交标签；`1.3.0-rc.1` 等预发布版只发布精确版本与提交标签，不更新稳定别名。精确 SemVer 标签在 Docker Hub 中自动设为不可变，`latest`、主版本和次版本别名保持可移动。
+
+正式发布只需更新 `VERSION` 并推送：
 
 ```bash
-git tag v1.0.0
-git push origin v1.0.0
+printf '1.2.3\n' > VERSION
+git add VERSION
+git commit -m "chore: release v1.2.3"
+git push origin HEAD:main
 ```
+
+完整版本规则、发布检查和回滚约定见 [发布与标签管理](docs/RELEASING.md)。
 
 Compose 可通过 `DOCKER_IMAGE` 选择远程镜像。部署机拉取镜像后，可用 `--no-build` 阻止本地重新构建：
 

@@ -3,7 +3,6 @@ name: CI and Docker
 on:
   push:
     branches: [main, master]
-    tags: ['v*']
   pull_request:
     branches: [main, master]
 
@@ -11,6 +10,70 @@ permissions:
   contents: read
 
 jobs:
+  release_info:
+    name: Release metadata
+    runs-on: ubuntu-latest
+    outputs:
+      is_release: ${{ steps.release.outputs.is_release }}
+      version: ${{ steps.release.outputs.version }}
+      tag: ${{ steps.release.outputs.tag }}
+      prerelease: ${{ steps.release.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Detect VERSION change
+        id: release
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          CURRENT_SHA: ${{ github.sha }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          echo "is_release=false" >> "$GITHUB_OUTPUT"
+          echo "version=" >> "$GITHUB_OUTPUT"
+          echo "tag=" >> "$GITHUB_OUTPUT"
+          echo "prerelease=false" >> "$GITHUB_OUTPUT"
+
+          if [ "$EVENT_NAME" != "push" ]; then
+            exit 0
+          fi
+
+          if [ "$BEFORE_SHA" = "0000000000000000000000000000000000000000" ]; then
+            version_changed=true
+          elif git diff --quiet "$BEFORE_SHA" "$CURRENT_SHA" -- VERSION; then
+            version_changed=false
+          else
+            version_changed=true
+          fi
+
+          if [ "$version_changed" != "true" ]; then
+            exit 0
+          fi
+
+          version="$(tr -d '[:space:]' < VERSION)"
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$ ]]; then
+            echo "::error::VERSION must be SemVer, for example 1.2.3 or 1.2.3-rc.1"
+            exit 1
+          fi
+
+          tag="v${version}"
+          existing_sha="$(git ls-remote --refs origin "refs/tags/${tag}" | awk '{print $1}')"
+          if [ -n "$existing_sha" ] && [ "$existing_sha" != "$CURRENT_SHA" ]; then
+            echo "::error::${tag} already points to ${existing_sha}; release tags are immutable"
+            exit 1
+          fi
+
+          prerelease=false
+          if [[ "$version" == *-* ]]; then
+            prerelease=true
+          fi
+
+          echo "is_release=true" >> "$GITHUB_OUTPUT"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "prerelease=${prerelease}" >> "$GITHUB_OUTPUT"
+
   backend:
     name: Backend (Go)
     runs-on: ubuntu-latest
@@ -62,9 +125,9 @@ jobs:
         run: npx vitest run
 
   docker:
-    name: Docker (GHCR and Docker Hub)
+    name: Publish container images
     if: github.event_name == 'push'
-    needs: [backend, frontend]
+    needs: [release_info, backend, frontend]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -109,12 +172,15 @@ jobs:
           images: |
             ${{ env.GHCR_IMAGE }}
             ${{ env.DOCKERHUB_IMAGE }}
+          flavor: |
+            latest=false
           tags: |
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' }}
-            type=ref,event=tag
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
+            type=raw,value=edge,enable=${{ needs.release_info.outputs.is_release != 'true' }}
+            type=raw,value=latest,enable=${{ needs.release_info.outputs.is_release == 'true' && needs.release_info.outputs.prerelease != 'true' }}
+            type=raw,value=${{ needs.release_info.outputs.tag || 'v0.0.0' }},enable=${{ needs.release_info.outputs.is_release == 'true' }}
+            type=semver,pattern={{version}},value=${{ needs.release_info.outputs.tag || 'v0.0.0' }},enable=${{ needs.release_info.outputs.is_release == 'true' }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.release_info.outputs.tag || 'v0.0.0' }},enable=${{ needs.release_info.outputs.is_release == 'true' }}
+            type=semver,pattern={{major}},value=${{ needs.release_info.outputs.tag || 'v0.0.0' }},enable=${{ needs.release_info.outputs.is_release == 'true' }}
             type=sha,prefix=sha-
 
       - name: Build and push image
@@ -132,6 +198,68 @@ jobs:
           provenance: mode=max
           sbom: true
 
+  github_release:
+    name: Publish GitHub Release
+    if: needs.release_info.outputs.is_release == 'true'
+    needs: [release_info, docker]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Create release and Git tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.release_info.outputs.tag }}
+          PRERELEASE: ${{ needs.release_info.outputs.prerelease }}
+        run: |
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "${RELEASE_TAG} already exists; keeping the existing immutable release"
+            exit 0
+          fi
+
+          args=(release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$RELEASE_TAG" --generate-notes)
+          if [ "$PRERELEASE" = "true" ]; then
+            args+=(--prerelease)
+          fi
+          gh "${args[@]}"
+
+  dockerhub_metadata:
+    name: Docker Hub tag policy and README
+    if: >-
+      ${{ always() && github.event_name == 'push' && needs.docker.result == 'success' &&
+          (needs.release_info.outputs.is_release != 'true' || needs.github_release.result == 'success') }}
+    needs: [release_info, docker, github_release]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Enable immutable release tags
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          auth_payload="$(jq -nc \
+            --arg identifier "$DOCKERHUB_USERNAME" \
+            --arg secret "$DOCKERHUB_TOKEN" \
+            '{identifier: $identifier, secret: $secret}')"
+          auth_response="$(curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header 'Content-Type: application/json' \
+            --data "$auth_payload" \
+            https://hub.docker.com/v2/auth/token)"
+          hub_token="$(jq -er '.access_token' <<< "$auth_response")"
+
+          curl --fail-with-body --silent --show-error \
+            --request PATCH \
+            --header "Authorization: Bearer ${hub_token}" \
+            --header 'Content-Type: application/json' \
+            --data '{"immutable_tags":true,"immutable_tags_rules":["^v?[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$"]}' \
+            https://hub.docker.com/v2/namespaces/jaykserks/repositories/summerain/immutabletags
+
       - name: Update Docker Hub description
         uses: peter-evans/dockerhub-description@v5
         with:
@@ -139,5 +267,5 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
           repository: jaykserks/summerain
           readme-filepath: ./README.md
-          short-description: ${{ github.event.repository.description }}
+          short-description: Self-hosted image hosting and photo album service.
           enable-url-completion: true
