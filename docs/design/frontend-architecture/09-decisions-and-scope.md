@@ -27,7 +27,7 @@
 | 代码组织 | feature-based + TanStack Query | 五域边界清晰、高内聚、服务端状态集中 |
 | shadcn 预设 | `apply --preset b3RZAU6YV`，忽略其颜色字体 | 复用预设组件骨架，主题沿用咖啡色板 |
 | 路由 | BrowserRouter + 懒加载 | 后端 SPA fallback 支持；深链可用 |
-| i18n | 保留能力，默认 zh-CN，文案进 i18n 组件 | 面向中国用户且需可扩展；覆盖早期 YAGNI |
+| i18n | 默认 en-US，内置 zh-CN 与 ja-JP，文案进入 i18n 资源 | 以英语为主要语言，同时保留完整本地化能力 |
 | 生产产物 | SHA512 SRI + SemVer + 资源本地化 + 无魔法值 | 用户生产质量硬性要求，dev 阶段豁免 |
 | TS/ES 基线 | target `ES2025`（TS 6.0 最高命名 target） | ES2026 字面量 TS 6.0 不支持；选稳定命名 target，实际降级交 Vite |
 | 编码规范 | [08 编码规范](08-coding-standards.md)：官方指南 + 用户要求，Prettier/ESLint/tsc 门禁 | 统一实现准则，可量化可检查 |

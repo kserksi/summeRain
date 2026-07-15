@@ -4,8 +4,8 @@ services:
   backend:
     build:
       context: ..
-      dockerfile: backend/Dockerfile.deploy
-    image: summerain:latest
+      dockerfile: Dockerfile
+    image: ${DOCKER_IMAGE:-summerain:latest}
     container_name: summerain-backend
     restart: unless-stopped
     ports:

@@ -34,6 +34,7 @@ func MigrateLegacyTokens(db *gorm.DB) {
 func SeedDefaultConfigs(db *gorm.DB) {
 	defaults := []model.SystemConfig{
 		{ConfigKey: "private_token_ttl_default_ms", ConfigValue: "3600000", ConfigType: "int", Description: "Default private-image access token TTL (ms)"},
+		{ConfigKey: "site_language", ConfigValue: "en-US", ConfigType: "string", Description: "Default site language"},
 	}
 	for _, d := range defaults {
 		var existing model.SystemConfig

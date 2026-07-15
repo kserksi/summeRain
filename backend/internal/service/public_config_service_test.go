@@ -59,6 +59,9 @@ func TestPublicConfigNoneProviderHasEmptyKey(t *testing.T) {
 	if result.CaptchaProvider != "none" || result.CaptchaSiteKey != "" {
 		t.Fatalf("none provider result = %+v, want provider=none empty key", result)
 	}
+	if result.SiteLanguage != "en-US" {
+		t.Fatalf("SiteLanguage = %q, want en-US", result.SiteLanguage)
+	}
 }
 
 type staticPublicConfigReader struct {

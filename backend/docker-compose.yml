@@ -2,8 +2,10 @@ version: "3.8"
 
 services:
   backend:
-    build: .
-    image: summerain:latest
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: ${DOCKER_IMAGE:-summerain:latest}
     container_name: summerain-backend
     restart: unless-stopped
     ports:

@@ -1,0 +1,12 @@
+**/.*/
+**/.env
+**/.env.*
+**/node_modules
+backend/web
+backend/server
+backend/server.exe
+backend/server_linux
+docs
+manual
+*.log
+*.pem

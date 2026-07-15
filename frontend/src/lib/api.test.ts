@@ -58,7 +58,7 @@ describe('api wrapper', () => {
     vi.mocked(fetch).mockRejectedValueOnce(new TypeError('Failed to fetch'))
     const err = (await api.get('/test').catch((e: unknown) => e)) as ApiError
     expect(err).toBeInstanceOf(ApiError)
-    expect(err.message).toBe('网络错误，请检查连接')
+    expect(err.message).toBe('Network error. Check your connection.')
   })
 
   it('does NOT redirect on 401 when skipAuthRedirect=true', async () => {

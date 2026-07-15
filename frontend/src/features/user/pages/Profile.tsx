@@ -63,7 +63,7 @@ function formatBytes(bytes: number): string {
 function formatDate(iso: string): string {
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return iso
-  return d.toLocaleDateString('zh-CN', {
+  return d.toLocaleDateString(i18n.resolvedLanguage ?? 'en-US', {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',

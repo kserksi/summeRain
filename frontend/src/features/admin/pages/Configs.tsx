@@ -91,7 +91,7 @@ type FormState = {
 }
 
 const DEFAULTS: FormState = {
-  siteLanguage: 'zh-CN',
+  siteLanguage: 'en-US',
   provider: 'none',
   siteKey: '',
   secret: '',
@@ -238,6 +238,7 @@ export default function Configs() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="en-US">English</SelectItem>
                     <SelectItem value="zh-CN">中文</SelectItem>
                     <SelectItem value="ja-JP">日本語</SelectItem>
                   </SelectContent>

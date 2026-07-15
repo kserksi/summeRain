@@ -42,15 +42,15 @@ describe('useCopy', () => {
     })
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith('hello')
     expect(result.current.copied).toBe(true)
-    expect(toast.success).toHaveBeenCalledWith('已复制到剪贴板')
+    expect(toast.success).toHaveBeenCalledWith('Copied to clipboard')
   })
 
   it('success: accepts custom success message', async () => {
     const { result } = renderHook(() => useCopy())
     await act(async () => {
-      await result.current.copy('x', '令牌已复制')
+      await result.current.copy('x', 'Token copied')
     })
-    expect(toast.success).toHaveBeenCalledWith('令牌已复制')
+    expect(toast.success).toHaveBeenCalledWith('Token copied')
   })
 
   it('resets copied to false after timeout', async () => {
@@ -74,7 +74,7 @@ describe('useCopy', () => {
       const ok = await result.current.copy('x')
       expect(ok).toBe(false)
     })
-    expect(toast.error).toHaveBeenCalledWith('复制失败，请检查浏览器权限')
+    expect(toast.error).toHaveBeenCalledWith('Could not copy. Check your browser permissions.')
     expect(result.current.copied).toBe(false)
   })
 

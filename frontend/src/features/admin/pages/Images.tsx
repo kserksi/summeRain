@@ -95,7 +95,7 @@ function DeleteImageButton({ image }: { image: AdminImage }) {
 }
 
 export default function Images() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const [page, setPage] = useState(1)
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
   const [search, setSearch] = useState('')
@@ -202,7 +202,7 @@ export default function Images() {
                     </span>
                   </TableCell>
                   <TableCell className="whitespace-nowrap text-muted-foreground tabular-nums">
-                    {new Date(img.created_at).toLocaleDateString('zh-CN')}
+                    {new Date(img.created_at).toLocaleDateString(i18n.resolvedLanguage ?? 'en-US')}
                   </TableCell>
                   <TableCell className="text-right">
                     <DeleteImageButton image={img} />

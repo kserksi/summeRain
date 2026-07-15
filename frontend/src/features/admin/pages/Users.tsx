@@ -391,7 +391,7 @@ function UserActions({ user }: { user: AdminUser }) {
 }
 
 export default function Users() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
@@ -500,7 +500,7 @@ export default function Users() {
                     </div>
                   </TableCell>
                   <TableCell className="whitespace-nowrap text-muted-foreground tabular-nums">
-                    {new Date(u.created_at).toLocaleDateString('zh-CN')}
+                    {new Date(u.created_at).toLocaleDateString(i18n.resolvedLanguage ?? 'en-US')}
                   </TableCell>
                   <TableCell className="text-right">
                     <UserActions user={u} />

@@ -56,11 +56,11 @@ docker compose up -d          # 启动 mysql / redis / imgproxy / backend
 ### 2.2 生产部署（Docker）
 
 ```bash
-# 构建镜像（多阶段：builder 编译 Go，运行时 alpine + 非 root 用户）
+# 在仓库根目录构建完整镜像（React + Go + 非 root Alpine 运行时）
 docker build -t summerain:latest .
 
 # 通过 docker compose 启动全部依赖
-docker compose -f docker-compose.deploy.yml up -d
+docker compose -f backend/docker-compose.deploy.yml up -d
 ```
 
 生产前置 nginx 反代到 `127.0.0.1:8080`，并经 Cloudflare 暴露 443（详见第 4 节）。
@@ -201,11 +201,11 @@ backend ──> MySQL / Redis / imgproxy（Docker 内网）
 # 升级前先打 rollback 标签
 docker tag summerain:latest summerain:rollback
 docker build -t summerain:latest .
-docker compose up -d backend      # 自动重建
+docker compose -f backend/docker-compose.deploy.yml up -d backend
 
 # 回滚
 docker tag summerain:rollback summerain:latest
-docker compose up -d backend
+docker compose -f backend/docker-compose.deploy.yml up -d backend
 ```
 
 > 切换为非 root 镜像时，需先对数据卷 `chown -R 10001:10001`（命名卷首次创建会继承镜像内 `/data` 属主）。

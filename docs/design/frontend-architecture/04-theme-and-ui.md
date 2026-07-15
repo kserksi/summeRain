@@ -32,7 +32,7 @@ Tailwind v4 为 CSS-first：色板写入 `src/styles.css` 的 `@theme { --color-
 ## 字体与 i18n
 
 - **字体**：系统字体栈 `-apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", Roboto, ...`。不引入任何外部 webfont（满足 [07 生产规范 · 外部资源本地化](07-production-standards.md#外部资源本地化)）。
-- **i18n**：保留国际化能力，主要面向中国用户，默认语言 `zh-CN`。所有 UI 中文字符串规范存放在 `src/i18n/locales/zh-CN.json`，组件内一律通过 `t('key')` 取用，禁止在组件中硬编码中文。结构上预留新增语言（如 `en-US`）的能力，组件代码不随语言变化。
+- **i18n**：英语是主要语言，默认语言为 `en-US`，同时提供 `zh-CN` 和 `ja-JP`。所有 UI 字符串按语言存放在 `src/i18n/locales/`，组件内一律通过 `t('key')` 取用，禁止硬编码面向用户的文案。
 
 > 本条覆盖早期"暂不引入 i18n"的 YAGNI 决策（见 [09 决策记录](09-decisions-and-scope.md#决策记录)）。
 

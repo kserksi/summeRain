@@ -2,6 +2,9 @@
 frontend/node_modules
 backend/vendor
 
+# Hidden directories are local-only. Hidden files remain eligible for version control.
+**/.*/
+
 # Build output
 frontend/dist
 backend/web
@@ -16,15 +19,7 @@ backend/server_linux
 *.tsbuildinfo
 
 # Editor
-.vscode
-.idea
 *.swp
-
-# AI tools (local only, not part of source)
-.opencode/
-.claude/
-.cursor/
-.agents/
 
 # OS
 .DS_Store
@@ -46,6 +41,3 @@ mockup/
 /捕获.PNG
 /*.PNG
 /*.png
-
-# AI assistant local plans
-.zcode/

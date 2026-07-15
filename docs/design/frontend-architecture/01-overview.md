@@ -33,7 +33,7 @@
 | 路由 | React Router 8（**Declarative 模式** + BrowserRouter） || 服务端状态 | TanStack Query 5 |
 | 客户端状态 | Zustand 5（仅主题 + 当前用户） |
 | 表单 | React Hook Form 7 + Zod 4（经 @hookform/resolvers） |
-| i18n | react-i18next 17 + i18next 26（默认 zh-CN，保留多语言能力） |
+| i18n | react-i18next 17 + i18next 26（默认 en-US，内置中文和日语） |
 | 生产构建增强 | vite-plugin-sri3 2（注入 SHA512 SRI）+ 构建清单 |
 | 常量管理 | 集中常量模块（消除魔法值） |
 | 测试 | Vitest 4 + @testing-library/react 16 + MSW 2 |

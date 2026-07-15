@@ -20,9 +20,11 @@ frontend/
    ├─ config/
    │  └─ constants.ts      # 集中存储所有常量（见 07-production-standards.md，消除魔法值）
    ├─ i18n/
-   │  ├─ index.ts          # i18next 初始化（默认 zh-CN）
+   │  ├─ index.ts          # i18next 初始化（默认 en-US）
    │  └─ locales/
-   │     └─ zh-CN.json     # 中文文案（所有 UI 字符串集中于此）
+   │     ├─ en-US.json     # 默认英语文案
+   │     ├─ zh-CN.json     # 简体中文文案
+   │     └─ ja-JP.json     # 日语文案
    ├─ lib/
    │  ├─ api.ts            # fetch 封装（核心）
    │  ├─ csrf.ts           # 读 __Host-csrf_token cookie
@@ -59,7 +61,7 @@ frontend/
   - **4030**（账户已被禁用）：登出 + 跳 `/login` + 提示"账号已被停用"（被封用户重新登录也是此码，登录表单同样映射此提示）
   - **429 / 2008 / 4029 / 2090**（限流）：不自动重试（避免加剧），抛 `ApiError` 由 UI 提示"操作过于频繁，请稍后再试"；若响应含 `Retry-After` 头，按其给出倒计时
   - **4032 / 4033**（管理接口仅 Web / identity 误用）：属调用方式错误，提示并上报，不登出
-- **错误文案 i18n**：前端按 `code` 映射到 `zh-CN.json` 的 `errors.<code>` 键渲染（可翻译、不硬编码）；后端 `message` 仅作未知 `code` 的兜底文案。组件不直接显示后端 `message`。
+- **错误文案 i18n**：前端按 `code` 映射到当前语言资源的 `errors.<code>` 键渲染（可翻译、不硬编码）；后端 `message` 仅作未知 `code` 的兜底文案。组件不直接显示后端 `message`。
 - 暴露便捷方法：`api.get / post / patch / del`，以及 `api.upload(formData)`
 - **不设字段映射层**：组件直接使用后端 snake_case 字段（如 `created_at`、`view_count`、`storage_used`），保持单一数据形状
 

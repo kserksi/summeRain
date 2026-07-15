@@ -1,0 +1,539 @@
+{
+  "common": {
+    "appName": "summeRain",
+    "loading": "Loading…",
+    "error": "Something went wrong",
+    "retry": "Retry",
+    "cancel": "Cancel",
+    "save": "Save",
+    "delete": "Delete",
+    "confirm": "Confirm",
+    "back": "Back",
+    "search": "Search",
+    "upload": "Upload",
+    "logout": "Log out",
+    "login": "Log in",
+    "register": "Sign up",
+    "copySuccess": "Copied to clipboard",
+    "copyFailed": "Could not copy. Check your browser permissions."
+  },
+  "nav": {
+    "home": "Home",
+    "dashboard": "Dashboard",
+    "images": "My images",
+    "upload": "Upload",
+    "profile": "Profile",
+    "admin": "Admin",
+    "notifications": "Notifications"
+  },
+  "errors": {
+    "2001": "Incorrect username or password",
+    "2008": "Too many requests. Try again later.",
+    "2009": "Verification failed. Try again.",
+    "3000": "Invalid request parameters",
+    "3002": "File exceeds the size limit",
+    "3003": "Unsupported file type",
+    "3004": "Too many files",
+    "4010": "You are not signed in or your session has expired",
+    "4011": "Your session has expired. Sign in again.",
+    "4012": "Storage quota reached",
+    "4029": "Too many requests",
+    "4030": "This account has been suspended",
+    "4035": "CSRF token is missing",
+    "4036": "CSRF token is invalid",
+    "4037": "The private image token is invalid or has expired",
+    "4042": "The private image token has been revoked",
+    "1004": "The verification service is temporarily unavailable",
+    "1003": "Image processing failed. Large 4K+ images may require more imgproxy memory."
+  },
+  "layout": {
+    "errorTitle": "This page encountered an error",
+    "unknownError": "Unknown error",
+    "notFound": "Page not found",
+    "deletionTitle": "Your account is scheduled for deletion",
+    "deletionMessage": "Your account will be permanently deleted in {{hours}} hours and {{minutes}} minutes. Download any data you need before then.",
+    "remainingDownloads": "Downloads remaining: {{remaining}}/{{total}}",
+    "batchDownload": "Download archive",
+    "toggleTheme": "Toggle light and dark mode"
+  },
+  "upload": {
+    "title": "Upload images",
+    "dropzone": "Click or drag images here to upload",
+    "dropzoneHint": "Supports JPG, PNG, GIF, and WebP. Multiple selection is available.",
+    "visibility": "Visibility",
+    "visibilityPublic": "Public",
+    "visibilityPrivate": "Private",
+    "queue": "Upload queue ({{count}})",
+    "startUpload": "Start upload",
+    "uploading": "Uploading…",
+    "done": "Done",
+    "remove": "Remove",
+    "empty": "No images have been added",
+    "status": {
+      "queued": "Queued",
+      "uploading": "Uploading",
+      "done": "Done",
+      "failed": "Failed"
+    },
+    "toast": {
+      "uploadSuccess": "Uploaded {{count}} images",
+      "uploadAllFailed": "Upload failed",
+      "uploadPartial": "{{ok}} succeeded, {{fail}} failed",
+      "itemFailed": "{{name}}: {{msg}}",
+      "copied": "Copied {{count}} links ({{format}})",
+      "errorCode": "Error code {{code}}",
+      "parseFailed": "Could not parse the response"
+    },
+    "copy": {
+      "button": "Copy all links",
+      "linkFormatLabel": "Link format",
+      "imageFormatLabel": "Image format",
+      "linkFormats": {
+        "url": "URL",
+        "markdown": "Markdown",
+        "bbs": "BBS (BBCode)",
+        "html": "HTML"
+      },
+      "imageFormats": {
+        "original": "Original",
+        "webp": "WebP",
+        "avif": "AVIF"
+      },
+      "action": "Copy {{count}} links"
+    },
+    "retry": "Retry",
+    "retryAll": "Retry all failed uploads ({{count}})"
+  },
+  "auth": {
+    "loginSubtitle": "Sign in to your {{appName}} account",
+    "registerSubtitle": "Create your {{appName}} account",
+    "bannedMessage": "Your account has been suspended by an administrator. Contact the administrator if you think this is a mistake.",
+    "noAccount": "New here?",
+    "hasAccount": "Already have an account?",
+    "registerNow": "Create an account",
+    "hidePassword": "Hide password",
+    "showPassword": "Show password",
+    "registerSuccess": "Account created. You can now sign in.",
+    "field": {
+      "username": "Username",
+      "password": "Password",
+      "email": "Email",
+      "confirmPassword": "Confirm password"
+    },
+    "validation": {
+      "usernameRequired": "Enter your username",
+      "passwordMin6": "Password must be at least 6 characters",
+      "usernameMin3": "Username must be at least 3 characters",
+      "usernameMax50": "Username must be no more than 50 characters",
+      "emailInvalid": "Enter a valid email address",
+      "passwordMin8": "Password must be at least 8 characters",
+      "confirmRequired": "Enter your password again",
+      "passwordMismatch": "Passwords do not match"
+    }
+  },
+  "captcha": {
+    "clickToVerify": "Click to verify",
+    "protectedByRecaptcha": "Protected by reCAPTCHA"
+  },
+  "images": {
+    "shared": {
+      "public": "Public",
+      "private": "Private",
+      "close": "Close",
+      "copy": "Copy",
+      "link": "Link",
+      "token": "Token",
+      "format": "Format",
+      "dimensions": "Dimensions",
+      "size": "Size",
+      "views": "Views",
+      "uploadedAt": "Uploaded",
+      "formatOriginal": "Original",
+      "formatWebp": "WebP",
+      "formatAvif": "AVIF",
+      "formatJpeg": "JPEG",
+      "formatPng": "PNG"
+    },
+    "list": {
+      "searchPlaceholder": "Search images…",
+      "filterAll": "All",
+      "gridView": "Grid view",
+      "listView": "List view",
+      "select": "Select",
+      "selectedCount": "{{count}} selected",
+      "selectAll": "Select all",
+      "batchDelete": "Delete selected",
+      "empty": "You have not uploaded any images yet",
+      "confirmBatchDeleteTitle": "Delete selected images?",
+      "confirmBatchDeleteDesc": "Delete the selected {{count}} images? This action cannot be undone.",
+      "toast": {
+        "deleted": "Deleted {{count}} images",
+        "deleteAllFailed": "Delete failed. Related access tokens may need to be removed first.",
+        "deletePartial": "{{ok}} succeeded, {{fail}} failed",
+        "deleteFailedWithMsg": "Delete failed: {{msg}}"
+      }
+    },
+    "detail": {
+      "zoom": "Zoom",
+      "zoomAria": "View larger image",
+      "privateHint": "Available only through a tokenized link",
+      "publicHint": "Visible to everyone",
+      "shareLinks": "Share links",
+      "processingTitle": "Image processing and conversion",
+      "processingHint": "Convert format, dimensions, and quality with imgproxy.",
+      "dimensionsPx": "Dimensions (px)",
+      "lockAspect": "Lock aspect ratio",
+      "widthAria": "Width",
+      "heightAria": "Height",
+      "reset": "Reset",
+      "quality": "Quality",
+      "accessToken": "Access token",
+      "tokenHelp": "Private images require a link containing an access token.",
+      "tokenLink": "Tokenized link",
+      "tokenCopied": "Token copied",
+      "processedLinkCopied": "Processed link copied",
+      "copyAriaLabel": "Copy {{label}}",
+      "expiresAt": "Expires: {{date}}",
+      "noActiveToken": "No active token",
+      "validity": "Validity",
+      "ttl10m": "10 minutes",
+      "ttl1h": "1 hour",
+      "ttl24h": "24 hours",
+      "ttl72h": "72 hours",
+      "issueToken": "Issue token",
+      "reissueToken": "Reissue token",
+      "revoke": "Revoke",
+      "deleteImage": "Delete image",
+      "confirmDeleteTitle": "Delete this image?",
+      "confirmDeleteDesc": "This action cannot be undone. The image will be permanently deleted.",
+      "confirmDelete": "Delete image",
+      "deleting": "Deleting…"
+    },
+    "toast": {
+      "deleted": "Image deleted",
+      "deleteFailed": "Could not delete image",
+      "setToPrivate": "Image is now private. Its public link is no longer available.",
+      "setToPublic": "Image is now public",
+      "toggleFailed": "Could not change visibility",
+      "tokenIssued": "Token issued",
+      "issueFailed": "Could not issue token",
+      "tokenRevoked": "Token revoked",
+      "revokeFailed": "Could not revoke token"
+    }
+  },
+  "profile": {
+    "title": "Profile",
+    "subtitle": "Manage your account information and security settings",
+    "settings": {
+      "title": "Preferences",
+      "language": "Interface language",
+      "languageDesc": "Choose the language used by the interface"
+    },
+    "avatar": {
+      "title": "Avatar",
+      "change": "Change avatar",
+      "remove": "Remove avatar",
+      "cropTitle": "Crop avatar",
+      "zoom": "Zoom",
+      "tooLarge": "The image must be no larger than 5 MB",
+      "updated": "Avatar updated",
+      "removed": "Avatar removed",
+      "updateFailed": "Could not update avatar. Try again."
+    },
+    "account": {
+      "title": "Account information",
+      "description": "View your account and storage usage",
+      "loadFailed": "Could not load your account information. Try again later.",
+      "username": "Username",
+      "email": "Email",
+      "role": "Role",
+      "status": "Status",
+      "createdAt": "Joined",
+      "storageUsage": "Storage usage",
+      "usedPercent": "{{percent}}% used"
+    },
+    "role": {
+      "admin": "Administrator",
+      "user": "User"
+    },
+    "status": {
+      "active": "Active",
+      "suspended": "Suspended",
+      "pending": "Pending"
+    },
+    "password": {
+      "title": "Change password",
+      "description": "You will be signed out after changing your password. Sign in again with the new password.",
+      "current": "Current password",
+      "new": "New password",
+      "confirm": "Confirm new password",
+      "minLengthHint": "At least 8 characters",
+      "currentRequired": "Enter your current password",
+      "newMinLength": "The new password must be at least 8 characters",
+      "confirmRequired": "Enter the new password again",
+      "mismatch": "Passwords do not match",
+      "changeFailed": "Could not change your password. Try again later.",
+      "changed": "Password changed. Sign in again.",
+      "saving": "Saving…",
+      "save": "Save new password"
+    }
+  },
+  "admin": {
+    "shared": {
+      "title": "Administration",
+      "subtitle": "System administration",
+      "prevPage": "Previous page",
+      "nextPage": "Next page",
+      "colActions": "Actions",
+      "actionFailed": "The action failed. Try again.",
+      "saving": "Saving…",
+      "nav": {
+        "overview": "Overview",
+        "users": "Users",
+        "images": "Images",
+        "configs": "Settings"
+      }
+    },
+    "overview": {
+      "title": "System overview",
+      "subtitle": "Current system activity",
+      "totalUsers": "Total users",
+      "totalImages": "Total images",
+      "storageUsed": "Storage used",
+      "activeUsers": "Active users",
+      "totalSessions": "Total sessions"
+    },
+    "users": {
+      "title": "Users",
+      "totalCount": "{{total}} users",
+      "searchPlaceholder": "Search by username or email",
+      "colUser": "User",
+      "colEmail": "Email",
+      "colRole": "Role",
+      "colStatus": "Status",
+      "colImages": "Images",
+      "colStorage": "Storage",
+      "colCreatedAt": "Joined",
+      "noMatch": "No users match your search",
+      "empty": "No users",
+      "role": {
+        "admin": "Administrator",
+        "user": "User"
+      },
+      "status": {
+        "active": "Active",
+        "banned": "Suspended",
+        "deleting": "Deletion pending",
+        "remainingHours": "({{hours}}h left)"
+      },
+      "unban": "Restore",
+      "ban": "Suspend",
+      "confirmUnbanTitle": "Restore this user?",
+      "confirmBanTitle": "Suspend this user?",
+      "unbanDesc": "The user will be able to sign in and use the service again.",
+      "banDesc": "The user will no longer be able to sign in. Existing images will not be affected.",
+      "suspendedUser": "User suspended",
+      "unsuspendedUser": "User restored",
+      "quota": "Quota",
+      "adjustQuotaTitle": "Adjust storage quota",
+      "quotaCurrentDesc": "Current quota: {{current}} · Used: {{used}}",
+      "newQuotaMb": "New quota (MB)",
+      "minQuota": "The minimum quota is 500 MB",
+      "quotaUpdated": "Quota updated",
+      "quotaUpdateFailed": "Could not update the quota. Try again.",
+      "requestDelete": "Delete account",
+      "deleteUserTitle": "Delete {{username}}",
+      "deleteDesc": "This immediately locks the account and permanently deletes all of its data after 24 hours.",
+      "deleteRestrict": "Blocks uploads, deletes, and conversions",
+      "deleteAllowDownload": "Allows up to 10 archive downloads of original images",
+      "deleteAfter24h": "Permanently deletes the account after 24 hours",
+      "deleteCancellable": "Can be cancelled during the 24-hour waiting period",
+      "typeUsernameConfirm": "Enter the username to confirm",
+      "processing": "Processing…",
+      "confirmDelete": "Schedule deletion",
+      "deletionInitiated": "Account deletion scheduled",
+      "deletionInitFailed": "Could not schedule account deletion. Try again.",
+      "deletionRequested": "Deletion request sent",
+      "deletionCancelled": "Deletion request cancelled",
+      "undo": "Cancel deletion",
+      "undoing": "Cancelling…",
+      "undoDeletionDone": "Account deletion cancelled",
+      "undoDeletionFailed": "Could not cancel deletion. Try again."
+    },
+    "images": {
+      "title": "Images",
+      "totalCount": "{{total}} images",
+      "searchPlaceholder": "Search by filename",
+      "colPreview": "Preview",
+      "colFilename": "Filename",
+      "colOwner": "Owner",
+      "colVisibility": "Visibility",
+      "private": "Private",
+      "noMatch": "No images match your search",
+      "empty": "No images",
+      "confirmDeleteTitle": "Delete this image?",
+      "deleteDesc": "The image and its related data will be permanently deleted.",
+      "deleted": "Image deleted",
+      "deleteFailed": "Could not delete the image. Try again."
+    },
+    "configs": {
+      "title": "System settings",
+      "subtitle": "Configure verification, private image tokens, and watermarks",
+      "siteLanguageTitle": "Site language",
+      "siteLanguageDesc": "Set the default interface language for every visitor",
+      "siteLanguageLabel": "Interface language",
+      "captchaTitle": "Human verification",
+      "captchaDesc": "Configure the CAPTCHA provider used during registration and sign-in",
+      "providerLabel": "Verification provider",
+      "providerNone": "Disabled",
+      "scriptHintRecaptcha": "The page must load https://www.google.com/recaptcha/api.js",
+      "scriptHintTurnstile": "The page must load https://challenges.cloudflare.com/turnstile/api.js",
+      "scriptHintGeetest": "The page must load the GeeTest v4 SDK",
+      "siteKeyPlaceholder": "Public key used by the browser",
+      "secretPlaceholder": "Secret key used by the server",
+      "tokenTtlTitle": "Private image token lifetime",
+      "tokenTtlDesc": "Set the default lifetime of tokens used to access private images",
+      "defaultTtlLabel": "Default lifetime (milliseconds)",
+      "ttlRange": "Allowed range: {{min}}–{{max}} ms (default: {{default}} ms)",
+      "watermarkTitle": "Image watermark",
+      "watermarkDesc": "When enabled, a watermark is added to images processed by imgproxy",
+      "enableWatermark": "Enable watermark",
+      "watermarkText": "Watermark text",
+      "watermarkTextPlaceholder": "For example: © summeRain",
+      "opacityLabel": "Opacity (0.0–1.0)",
+      "opacityHint": "0.3–0.7 is recommended. Higher values are more opaque.",
+      "sizeLabel": "Font size (px)",
+      "colorLabel": "Color (hex without #)",
+      "colorHint": "For example: ffffff (white), 000000 (black), ff6600 (orange)",
+      "positionLabel": "Watermark position",
+      "posCenter": "Center",
+      "posBottomRight": "Bottom right",
+      "posBottomLeft": "Bottom left",
+      "posTopRight": "Top right",
+      "posTopLeft": "Top left",
+      "r2Title": "Cloudflare R2 storage",
+      "r2Desc": "Store new uploads only in R2 and deliver them through a CDN without using local disk space.",
+      "enableR2": "Enable R2 storage",
+      "bucketLabel": "Bucket name",
+      "publicUrlLabel": "Public domain",
+      "publicUrlHint": "A custom domain connected to the R2 bucket in the Cloudflare dashboard",
+      "r2MigrateHint": "New uploads are stored only in R2 after it is enabled. Existing local images can be synchronized with the R2 migration action.",
+      "testing": "Testing…",
+      "testConnection": "Test connection",
+      "affectsAll": "Changes affect the entire site",
+      "saved": "Settings saved",
+      "saveFailed": "Could not save settings. Try again.",
+      "r2TestSuccess": "R2 connection succeeded",
+      "r2TestFailed": "R2 connection failed"
+    }
+  },
+  "landing": {
+    "hero": {
+      "badge": "⚡ Fast · Reliable · Free",
+      "titlePrefix": "A better home for",
+      "titleHighlight": "your images",
+      "subtitle": "Fast and reliable image hosting with global CDN delivery and stable direct links.",
+      "uploadNow": "Upload now",
+      "registerFree": "Create free account"
+    },
+    "stats": {
+      "images": "Images hosted",
+      "users": "Registered users",
+      "views": "Total views",
+      "storage": "Storage"
+    },
+    "features": {
+      "fastTransfer": {
+        "title": "Fast delivery",
+        "desc": "Global CDN acceleration provides responsive uploads and downloads."
+      },
+      "permanentLink": {
+        "title": "Stable direct links",
+        "desc": "HTTPS image links that can be embedded in any website."
+      },
+      "secure": {
+        "title": "Private by design",
+        "desc": "Protect private images with expiring access tokens."
+      },
+      "analytics": {
+        "title": "Usage insights",
+        "desc": "Track view counts for every image."
+      },
+      "management": {
+        "title": "Simple management",
+        "desc": "Organize images and switch between public and private access at any time."
+      },
+      "crossPlatform": {
+        "title": "Cross-platform",
+        "desc": "Use the web interface, API, and desktop clients across your devices."
+      }
+    }
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "welcomeBack": "Welcome back, {{name}}",
+    "subtitle": "An overview of your images and storage",
+    "uploadNow": "Upload now",
+    "statCards": {
+      "myImages": "My images",
+      "totalViews": "Total views",
+      "storageUsed": "Storage used",
+      "publicImages": "Public images"
+    },
+    "storage": {
+      "title": "Storage usage",
+      "remaining": "{{used}} remaining of {{total}}"
+    },
+    "recent": {
+      "title": "Recent uploads",
+      "viewAll": "View all"
+    },
+    "empty": {
+      "title": "You have not uploaded any images yet",
+      "desc": "Upload your first image to get started"
+    },
+    "adminStats": {
+      "totalUsers": "Total users",
+      "totalImages": "Total images",
+      "storageUsed": "Storage used",
+      "activeUsers": "Active users",
+      "totalSessions": "Total sessions"
+    },
+    "adminSection": {
+      "title": "System administration",
+      "subtitle": "Current system activity",
+      "enterAdmin": "Open administration"
+    }
+  },
+  "notification": {
+    "title": "Notifications",
+    "markAllRead": "Mark all as read",
+    "clearAll": "Clear all",
+    "empty": "No notifications",
+    "confirmClear": "Clear all notifications?",
+    "time": {
+      "justNow": "Just now",
+      "minutesAgo": "{{count}} minutes ago",
+      "hoursAgo": "{{count}} hours ago",
+      "daysAgo": "{{count}} days ago"
+    },
+    "actions": {
+      "markRead": "Mark as read",
+      "delete": "Delete notification"
+    },
+    "toast": {
+      "markReadFailed": "Could not mark the notification as read",
+      "allMarkedRead": "All notifications marked as read",
+      "actionFailed": "The action failed",
+      "deleteFailed": "Could not delete the notification",
+      "allCleared": "All notifications cleared",
+      "clearFailed": "Could not clear notifications"
+    }
+  },
+  "api": {
+    "networkError": "Network error. Check your connection.",
+    "sessionExpired": "Your session has expired",
+    "parseFailed": "Could not parse the response",
+    "unknownError": "Unknown error"
+  }
+}

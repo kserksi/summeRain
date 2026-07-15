@@ -36,7 +36,7 @@ type PublicConfigResult struct {
 }
 
 func (s *PublicConfigService) Get() (*PublicConfigResult, *errcode.AppError) {
-	result := &PublicConfigResult{CaptchaProvider: "none", CaptchaSiteKey: "", SiteLanguage: "zh-CN"}
+	result := &PublicConfigResult{CaptchaProvider: "none", CaptchaSiteKey: "", SiteLanguage: "en-US"}
 	if s != nil {
 		result.CaptchaProvider = s.captcha.Provider
 		result.CaptchaSiteKey = providerSiteKey(s.captcha)

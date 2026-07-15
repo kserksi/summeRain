@@ -12,13 +12,13 @@ import (
 
 func TestDockerfileUsesGoVersionFromModule(t *testing.T) {
 	goMod := readTestFile(t, "go.mod")
-	dockerfile := readTestFile(t, "Dockerfile")
+	dockerfile := readTestFile(t, "../Dockerfile")
 
-	version := regexp.MustCompile(`(?m)^go\s+(\d+)\.(\d+)\.\d+`).FindStringSubmatch(goMod)
+	version := regexp.MustCompile(`(?m)^go\s+(\d+)\.(\d+)(?:\.\d+)?`).FindStringSubmatch(goMod)
 	if len(version) != 3 {
 		t.Fatalf("go.mod does not declare a full Go version")
 	}
-	wantBuilder := "FROM golang:" + version[1] + "." + version[2] + "-alpine AS builder"
+	wantBuilder := "FROM golang:" + version[1] + "." + version[2] + "-alpine AS backend-builder"
 
 	if !strings.Contains(dockerfile, wantBuilder) {
 		t.Fatalf("Dockerfile builder image mismatch: want line %q", wantBuilder)
@@ -42,7 +42,7 @@ func readTestFile(t *testing.T, path string) string {
 	if err != nil {
 		t.Fatalf("read %s: %v", path, err)
 	}
-	return string(content)
+	return strings.ReplaceAll(string(content), "\r\n", "\n")
 }
 
 func serviceBlock(t *testing.T, compose string, service string, nextService string) string {
