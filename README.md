@@ -162,7 +162,12 @@ npm run build
 
 ### 4. 通过 GitHub Actions 发布容器镜像
 
-推送到 `main` 或 `master` 后，GitHub Actions 会先运行前后端检查，再使用根目录的多阶段 Dockerfile 在 GitHub Runner 上构建 `linux/amd64` 和 `linux/arm64` 镜像，并推送到 GHCR。整个发布过程不需要在本地构建镜像。
+推送到 `main` 或 `master` 后，GitHub Actions 会先运行前后端检查，再使用根目录的多阶段 Dockerfile 在 GitHub Runner 上构建 `linux/amd64` 和 `linux/arm64` 镜像，并同时推送到 GHCR 和 Docker Hub。整个发布过程不需要在本地构建镜像。
+
+- Docker Hub：`jaykserks/summerain`
+- GHCR：`ghcr.io/kserksi/summerain`
+
+工作流还会把仓库根目录的 `README.md` 同步到 Docker Hub 仓库说明。GitHub 仓库需要配置 Actions Secrets：`DOCKERHUB_USERNAME`（值为 `Jaykserks`）以及具有 `read/write/delete` 权限的 `DOCKERHUB_TOKEN`。
 
 分支构建会发布 `latest` 和 `sha-<commit>` 标签。推送 `v1.0.0` 形式的 Git 标签时，还会发布 `v1.0.0`、`1.0.0`、`1.0` 和 `1` 等版本标签。
 
@@ -176,8 +181,8 @@ git push origin v1.0.0
 Compose 可通过 `DOCKER_IMAGE` 选择远程镜像。部署机拉取镜像后，可用 `--no-build` 阻止本地重新构建：
 
 ```bash
-DOCKER_IMAGE=ghcr.io/kserksi/summerain:1.0.0 docker compose -f backend/docker-compose.deploy.yml pull
-DOCKER_IMAGE=ghcr.io/kserksi/summerain:1.0.0 docker compose -f backend/docker-compose.deploy.yml up -d --no-build
+DOCKER_IMAGE=jaykserks/summerain:1.0.0 docker compose -f backend/docker-compose.deploy.yml pull
+DOCKER_IMAGE=jaykserks/summerain:1.0.0 docker compose -f backend/docker-compose.deploy.yml up -d --no-build
 ```
 
 生产环境的 nginx/Cloudflare 前置和回滚流程见 [部署与使用文档](docs/USAGE.md)。
