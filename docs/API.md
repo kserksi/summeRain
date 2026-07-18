@@ -81,7 +81,7 @@
 
 ### 2.2 CSRF 保护（关键）
 
-**所有写操作（POST/PATCH/DELETE）在使用 Cookie 鉴权时，必须携带请求头：**
+**所有写操作（POST/PUT/PATCH/DELETE）在使用 Cookie 鉴权时，必须携带请求头：**
 
 ```
 X-CSRF-Token: <__Host-csrf_token cookie 的值>
@@ -126,7 +126,7 @@ X-CSRF-Token: <__Host-csrf_token cookie 的值>
 }
 ```
 校验：`username` 3-50，`email` 合法邮箱 ≤100，`password` 8-72。
-> `captcha` 载荷形态由当前 `captcha_provider` 决定（见 [9.1](#91-公共配置)）；`provider=none` 时可不传。recaptcha 需 `token`+`action`；turnstile 需 `token`；geetest_v4 需 `lot_number`/`captcha_output`/`pass_token`/`gen_time`。前端传错 provider 会被拒。
+> `captcha` 载荷形态由当前 `captcha_provider` 决定（见 [9.1](#91-公共配置)）；`provider=none` 时可不传。recaptcha 需 `token`+`action`；turnstile 需 `token`；geetest_v4 需 `lot_number`/`captcha_output`/`pass_token`/`gen_time`。前端传错 provider 会被拒。默认 `CROSS_ORIGIN_ISOLATION=true` 时不支持 `geetest_v4`，详见 [9.1](#91-公共配置)。
 
 **成功 201**
 ```json
@@ -185,7 +185,13 @@ X-CSRF-Token: <__Host-csrf_token cookie 的值>
 
 清除两个 Cookie，服务端删除会话。返回 `{"code":0,"data":null}`。
 
-### 3.5 设备端接口（Web 对接可忽略）
+### 3.5 恢复 CSRF Token
+
+`POST /api/v1/auth/csrf/refresh` 🔒
+
+该接口用于长时间上传期间恢复过期的 CSRF token，不要求旧 `X-CSRF-Token`，但必须是同源 Web 请求；服务端校验 `Origin`，并在浏览器提供时校验 `Sec-Fetch-Site: same-origin`。成功后重新设置 `__Host-csrf_token`。只有具备幂等语义的请求可以在刷新后自动重放。
+
+### 3.6 设备端接口（Web 对接可忽略）
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
@@ -243,6 +249,9 @@ X-CSRF-Token: <__Host-csrf_token cookie 的值>
 | `unique_link` | string | 唯一短链，拼出图地址 `/i/<unique_link>` |
 | `title` / `filename` / `description` | string | 元信息 |
 | `visibility` | string | `public` / `private` |
+| `pipeline_version` | uint16 | `1` 为历史管线，`2` 为客户端预处理管线 |
+| `processing_status` | string | `pending` / `processing` / `completed` / `failed` |
+| `asset_link` | string? | V2 当前原站别名；私密图片为 `<unique_link>S` |
 | `view_count` | uint64 | 浏览量 |
 | `width` / `height` | int | 尺寸 |
 | `file_size` | int64 | 字节 |
@@ -250,48 +259,51 @@ X-CSRF-Token: <__Host-csrf_token cookie 的值>
 
 > ⚠️ **后端 Image 模型无 `category` / `tags` 字段**。前端若需分类标签，需后端扩展或前端本地维护。
 
-### 4.2 上传图片
+### 4.2 V2 客户端预处理上传
 
-`POST /api/v1/images/` 🔒 CSRF
+V2 默认启用。浏览器接受静态 JPG/JPEG、PNG、BMP、WebP、AVIF，拒绝动图，并在客户端生成四份 WebP：`master`（原分辨率，Q80）、`gallery`（400x400 cover，Q60）、`admin`（120x160 cover，Q60，在 Image Management 中以 CSS 60x80 显示，提供 2x 像素密度）和 `publish_source`（最长边 2048，Q80）。服务端流式接收、校验完整 WebP 容器，并仅在后台为最终 `publish` 产物应用水印。
 
-**请求**：`multipart/form-data`
-- `images`：文件字段（可多个，最多 20 个）
-- `visibility`：表单字段，`public` 或 `private`（可选）
+1. `GET /api/v1/uploads/recipe` 🔒：获取当前配方、部件上限、像素上限和会话 TTL。响应中的 `v2_enabled` 是新建上传的能力开关；为 `false` 时 Web 客户端不执行本地预处理，改走 V1 multipart。
+2. `POST /api/v1/uploads/` 🔒 CSRF：创建会话。必须发送最长 64 字符的 `Idempotency-Key`；同一 key 只能重放完全相同的清单。
+3. `PUT /api/v1/uploads/:uploadID/parts/:kind` 🔒 CSRF：按响应的 `put_url` 上传 `image/webp` 原始请求体；`Content-Length`、SHA-256、尺寸和完整 RIFF 容器必须与清单一致。
+4. `POST /api/v1/uploads/:uploadID/complete` 🔒 CSRF：原子固化 `master`、`gallery`、`admin`，并创建从 `publish_source` 生成 `publish` 的持久化发布任务。
+5. `POST /api/v1/uploads/status` 🔒 CSRF：批量查询 1-100 个 `upload_ids`；缺失或无权 ID 返回统一 404，不返回部分结果。
+6. `GET /api/v1/uploads/:uploadID` 🔒：查询单个状态。`DELETE` 同一路径可取消尚未进入处理阶段的会话。
 
-```bash
-curl -X POST /api/v1/images/ \
-  -H "X-CSRF-Token: <csrf>" \
-  -F "images=@photo.jpg" \
-  -F "visibility=public"
-```
+**创建清单示例**
 
-**成功 200**（`UploadResponse`）
 ```json
 {
-  "code": 0,
-  "data": {
-    "upload_id": 99,
-    "total": 1,
-    "results": [
-      {
-        "filename": "photo.jpg",
-        "success": true,
-        "image_id": 50,
-        "unique_link": "xY9k2...",
-        "thumbnail_url": "/i/xY9k2....webp",
-        "processed_url": "/i/xY9k2....jpg",
-        "error": "",
-        "error_code": 0
-      }
-    ],
-    "storage_used": 2000000,
-    "storage_quota": 1073741824,
-    "storage_percent": 0.18
-  }
+  "filename": "photo.jpg",
+  "visibility": "public",
+  "processor_version": "wasm-vips-0.0.18",
+  "recipe_version": "2.0.0",
+  "source": { "mime_type": "image/jpeg", "width": 8000, "height": 6000, "animated": false },
+  "parts": [
+    { "kind": "master", "size": 8200000, "sha256": "<64 lowercase hex>", "mime_type": "image/webp", "width": 8000, "height": 6000, "quality": 80 },
+    { "kind": "gallery", "size": 32000, "sha256": "<64 lowercase hex>", "mime_type": "image/webp", "width": 400, "height": 400, "quality": 60 },
+    { "kind": "admin", "size": 9000, "sha256": "<64 lowercase hex>", "mime_type": "image/webp", "width": 120, "height": 160, "quality": 60 },
+    { "kind": "publish_source", "size": 410000, "sha256": "<64 lowercase hex>", "mime_type": "image/webp", "width": 2048, "height": 1536, "quality": 80 }
+  ]
 }
 ```
 
-> 每个 `UploadResult` 独立标记成功/失败。配额满返回 `4012 存储配额已满`；文件过大 `3002`；类型不支持 `3003`；数量超限 `3004`。
+**会话响应**
+
+```json
+{
+  "upload_id": "32-character-url-safe-id",
+  "status": "initiated",
+  "expires_at": "2026-07-16T12:30:00Z",
+  "parts": [
+    { "kind": "master", "status": "pending", "put_url": "/api/v1/uploads/.../parts/master", "size": 8200000, "sha256": "...", "width": 8000, "height": 6000 }
+  ]
+}
+```
+
+状态依次为 `initiated`、`uploading`、`processing`、`completed`；`failed`、`cancelled` 为终态。发布完成后持久化的四个访问变体为 `master`、`gallery`、`admin`、`publish`，中间 `publish_source` 会被删除。`cleanup_pending` 带 `image_id`、`unique_link` 和 `asset_link` 时表示图片已经发布，仅剩中间文件清理；否则按失败终态处理。客户端轮询上限为 10 分钟。
+
+`POST /api/v1/images/` 只在 `V2_UPLOAD_ENABLED=false` 时保留 V1 multipart 兼容；V2 启用时返回 `4262`。配方端点始终可查询，关闭 V2 时返回 `"v2_enabled": false`，以便客户端在处理源图之前选择兼容管线。
 
 ### 4.3 图片详情
 
@@ -331,11 +343,14 @@ curl -X POST /api/v1/images/ \
 ```json
 { "code": 0, "data": {
     "image_id": 50,
-    "visibility": "private",
+    "visibility": "public",
     "tokens_revoked": 2,
-    "warning": "改为私密后已撤销 N 个外链令牌"
+    "warning": "private → public 切换已撤销此图片的全部访问令牌",
+    "asset_link": "V2 当前生效的发布短链；私密状态会在文件名后附加 S"
 }}
 ```
+
+`tokens_revoked` 仅在 `private → public` 时可能大于 0；`public → private` 会立即切换到带 `S` 的 V2 `asset_link`，旧公开地址的 CDN 缓存最长保留 10 分钟并同时进入 purge outbox。
 
 ---
 
@@ -447,11 +462,22 @@ curl -X POST /api/v1/images/ \
 
 **请求体**：`{ "status": "active" }`
 
-`status` 仅允许三值之一：`active` / `suspended` / `pending`。
+`status` 仅允许 `active` / `suspended`。`pending_deletion` 与 `deleting` 由注销状态机维护，不能通过本接口直接写入。
 
-> 设为 `suspended` 时：服务端自动删除该用户所有会话（强制下线）并发"账号已被禁用"通知。注意：后端无 `banned`，对应概念是 `suspended`。用户不存在返回 `4041`。
+> 设为 `suspended` 时：后续鉴权会拒绝该用户的现有会话（效果为强制下线），并发送"账号已被禁用"通知。注意：后端无 `banned`，对应概念是 `suspended`。用户不存在返回 `4041`。
 
-### 8.3 系统统计
+### 8.3 请求或取消用户注销
+
+| 方法 | 路径 | 请求 | 说明 |
+|---|---|---|---|
+| POST | `/admin/users/:id/request-deletion?admin=<管理员用户名>` | `{ "username": "待注销用户名" }` | 仅允许 `active` 普通用户；进入 `pending_deletion` 并安排 24 小时后删除 |
+| POST | `/admin/users/:id/cancel-deletion` | 无 | 仅允许 `pending_deletion`；恢复为 `active` |
+
+请求注销会清除目标用户的全部会话。锁定期内用户可重新登录并批量下载数据，但上传、删除图片及修改图片会返回 `4038`。到期 Worker 抢占任务后状态进入内部阶段 `deleting`，此时鉴权与业务访问均 fail-closed，且不能再取消；物理文件删除通过持久化 outbox 重试。
+
+重复请求、不允许的源状态或并发状态变化返回 `4095`；用户名不匹配返回 `3000`；管理员账户不能注销。两个接口成功均返回 `{"code":0,"data":null}`。
+
+### 8.4 系统统计
 
 `GET /api/v1/admin/stats`
 
@@ -466,7 +492,7 @@ curl -X POST /api/v1/images/ \
 }}
 ```
 
-### 8.4 系统配置
+### 8.5 系统配置
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
@@ -484,20 +510,25 @@ curl -X POST /api/v1/images/ \
 ```json
 { "code": 0, "data": {
     "captcha_provider": "none",
-    "captcha_site_key": ""
+    "captcha_site_key": "",
+    "site_language": "en-US"
 }}
 ```
 | 字段 | 说明 |
 |---|---|
 | `captcha_provider` | `none` / `recaptcha` / `turnstile` / `geetest_v4`；可被 admin 经 `/admin/configs`（键 `captcha_provider`）覆盖 |
 | `captcha_site_key` | 当前 provider 的客户端公钥（recaptcha/turnstile→site key；geetest→captcha_id；`none`→空） |
+| `site_language` | 站点语言，如 `en-US` / `zh-CN`；前端启动时据此切换语言 |
+
+默认 `CROSS_ORIGIN_ISOLATION=true` 会下发 COOP/COEP，以启用 wasm-vips 的 50MP 大图处理路径。GeeTest v4 的外部脚本资源不满足该隔离策略，因此服务端在隔离开启时拒绝把 `captcha_provider` 配置为 `geetest_v4`；请使用 `none`、`recaptcha` 或 `turnstile`。显式关闭跨源隔离虽可使用 GeeTest，但会失去 V2 大图所需的隔离执行路径，不建议用于 50MP 上传部署。
 
 ### 9.2 图片直链服务
 
 `GET /i/:link`
 
-- `link` 形如 `<unique_link>` 或 `<unique_link>.<ext>`（ext ∈ webp/avif/jpg/jpeg/png/gif）。
-- 无扩展名 → 返回原图（原始 mime）；带扩展名 → 经 imgproxy 转码，支持 `w`/`h`（≤4096）/`q` 查询参数。
+- V2 发布图：`GET /i/<asset_link>.webp`。
+- V2 固定变体：`GET /i/<asset_link>/master.webp`、`gallery.webp`、`admin.webp`、`publish.webp`；查询参数不会触发新的尺寸生成。`master` 与 `admin` 只允许 owner/admin 访问。
+- V1 `link` 仍可写成 `<unique_link>` 或 `<unique_link>.<ext>`（ext ∈ webp/avif/jpg/jpeg/png/gif）。无扩展名返回原图，带扩展名走有界的 imgproxy 兼容路径，并支持 `w`/`h`（≤4096）/`q`。无尺寸 WebP 与后台生成的 AVIF 可持久化；任意尺寸等动态结果只在请求期间使用临时文件，同参数并发请求会合并，最后一个响应释放后删除。
 - **私密图片**：
   - owner/admin（同源会话，`__Host-session_token` / `Bearer`）→ **直接放行**，无需令牌。
   - 第三方：query `?token=xxx`、头 `X-Image-Token` 或 `Authorization: Bearer xxx`。
@@ -505,7 +536,7 @@ curl -X POST /api/v1/images/ \
     - 未带 / 错令牌 / 已过期 → **`4037`(403)**
     - 已吊销 → **`4042`(404)**
 - 每次访问异步累加浏览量（Redis `views:<id>`，由 `view_flusher` worker 落库）。
-- 缓存头：私密图 `no-store`，公开图 `no-cache, must-revalidate`。
+- 缓存头：私密图 `no-store`；公开原站响应最长缓存 10 分钟，变更可见性时同时写入持久化 CDN purge outbox。
 
 ### 9.3 公开统计
 
@@ -547,6 +578,10 @@ curl -X POST /api/v1/images/ \
 | 3002 | 413 | 文件大小超出限制 |
 | 3003 | 415 | 不支持的文件类型 |
 | 3004 | 400 | 文件数量超出限制 |
+| 3005 | 400/404 | V2 上传清单、上传 ID 或部件参数无效 |
+| 3006 | 400 | 上传流读取失败或 R2 URL 配置无效 |
+| 3007 | 422 | 上传部件 SHA-256 校验失败 |
+| 3008 | 422 | 上传部件图片尺寸与清单不一致 |
 | 3010 | 400 | 图片尺寸超出限制 |
 | 4010 | 401 | 未认证 / 无效令牌 |
 | 4011 | 401 | 会话已过期 |
@@ -560,11 +595,24 @@ curl -X POST /api/v1/images/ \
 | 4035 | 403 | CSRF token required |
 | 4036 | 403 | Invalid CSRF token |
 | 4037 | 403 | 私密图片令牌无效或已过期 |
+| 4038 | 403 | 账号处于注销锁定期，禁止写入图片 |
+| 4039 | 403 | 注销锁定期批量下载次数已用尽 |
 | 4040 | 404 | 通知不存在 |
 | 4041 | 404 | 用户/文件不存在 |
 | 4042 | 404 | 私密图片令牌已吊销 |
+| 4043 | 404 | 上传会话不存在、已过期或无权访问 |
 | 4090 | 409 | Nonce 重放 |
+| 4091 | 409 | 上传会话状态冲突 |
+| 4092 | 409 | 上传部件尚未全部完成 |
+| 4093 | 409 | 图片仍在处理或清理中 |
+| 4094 | 409 | R2 存储目标仍被历史文件或待清理对象引用，禁止切换 |
+| 4095 | 409 | 用户当前状态不允许请求的状态迁移 |
+| 4261 | 426 | 客户端图片配方版本不受支持 |
+| 4262 | 426 | 当前部署要求 V2 客户端预处理上传 |
 | 4260 | 426 | 客户端版本过低 |
+| 4291 | 429 | 上传并发或活跃会话已满 |
+| 5030 | 503 | 服务器存储压力过高 |
+| 5031 | 503 | V2 上传暂未启用 |
 
 ---
 
@@ -594,8 +642,8 @@ curl -X POST /api/v1/images/ \
 
 - **公开图库 / 发现页**：后端无公开图片列表接口，`images` 列表仅按用户返回。需新增 `GET /images/public` 或前端移除该功能。
 - **分类 / 标签**：`Image` 模型无 `category`/`tags` 字段。
-- **管理员图片审核列表**：无对应接口。
-- **用户删除**：admin 仅支持改状态，无删除用户接口。
+
+现有前端已对接管理员图片列表/删除、用户注销请求/取消，以及 `pending_deletion` / `deleting` 状态展示；这些不再属于能力缺口。
 
 ---
 

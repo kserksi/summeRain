@@ -42,6 +42,7 @@ import { ApiError } from '@/lib/errors'
 import { useAuthStore } from '@/store/auth-store'
 import { useAdminImages } from '../hooks'
 import type { AdminImage } from '../api'
+import { hasV2Assets, resolveImageAssetUrl } from '@/features/images/asset-url'
 
 const PAGE_SIZE = PAGINATION.DEFAULT_PAGE_SIZE
 
@@ -171,13 +172,19 @@ export default function Images() {
               filtered.map((img) => (
                 <TableRow key={img.id}>
                   <TableCell>
-                    <img
-                      src={`/i/${img.unique_link}.webp?w=80&h=60`}
-                      alt={img.filename}
-                      loading="lazy"
-                      className="h-12 w-16 cursor-zoom-in rounded border border-border object-cover transition hover:ring-2 hover:ring-primary"
-                      onClick={() => setLightboxSrc(`/i/${img.unique_link}`)}
-                    />
+                    <button
+                      type="button"
+                      className={`${hasV2Assets(img) ? 'h-20 w-[60px]' : 'h-12 w-16'} cursor-zoom-in rounded border border-border object-cover transition hover:ring-2 hover:ring-primary`}
+                      onClick={() => setLightboxSrc(resolveImageAssetUrl(img, 'master'))}
+                      aria-label={t('images.detail.zoomAria')}
+                    >
+                      <img
+                        src={resolveImageAssetUrl(img, 'admin')}
+                        alt={img.filename}
+                        loading="lazy"
+                        className="size-full rounded-[inherit] object-cover"
+                      />
+                    </button>
                   </TableCell>
                   <TableCell className="max-w-[200px] truncate font-medium" title={img.filename}>
                     {img.filename}

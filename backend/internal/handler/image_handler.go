@@ -285,13 +285,17 @@ func (h *ImageHandler) BatchDownload(c *gin.Context) {
 		return
 	}
 
-	zipData, filename, appErr := h.imageSvc.BatchDownloadOriginals(userID)
+	appErr := h.imageSvc.BatchDownloadOriginals(c.Request.Context(), userID, c.Writer, func(filename string) {
+		c.Header("Content-Type", "application/zip")
+		c.Header("Content-Disposition", "attachment; filename=\""+filename+"\"")
+	})
 	if appErr != nil {
-		response.Error(c, appErr)
+		if !c.Writer.Written() {
+			response.Error(c, appErr)
+		} else {
+			_ = c.Error(appErr)
+			c.Abort()
+		}
 		return
 	}
-
-	c.Header("Content-Type", "application/zip")
-	c.Header("Content-Disposition", "attachment; filename=\""+filename+"\"")
-	c.Data(200, "application/zip", zipData)
 }

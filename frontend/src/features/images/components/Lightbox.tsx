@@ -30,15 +30,20 @@ export function Lightbox({ src, onClose }: LightboxProps) {
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
-      onClick={onClose}
       role="dialog"
       aria-modal="true"
     >
+      <button
+        type="button"
+        className="absolute inset-0 cursor-default"
+        onClick={onClose}
+        aria-label={t('images.shared.close')}
+      />
       <Button
         type="button"
         variant="ghost"
         size="icon"
-        className="absolute top-4 right-4 text-white hover:bg-white/10"
+        className="absolute top-4 right-4 z-10 text-white hover:bg-white/10"
         onClick={onClose}
         aria-label={t('images.shared.close')}
       >
@@ -47,8 +52,7 @@ export function Lightbox({ src, onClose }: LightboxProps) {
       <img
         src={src}
         alt=""
-        onClick={(e) => e.stopPropagation()}
-        className="max-h-[90vh] max-w-[90vw] scale-95 object-contain duration-200 animate-in fade-in-0 zoom-in-90"
+        className="relative z-10 max-h-[90vh] max-w-[90vw] scale-95 object-contain duration-200 animate-in fade-in-0 zoom-in-90"
       />
     </div>
   )

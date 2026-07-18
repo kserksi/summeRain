@@ -55,6 +55,8 @@ export const USER_STATUS = {
   ACTIVE: 'active',
   SUSPENDED: 'suspended',
   PENDING: 'pending',
+  PENDING_DELETION: 'pending_deletion',
+  DELETING: 'deleting',
 } as const
 
 export const QUERY_KEYS = {

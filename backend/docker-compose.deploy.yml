@@ -1,21 +1,36 @@
-version: "3.8"
-
 services:
+  storage-init:
+    image: alpine:3.24.1
+    container_name: summerain-storage-init
+    restart: "no"
+    user: "0:0"
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        mkdir -p /data/images/.staging /data/images/v2
+        chown 10001:10001 /data/images /data/images/.staging /data/images/v2
+        chmod 0750 /data/images /data/images/.staging /data/images/v2
+    volumes:
+      - image_storage:/data/images
+
   backend:
-    build:
-      context: ..
-      dockerfile: Dockerfile
-    image: ${DOCKER_IMAGE:-summerain:latest}
+    image: ${DOCKER_IMAGE:?Set DOCKER_IMAGE to an exact release tag or digest}
     container_name: summerain-backend
     restart: unless-stopped
+    stop_grace_period: 35s
     ports:
       - "127.0.0.1:8080:8080"
     env_file:
       - .env
+    environment:
+      GOMEMLIMIT: 512MiB
+      TEMP_PATH: /data/images/.staging
     volumes:
       - image_storage:/data/images
-      - temp_storage:/data/temp
     depends_on:
+      storage-init:
+        condition: service_completed_successfully
       mysql:
         condition: service_healthy
       redis:
@@ -27,78 +42,107 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
-    deploy:
-      resources:
-        limits:
-          memory: 512M
+      start_period: 15s
+    cpus: "0.75"
+    mem_limit: 640m
+    pids_limit: 128
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - internal
 
   mysql:
-    image: mysql:latest
+    image: mysql:8.4.10
     container_name: summerain-mysql
     restart: unless-stopped
+    stop_grace_period: 45s
     environment:
-      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
-      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME:-summerain}
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 10s
       timeout: 5s
-      retries: 5
-    deploy:
-      resources:
-        limits:
-          memory: 1G
+      retries: 8
+      start_period: 30s
+    cpus: "0.75"
+    mem_limit: 1024m
+    pids_limit: 256
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - internal
 
   redis:
-    image: redis:latest
+    image: redis:8.8.0-alpine
     container_name: summerain-redis
     restart: unless-stopped
+    stop_grace_period: 15s
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "128mb", "--maxmemory-policy", "noeviction"]
     volumes:
       - redis_data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
-      retries: 3
-    deploy:
-      resources:
-        limits:
-          memory: 256M
+      retries: 5
+      start_period: 10s
+    cpus: "0.15"
+    mem_limit: 192m
+    pids_limit: 128
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - internal
 
+  # V2 fixed display variants bypass imgproxy; publish watermarks and V1 use it.
   imgproxy:
-    image: darthsim/imgproxy:v3.12
+    image: ghcr.io/imgproxy/imgproxy:v4.0.11
     container_name: summerain-imgproxy
     restart: unless-stopped
+    stop_grace_period: 20s
     environment:
-      - IMGPROXY_BIND=:8080
-      - IMGPROXY_LOCAL_FILESYSTEM_ROOT=/data
-      - IMGPROXY_MAX_SRC_RESOLUTION=50
-      - IMGPROXY_MAX_ANIMATION_FRAMES=100
-      - IMGPROXY_TTL=31536000
-      - IMGPROXY_KEY=${IMGPROXY_KEY}
-      - IMGPROXY_SALT=${IMGPROXY_SALT}
-      # 水印图源: watermark.go 生成的 SVG 存到 STORAGE_PATH,imgproxy 读它叠加水印
-      - IMGPROXY_WATERMARK_PATH=/data/images/watermark.svg
+      IMGPROXY_BIND: :8080
+      IMGPROXY_LOCAL_FILESYSTEM_ROOT: /data
+      IMGPROXY_MAX_SRC_RESOLUTION: "50"
+      IMGPROXY_MAX_ANIMATION_FRAMES: "100"
+      IMGPROXY_WORKERS: ${IMGPROXY_WORKERS:-2}
+      IMGPROXY_REQUESTS_QUEUE_SIZE: "4"
+      IMGPROXY_TTL: "31536000"
+      IMGPROXY_KEY: ${IMGPROXY_KEY:?Set IMGPROXY_KEY}
+      IMGPROXY_SALT: ${IMGPROXY_SALT:?Set IMGPROXY_SALT}
+      IMGPROXY_WATERMARK_PATH: /data/images/watermark.svg
     volumes:
       - image_storage:/data/images:ro
-      - temp_storage:/data/temp:ro
-    deploy:
-      resources:
-        limits:
-          memory: 256M
+    group_add:
+      - "10001"
     healthcheck:
       test: ["CMD", "imgproxy", "health"]
       interval: 10s
       timeout: 5s
       retries: 3
+      start_period: 10s
+    cpus: "0.70"
+    mem_limit: 512m
+    pids_limit: 128
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - internal
 
@@ -106,7 +150,6 @@ volumes:
   mysql_data:
   redis_data:
   image_storage:
-  temp_storage:
 
 networks:
   internal:

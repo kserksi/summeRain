@@ -35,7 +35,7 @@ func (r *ImageRepo) FindByID(id uint64) (*model.Image, error) {
 
 func (r *ImageRepo) FindByUniqueLink(link string) (*model.Image, error) {
 	var image model.Image
-	if err := r.db.Where("unique_link = ?", link).First(&image).Error; err != nil {
+	if err := r.db.Where("unique_link = ? OR origin_alias = ?", link, link).First(&image).Error; err != nil {
 		return nil, err
 	}
 	return &image, nil

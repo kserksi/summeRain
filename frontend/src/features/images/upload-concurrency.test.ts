@@ -3,7 +3,7 @@
 
 import { describe, it, expect } from 'vitest'
 
-import { runWithConcurrency } from './upload-concurrency'
+import { ConcurrencyGate, runWithConcurrency } from './upload-concurrency'
 
 describe('runWithConcurrency', () => {
   it('returns empty array for empty input', async () => {
@@ -51,5 +51,54 @@ describe('runWithConcurrency', () => {
       return x
     }
     await expect(runWithConcurrency([1, 2, 3], fn, 2)).rejects.toThrow('boom')
+  })
+})
+
+describe('ConcurrencyGate', () => {
+  it('holds queued work until an active permit is released', async () => {
+    const gate = new ConcurrencyGate(2)
+    const releaseFirst = await gate.acquire()
+    const releaseSecond = await gate.acquire()
+    let thirdAcquired = false
+    const third = gate.acquire().then((release) => {
+      thirdAcquired = true
+      return release
+    })
+
+    await Promise.resolve()
+    expect(thirdAcquired).toBe(false)
+    releaseFirst()
+    const releaseThird = await third
+    expect(thirdAcquired).toBe(true)
+
+    // Releasing a permit is idempotent and cannot overbook the gate.
+    releaseFirst()
+    const fourth = gate.acquire()
+    let fourthAcquired = false
+    void fourth.then(() => {
+      fourthAcquired = true
+    })
+    await Promise.resolve()
+    expect(fourthAcquired).toBe(false)
+
+    releaseSecond()
+    const releaseFourth = await fourth
+    releaseThird()
+    releaseFourth()
+  })
+
+  it('removes an aborted waiter without consuming a permit', async () => {
+    const gate = new ConcurrencyGate(1)
+    const releaseFirst = await gate.acquire()
+    const controller = new AbortController()
+    const reason = new DOMException('page left', 'AbortError')
+    const aborted = gate.acquire(controller.signal)
+    const next = gate.acquire()
+
+    controller.abort(reason)
+    await expect(aborted).rejects.toBe(reason)
+    releaseFirst()
+    const releaseNext = await next
+    releaseNext()
   })
 })

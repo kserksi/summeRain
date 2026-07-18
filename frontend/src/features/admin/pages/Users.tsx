@@ -16,6 +16,7 @@ import {
   IconArrowBackUp,
   IconAlertTriangle,
   IconClockCancel,
+  IconLoader2,
 } from '@tabler/icons-react'
 import {
   Table,
@@ -61,9 +62,9 @@ import { useAuthStore } from '@/store/auth-store'
 import { toast } from 'sonner'
 import type { User } from '@/lib/types'
 import { useAdminUsers, useSetUserStatus } from '../hooks'
+import { getAdminUserActionPolicy } from '../user-status'
 
 const PAGE_SIZE = PAGINATION.DEFAULT_PAGE_SIZE
-const PENDING_DELETION = 'pending_deletion'
 
 type AdminUser = User & { deletion_scheduled_at?: string | null }
 
@@ -90,13 +91,21 @@ function StatusBadge({ user }: { user: AdminUser }) {
       </Badge>
     )
   }
-  if (user.status === PENDING_DELETION) {
+  if (user.status === USER_STATUS.PENDING_DELETION) {
     const hours = getRemainingHours(user.deletion_scheduled_at)
     return (
       <Badge className="gap-1 bg-amber-500/10 text-amber-600 dark:text-amber-400">
         <IconClockCancel className="size-3.5" />
         {t('admin.users.status.deleting')}
         {hours !== null && hours > 0 ? t('admin.users.status.remainingHours', { hours }) : ''}
+      </Badge>
+    )
+  }
+  if (user.status === USER_STATUS.DELETING) {
+    return (
+      <Badge className="gap-1 bg-red-500/10 text-red-600 dark:text-red-400">
+        <IconLoader2 className="size-3.5 animate-spin" />
+        {t('admin.users.status.deletionInProgress')}
       </Badge>
     )
   }
@@ -373,19 +382,18 @@ function CancelDeletionButton({ user }: { user: AdminUser }) {
 }
 
 function UserActions({ user }: { user: AdminUser }) {
-  if (user.role === USER_ROLES.ADMIN) {
+  const policy = getAdminUserActionPolicy(user.status)
+  const hasActions = Object.values(policy).some(Boolean)
+  if (user.role === USER_ROLES.ADMIN || !hasActions) {
     return <span className="text-muted-foreground">—</span>
   }
 
   return (
     <div className="flex items-center justify-end gap-1.5">
-      {user.status === PENDING_DELETION ? (
-        <CancelDeletionButton user={user} />
-      ) : (
-        <BanUnbanActions user={user} />
-      )}
-      {user.status === USER_STATUS.ACTIVE && <DeleteDialog user={user} />}
-      <QuotaEditDialog user={user} />
+      {policy.canCancelDeletion && <CancelDeletionButton user={user} />}
+      {policy.canChangeStatus && <BanUnbanActions user={user} />}
+      {policy.canRequestDeletion && <DeleteDialog user={user} />}
+      {policy.canEditQuota && <QuotaEditDialog user={user} />}
     </div>
   )
 }

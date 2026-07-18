@@ -1,8 +1,18 @@
 // Copyright 2026 The summeRain Authors
 // SPDX-License-Identifier: Apache-2.0
 
+import {
+  resolveCopyImageUrl,
+  type LegacyCopyImageFormat,
+} from './asset-url'
+
 export type CopyLinkFormat = 'url' | 'markdown' | 'bbs' | 'html'
-export type CopyImageFormat = 'original' | 'webp' | 'avif'
+export type CopyImageFormat = LegacyCopyImageFormat
+
+export interface CopyAssetMetadata {
+  pipelineVersion?: number
+  assetLink?: string
+}
 
 export interface CopyPrefs {
   link: CopyLinkFormat
@@ -35,9 +45,17 @@ export function buildUrl(
   origin: string,
   link: string,
   format: CopyImageFormat,
+  metadata?: CopyAssetMetadata,
 ): string {
-  if (format === 'original') return `${origin}/i/${link}`
-  return `${origin}/i/${link}.${format}?q=85`
+  const path = resolveCopyImageUrl(
+    {
+      unique_link: link,
+      pipeline_version: metadata?.pipelineVersion,
+      asset_link: metadata?.assetLink,
+    },
+    format,
+  )
+  return new URL(path, origin).toString()
 }
 
 /** Format a single line according to the chosen link format. */
@@ -62,12 +80,26 @@ export function formatLine(
 /** Build the full multi-line text to copy. */
 export function buildCopyText(
   origin: string,
-  items: readonly { uniqueLink: string; fileName: string }[],
+  items: readonly {
+    uniqueLink: string
+    fileName: string
+    pipelineVersion?: number
+    assetLink?: string
+  }[],
   link: CopyLinkFormat,
   image: CopyImageFormat,
 ): string {
   return items
-    .map((it) => formatLine(buildUrl(origin, it.uniqueLink, image), baseName(it.fileName), link))
+    .map((it) =>
+      formatLine(
+        buildUrl(origin, it.uniqueLink, image, {
+          pipelineVersion: it.pipelineVersion,
+          assetLink: it.assetLink,
+        }),
+        baseName(it.fileName),
+        link,
+      ),
+    )
     .join('\n')
 }
 

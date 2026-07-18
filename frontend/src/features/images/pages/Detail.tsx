@@ -53,6 +53,12 @@ import { IMAGE_TOKEN } from '@/config/constants'
 
 import { Lightbox } from '../components/Lightbox'
 import {
+  appendAccessToken,
+  hasV2Assets,
+  resolveAbsoluteImageAssetUrl,
+  resolveDetailPreviewUrl,
+} from '../asset-url'
+import {
   useDeleteImage,
   useImage,
   useIssueToken,
@@ -183,6 +189,7 @@ export default function Detail() {
   const [quality, setQuality] = useState(80)
   const [lockAspect, setLockAspect] = useState(false)
   const [issuedToken, setIssuedToken] = useState<string | null>(null)
+  const [issuedTokenExpiresAt, setIssuedTokenExpiresAt] = useState<string | null>(null)
 
   const toggleVis = useToggleVisibility()
   const del = useDeleteImage()
@@ -206,15 +213,27 @@ export default function Detail() {
     )
   }
 
-  const imgUrl = `/i/${image.unique_link}.webp?q=85`
-  const shareUrl = `${window.location.origin}/i/${image.unique_link}.webp?q=85`
+  const isV2 = hasV2Assets(image)
+  const imgUrl = resolveDetailPreviewUrl(image)
+  const shareUrl = resolveAbsoluteImageAssetUrl(
+    window.location.origin,
+    image,
+    'publish',
+  )
+  const fixedAssetUrls = {
+    publish: shareUrl,
+    master: resolveAbsoluteImageAssetUrl(window.location.origin, image, 'master'),
+    gallery: resolveAbsoluteImageAssetUrl(window.location.origin, image, 'gallery'),
+    admin: resolveAbsoluteImageAssetUrl(window.location.origin, image, 'admin'),
+  }
   const isPrivate = image?.visibility === 'private'
   const title = image?.title || image?.filename
   const activeToken = issuedToken || image?.access_token
+  const activeTokenExpiresAt = issuedTokenExpiresAt || image?.token_expires_at
   const maskedToken = activeToken
     ? `${activeToken.slice(0, 6)}••••••`
     : ''
-  const tokenShare = activeToken ? `${shareUrl}&token=${activeToken}` : ''
+  const tokenShare = activeToken ? appendAccessToken(shareUrl, activeToken) : ''
 
   const aspectRatio = image.height / image.width
   const onProcWidthChange = (val: string) => {
@@ -337,8 +356,19 @@ export default function Detail() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardContent className="space-y-4 p-5">
+          {isV2 ? (
+            <Card>
+              <CardContent className="space-y-3 p-5">
+                <p className="font-medium">{t('images.detail.shareLinks')}</p>
+                <ShareRow label="Publish" value={fixedAssetUrls.publish} />
+                <ShareRow label="Master" value={fixedAssetUrls.master} />
+                <ShareRow label="Gallery" value={fixedAssetUrls.gallery} />
+                <ShareRow label="Admin" value={fixedAssetUrls.admin} />
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardContent className="space-y-4 p-5">
               <div className="space-y-0.5">
                 <p className="flex items-center gap-1.5 font-medium">
                   <IconPhotoEdit className="size-4" /> {t('images.detail.processingTitle')}
@@ -437,8 +467,9 @@ export default function Detail() {
                 <Label className="text-xs text-muted-foreground">{t('images.shared.link')}</Label>
                 <ProcessedLinkRow value={processedUrl} />
               </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          )}
 
           {isPrivate && (
             <Card>
@@ -459,9 +490,9 @@ export default function Detail() {
                       successMsg={t('images.detail.tokenCopied')}
                     />
                     <ShareRow label={t('images.detail.tokenLink')} value={tokenShare} />
-                    {image?.token_expires_at && (
+                    {activeTokenExpiresAt && (
                       <p className="text-xs text-muted-foreground">
-                        {t('images.detail.expiresAt', { date: formatDate(image?.token_expires_at ?? '') })}
+                        {t('images.detail.expiresAt', { date: formatDate(activeTokenExpiresAt) })}
                       </p>
                     )}
                   </>
@@ -498,11 +529,8 @@ export default function Detail() {
                         {
                           onSuccess: (data) => {
                             setIssuedToken(data.access_token || '')
-                            toast.success(t('images.toast.tokenIssued'))
-                            const warning = (
-                              data as { warning?: string }
-                            ).warning
-                            if (warning) toast.warning(warning)
+                            setIssuedTokenExpiresAt(data.token_expires_at || null)
+                            if (data.warning) toast.warning(data.warning)
                           },
                         },
                       )
@@ -513,13 +541,20 @@ export default function Detail() {
                     ) : (
                       <IconRefresh />
                     )}
-                    {image?.access_token ? t('images.detail.reissueToken') : t('images.detail.issueToken')}
+                    {activeToken ? t('images.detail.reissueToken') : t('images.detail.issueToken')}
                   </Button>
                   <Button
                     size="sm"
                     variant="outline"
-                    disabled={revoke.isPending || !image?.access_token}
-                    onClick={() => revoke.mutate(image.id)}
+                    disabled={revoke.isPending || !activeToken}
+                    onClick={() =>
+                      revoke.mutate(image.id, {
+                        onSuccess: () => {
+                          setIssuedToken(null)
+                          setIssuedTokenExpiresAt(null)
+                        },
+                      })
+                    }
                   >
                     <IconBan />
                     {t('images.detail.revoke')}

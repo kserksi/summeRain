@@ -16,5 +16,8 @@ type ImageFile struct {
 	OriginalPath   string    `gorm:"size:500;not null" json:"original_path"`
 	ThumbnailPath  string    `gorm:"size:500" json:"thumbnail_path"`
 	ProcessedPath  string    `gorm:"size:500" json:"processed_path"`
+	RemoteBackend  string    `gorm:"size:16;not null;default:'';index" json:"-"`
+	RemoteEndpoint string    `gorm:"size:500;not null;default:''" json:"-"`
+	RemoteBucket   string    `gorm:"size:255;not null;default:''" json:"-"`
 	CreatedAt      time.Time `gorm:"autoCreateTime" json:"created_at"`
 }

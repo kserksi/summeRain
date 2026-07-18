@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "policy": {
+    "production": "Use exact validated releases; never deploy floating latest tags.",
+    "go_modules": "backend/go.sum remains the authoritative Go module checksum lock.",
+    "npm_packages": "frontend/package-lock.json remains the authoritative npm dependency lock.",
+    "container_images": "Source configuration locks exact version tags for cross-architecture portability. Production may pin an OCI multi-platform index digest, but must not reuse an architecture-specific child digest across platforms."
+  },
+  "ecosystem_locks": {
+    "go_modules": {
+      "path": "backend/go.sum",
+      "authoritative": true
+    },
+    "npm_packages": {
+      "path": "frontend/package-lock.json",
+      "authoritative": true
+    }
+  },
+  "toolchains": {
+    "go": {
+      "version": "1.26.5",
+      "track": "stable"
+    },
+    "node": {
+      "version": "24.18.0",
+      "track": "lts"
+    }
+  },
+  "services": {
+    "alpine": {
+      "version": "3.24.1",
+      "track": "stable",
+      "image": "alpine:3.24.1"
+    },
+    "mysql": {
+      "version": "8.4.10",
+      "track": "lts",
+      "image": "mysql:8.4.10"
+    },
+    "redis": {
+      "version": "8.8.0",
+      "track": "stable",
+      "image": "redis:8.8.0-alpine"
+    },
+    "imgproxy": {
+      "version": "4.0.11",
+      "track": "stable-legacy-compatibility",
+      "image": "ghcr.io/imgproxy/imgproxy:v4.0.11"
+    }
+  },
+  "image_processing": {
+    "libvips": {
+      "version": "8.18.3",
+      "scope": "imgproxy-runtime"
+    },
+    "wasm-vips": {
+      "version": "0.0.18",
+      "scope": "browser-optional-fast-path"
+    },
+    "pica": {
+      "version": "10.0.2",
+      "scope": "browser-baseline"
+    }
+  }
+}

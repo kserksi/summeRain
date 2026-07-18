@@ -4,6 +4,8 @@ backend/vendor
 
 # Hidden directories are local-only. Hidden files remain eligible for version control.
 **/.*/
+!.github/
+!.github/**
 
 # Build output
 frontend/dist
@@ -36,6 +38,11 @@ frontend/.dev-*.log
 # Local scratch / working dirs (not part of source)
 manual/
 mockup/
+.dev-data/
+backend/secrets/
+
+# Local production incident notes (never publish from this repository)
+docs/incident-2026-07-14.md
 
 # Root-level screenshots (keep docs/images/ for committed assets)
 /捕获.PNG

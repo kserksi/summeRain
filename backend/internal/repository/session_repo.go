@@ -5,18 +5,22 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/go-redis/redis/v8"
 	"github.com/kserksi/summerain/internal/model"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type SessionRepo struct {
 	db  *gorm.DB
 	rdb *redis.Client
 }
+
+const maxActiveCSRFTokensPerSession = 4
 
 func NewSessionRepo(db *gorm.DB, rdb *redis.Client) *SessionRepo {
 	return &SessionRepo{db: db, rdb: rdb}
@@ -73,7 +77,7 @@ func (r *SessionRepo) UpdateHeartbeat(id uint64) error {
 func (r *SessionRepo) UpdateExpiry(id uint64, expiresAt time.Time) error {
 	return r.db.Model(&model.Session{}).Where("id = ?", id).
 		Updates(map[string]interface{}{
-			"expires_at":    gorm.Expr("GREATEST(expires_at, ?)", expiresAt),
+			"expires_at":     gorm.Expr("GREATEST(expires_at, ?)", expiresAt),
 			"last_active_at": time.Now(),
 		}).Error
 }
@@ -129,6 +133,72 @@ func (r *SessionRepo) FindCSRFBySessionAndHash(sessionID uint64, tokenHash strin
 func (r *SessionRepo) RenewCSRFExpiry(id uint64) error {
 	return r.db.Model(&model.CSRFToken{}).Where("id = ?", id).
 		Update("expires_at", time.Now().Add(24*time.Hour)).Error
+}
+
+// RefreshCSRFToken serializes refreshes on the session row. Valid tokens are
+// retained until expiry so two refresh responses arriving out of order cannot
+// leave the browser holding a token that the other request already deleted.
+func (r *SessionRepo) RefreshCSRFToken(sessionID uint64, currentHash, replacementHash string, expiresAt time.Time) (bool, error) {
+	reused := false
+	err := r.db.Transaction(func(tx *gorm.DB) error {
+		var session model.Session
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Select("id").
+			Where("id = ? AND token_type = ? AND expires_at > ?", sessionID, "session", time.Now()).
+			First(&session).Error; err != nil {
+			return err
+		}
+
+		if currentHash != "" {
+			var csrf model.CSRFToken
+			err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+				Where("session_id = ? AND token_hash = ?", sessionID, currentHash).
+				First(&csrf).Error
+			switch {
+			case err == nil:
+				if err := tx.Model(&model.CSRFToken{}).Where("id = ?", csrf.ID).
+					Update("expires_at", expiresAt).Error; err != nil {
+					return err
+				}
+				reused = true
+				return nil
+			case !errors.Is(err, gorm.ErrRecordNotFound):
+				return err
+			}
+		}
+
+		if replacementHash == "" {
+			return errors.New("replacement CSRF token hash is empty")
+		}
+		if err := tx.Where("session_id = ? AND expires_at <= ?", sessionID, time.Now()).
+			Delete(&model.CSRFToken{}).Error; err != nil {
+			return err
+		}
+		// A caller without the current cookie needs a replacement, but retaining
+		// every such replacement lets one authenticated client grow this table
+		// without bound. Keep a small overlap for out-of-order refresh responses.
+		var retainedIDs []uint64
+		if err := tx.Model(&model.CSRFToken{}).
+			Where("session_id = ? AND expires_at > ?", sessionID, time.Now()).
+			Order("created_at DESC, id DESC").
+			Limit(maxActiveCSRFTokensPerSession-1).
+			Pluck("id", &retainedIDs).Error; err != nil {
+			return err
+		}
+		deleteOlder := tx.Where("session_id = ?", sessionID)
+		if len(retainedIDs) > 0 {
+			deleteOlder = deleteOlder.Where("id NOT IN ?", retainedIDs)
+		}
+		if err := deleteOlder.Delete(&model.CSRFToken{}).Error; err != nil {
+			return err
+		}
+		return tx.Create(&model.CSRFToken{
+			SessionID: sessionID,
+			TokenHash: replacementHash,
+			ExpiresAt: expiresAt,
+		}).Error
+	})
+	return reused, err
 }
 
 func (r *SessionRepo) DeleteCSRFBySessionID(sessionID uint64) error {

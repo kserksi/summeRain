@@ -4,6 +4,7 @@
 package middleware
 
 import (
+	"net/url"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -15,6 +16,45 @@ import (
 
 type CSRFMiddleware struct {
 	sessionRepo *repository.SessionRepo
+}
+
+// RefreshGuard protects the recovery endpoint without requiring the expired
+// CSRF token itself. Origin is mandatory; Fetch Metadata is enforced whenever
+// the browser provides it (older WebKit versions may omit it).
+func (m *CSRFMiddleware) RefreshGuard() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !sameRequestOrigin(c) {
+			response.Error(c, errcode.ErrCSRFRefreshRejected)
+			return
+		}
+
+		fetchSite := strings.ToLower(strings.TrimSpace(c.GetHeader("Sec-Fetch-Site")))
+		if fetchSite != "" && fetchSite != "same-origin" {
+			response.Error(c, errcode.ErrCSRFRefreshRejected)
+			return
+		}
+		c.Next()
+	}
+}
+
+func sameRequestOrigin(c *gin.Context) bool {
+	origin, err := url.Parse(c.GetHeader("Origin"))
+	if err != nil || origin.Scheme == "" || origin.Host == "" || origin.User != nil ||
+		origin.Path != "" || origin.RawQuery != "" || origin.Fragment != "" {
+		return false
+	}
+
+	scheme := "http"
+	if c.Request.TLS != nil {
+		scheme = "https"
+	}
+	if forwarded := strings.TrimSpace(strings.Split(c.GetHeader("X-Forwarded-Proto"), ",")[0]); forwarded != "" {
+		scheme = strings.ToLower(forwarded)
+	}
+
+	return (origin.Scheme == "http" || origin.Scheme == "https") &&
+		strings.EqualFold(origin.Scheme, scheme) &&
+		strings.EqualFold(origin.Host, c.Request.Host)
 }
 
 func NewCSRFMiddleware(sessionRepo *repository.SessionRepo) *CSRFMiddleware {

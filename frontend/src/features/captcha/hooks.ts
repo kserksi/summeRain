@@ -21,10 +21,25 @@ interface GeetestCaptchaObject {
   getValidate: () => GeetestValidate
 }
 
+interface RecaptchaApi {
+  execute: (siteKey: string, options: { action: string }) => Promise<string>
+}
+
+interface TurnstileApi {
+  render: (
+    container: HTMLElement,
+    options: {
+      sitekey: string
+      callback: (token: string) => void
+      'error-callback': (error: unknown) => void
+    },
+  ) => string
+}
+
 declare global {
   interface Window {
-    grecaptcha?: any
-    turnstile?: any
+    grecaptcha?: RecaptchaApi
+    turnstile?: TurnstileApi
     initGeetest4?: (
       config: Record<string, unknown>,
       cb: (obj: GeetestCaptchaObject) => void,
@@ -94,7 +109,9 @@ export function useCaptcha(action: string) {
     if (provider === 'recaptcha' && siteKey) {
       await loadScript(RECAPTCHA_URL(siteKey))
       await waitForGlobal(() => window.grecaptcha?.execute)
-      const token: string = await window.grecaptcha.execute(siteKey, { action })
+      const grecaptcha = window.grecaptcha
+      if (!grecaptcha) throw new Error('reCAPTCHA library unavailable')
+      const token = await grecaptcha.execute(siteKey, { action })
       return { provider: 'recaptcha', token, action }
     }
 
@@ -103,8 +120,10 @@ export function useCaptcha(action: string) {
       if (!container) return undefined
       await loadScript(TURNSTILE_URL)
       await waitForGlobal(() => window.turnstile?.render)
+      const turnstile = window.turnstile
+      if (!turnstile) throw new Error('Turnstile library unavailable')
       return await new Promise<CaptchaPayload>((resolve, reject) => {
-        window.turnstile.render(container, {
+        turnstile.render(container, {
           sitekey: siteKey,
           callback: (token: string) => resolve({ provider: 'turnstile', token }),
           'error-callback': (err: unknown) => reject(err),

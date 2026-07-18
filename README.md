@@ -3,13 +3,13 @@
 > 自托管图片托管与相册服务，提供图片转码、水印、自适应尺寸、多存储后端以及 Web/设备端鉴权。
 
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
-[![Go](https://img.shields.io/badge/Go-1.24-00ADD8.svg)](https://go.dev)
+[![Go](https://img.shields.io/badge/Go-1.26-00ADD8.svg)](https://go.dev)
 [![React](https://img.shields.io/badge/React-19-61DAFB.svg)](https://react.dev)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6.svg)](https://www.typescriptlang.org/)
 
 ## 项目概览
 
-summeRain 采用“Go 模块化单体 + React 静态 SPA”的同源部署架构：Go 服务统一提供 `/api/v1/*` API、`/i/:link` 图片直链以及前端静态资源；MySQL 保存业务数据，Redis 承担限流、浏览量缓冲和设备端防重放，imgproxy 负责图片转换与水印处理。
+summeRain 采用“Go 模块化单体 + React 静态 SPA”的同源部署架构：Go 服务统一提供 `/api/v1/*` API、`/i/:link` 图片直链以及前端静态资源；MySQL 保存业务与任务真相，Redis 承担限流、浏览量缓冲和设备端防重放，imgproxy 只保留给 V1 兼容路径及服务端发布水印。
 
 ```text
 Browser / Android / Windows
@@ -22,28 +22,30 @@ Browser / Android / Windows
                               │
              ┌────────────────┼────────────────┐
              ▼                ▼                ▼
-          MySQL 8          Redis 7       本地存储 / R2
+        MySQL 8.4         Redis 8       本地存储 / R2
 ```
 
 ## 核心能力
 
 ### 图片与存储
 
-- **WebP / AVIF 转码**：使用 `/i/<link>.<format>` 获取转换结果；AVIF 首次缺失时可先回退 WebP，并在后台生成。
-- **自适应尺寸与质量**：支持 `?w=300&h=200&q=80`，宽高最大 4096，质量范围 1～100。
-- **文字水印**：上传时生成处理图，管理员可配置文案、位置、透明度、字号和颜色。
+- **浏览器端预处理**：V2 启用时，静态 JPG、JPEG、PNG、BMP、WebP、AVIF 在上传前生成 `master`、`gallery`、`admin` 和 `publish_source` 四份固定 WebP 上传部件；服务端关闭 V2 时，Web 根据配方能力位自动回退到 V1 multipart。
+- **固定访问变体**：发布完成后持久化 `master`、`gallery`、`admin` 和 `publish`；My Images 使用 400×400，Image Management 使用 120×160 文件并以 CSS 60×80 显示（2x 像素密度），发布源最长边 2048。中间 `publish_source` 在发布后删除。
+- **文字水印**：服务端仅对发布产物应用水印，管理员可配置文案、位置、透明度、字号和颜色。
+- **V1 兼容**：历史图片继续支持动态格式、尺寸和质量参数；无尺寸 WebP 与后台 AVIF 可持久化，任意尺寸等动态结果只写入有界临时文件，并在最后一个请求完成后删除。
 - **内容去重**：按 SHA-256 识别相同源文件，通过 `ImageFile.reference_count` 管理物理文件生命周期。
 - **多存储后端**：支持本地磁盘、Cloudflare R2 和 S3 兼容存储；公开原图可重定向到 R2/CDN。
+- **历史存储安全**：主服务不执行历史图片批量迁移；未分类的 V1 记录仅走本地优先兼容读取，正式迁移由后续独立工具完成。
 - **配额管理**：按用户统计存储用量，达到 90% 时发送通知；管理员可调整用户配额。
-- **批量操作**：前端最多 5 个上传请求并发，支持批量下载用户原图。
+- **批量操作**：客户端处理串行、上传流水线并发 2、上传部件自适应并发 2～3，并支持流式批量下载。
 
 ### 账号、权限与分享
 
 - **Web 鉴权**：使用 `__Host-` Secure/HttpOnly Cookie，并对写请求校验双提交 CSRF Token。
 - **设备端鉴权**：Android / Windows 使用 `identity → bootstrap → session` 的 Bearer Token 流程，每个平台最多保留 3 个身份令牌。
 - **私密图分享**：每张私密图片最多一个有效分享令牌，TTL 为 10 分钟～3 天；重新签发会撤销旧令牌。
-- **可插拔 Captcha**：支持 `none`、reCAPTCHA v3、Cloudflare Turnstile 和极验 v4，由管理员选择 Provider。
-- **角色与状态**：提供 `user/admin` 角色，以及 `active/suspended/pending_deletion` 用户状态。
+- **可插拔 Captcha**：支持 `none`、reCAPTCHA v3、Cloudflare Turnstile；显式关闭默认跨源隔离后也可选择极验 v4。
+- **角色与状态**：提供 `user/admin` 角色；管理员只在 `active/suspended` 间切换状态，注销状态机独立维护 `pending_deletion/deleting`。
 - **会话管理**：用户可查看并吊销 Web 或设备会话；设备会话支持心跳、版本下限和平台一致性校验。
 - **账号生命周期**：管理员可发起 24 小时延迟注销并在执行前撤销，后台 Worker 负责最终清理。
 - **审计与安全**：bcrypt 密码哈希、审计日志、请求 ID、安全响应头、路径穿越防护和 SVG 下载保护。
@@ -110,8 +112,8 @@ request → middleware → handler → service → repository → MySQL/Redis
 | 前端 | React 19 · React Router 8 · Vite 8 · TypeScript 6 · Tailwind CSS 4 · shadcn/ui |
 | 前端数据 | TanStack Query 5 · Zustand 5 · React Hook Form 7 · Zod 4 |
 | 前端体验 | i18next · Sonner · Tabler Icons · View Transitions · SRI |
-| 后端 | Go 1.24 · Gin · GORM · MySQL 8 · Redis 7 |
-| 图片与对象存储 | imgproxy v3.12 · AWS SDK for Go v2 · Cloudflare R2/S3 |
+| 后端 | Go 1.26 · Gin · GORM · MySQL 8.4 · Redis 8 |
+| 图片与对象存储 | 浏览器 WebP 预处理 · imgproxy v4.0.11 · AWS SDK for Go v2 · Cloudflare R2/S3 |
 | 运维 | Docker Compose · Prometheus · 非 root 容器（UID 10001） |
 | 测试 | Go testing · Vitest · Testing Library · MSW |
 
@@ -119,39 +121,50 @@ request → middleware → handler → service → repository → MySQL/Redis
 
 ### 前置要求
 
-- Go 1.24+
-- Node.js 20+
+- Go 1.24+（CI / 容器锁定 1.26.5）
+- Node.js 20+（CI / 容器锁定 24.18.0 LTS）
 - Docker 与 Docker Compose
 
-### 1. 启动后端依赖与服务
+### 1. 在 WSL 启动开发依赖
 
 ```bash
-cd backend
-cp .env.example .env
-docker compose up -d
+./scripts/dev-wsl.sh deps-up
 ```
 
-启动前至少应修改 `.env` 中的 `DB_PASSWORD`、`COOKIE_SECRET`、`IMGPROXY_KEY` 和 `IMGPROXY_SALT`。开发 Compose 使用 `secrets/mysql_password.txt` 初始化 MySQL，该文件的内容需要与 `.env` 的 `DB_PASSWORD` 保持一致。
+该命令只启动固定版本的 MySQL、Redis 和 imgproxy，不构建应用镜像。
 
-- API 默认监听 `http://localhost:8080`
+- MySQL：`127.0.0.1:13306`
+- Redis：`127.0.0.1:16379`
+- imgproxy：`127.0.0.1:18081`
+
+可分别通过 `SUMMERAIN_DEV_MYSQL_PORT`、`SUMMERAIN_DEV_REDIS_PORT` 和 `SUMMERAIN_DEV_IMGPROXY_PORT` 覆盖这些端口。
+
+### 2. 启动后端开发进程
+
+```bash
+./scripts/dev-wsl.sh backend
+```
+
+- API 默认监听 `http://127.0.0.1:18080`，可通过 `SUMMERAIN_DEV_BACKEND_PORT` 覆盖
 - 存活检查：`GET /health`
 - 就绪检查：`GET /ready`（同时检查 MySQL 与 Redis）
 - Prometheus：`GET /metrics`
-- 首次启动自动执行 GORM `AutoMigrate`
+- 首次启动自动执行数据库迁移
 
-### 2. 启动前端开发服务器
+### 3. 启动前端开发服务器
 
 ```bash
 cd frontend
 npm ci
-npm run dev
+cd ..
+./scripts/dev-wsl.sh frontend
 ```
 
-Vite 默认使用 `http://localhost:5173`；若 `frontend/` 下存在本地证书 `localhost+1.pem` 和 `localhost+1-key.pem`，则自动启用 HTTPS。开发服务器会把 `/api/` 和 `/i/` 代理到 `localhost:8080`。
+脚本会在首次运行时生成本地开发证书，并默认启动 `https://127.0.0.1:5173`；若 5173 已被占用，Vite 会自动选择下一个可用端口。开发服务器会把 `/api/` 和 `/i/` 同源代理到 `127.0.0.1:18080`，也可通过 `VITE_DEV_BACKEND_URL` 覆盖目标地址。
 
-> Web 鉴权 Cookie 使用 `__Host-` 前缀，要求 HTTPS 且同源。需要完整测试登录和写操作时，请使用本地 HTTPS 或同源反向代理。
+> 首次访问需要在浏览器中接受自签名开发证书。Web 鉴权 Cookie 使用 `__Host-` 前缀，必须保持 HTTPS 与同源代理。开发与生产默认启用 COOP/COEP 跨源隔离以支持 wasm-vips 处理 50MP 大图；引入第三方脚本、字体或图片时，资源服务器必须提供兼容的 CORS 或 CORP 响应头。GeeTest v4 不满足默认隔离策略，隔离开启时请使用 `none`、reCAPTCHA 或 Turnstile。
 
-### 3. 构建前端
+### 4. 构建前端
 
 ```bash
 cd frontend
@@ -160,7 +173,7 @@ npm run build
 
 构建产物输出到 `backend/web/`。从 `backend/` 目录启动 Go 服务后，未知的非 API 路由会回退到 `web/index.html`，因此 SPA 深链刷新可用。
 
-### 4. 通过 GitHub Actions 发布容器镜像
+### 5. 通过 GitHub Actions 发布容器镜像
 
 推送到 `main` 或 `master` 后，GitHub Actions 会先运行前后端检查，再使用根目录的多阶段 Dockerfile 在 GitHub Runner 上构建 `linux/amd64` 和 `linux/arm64` 镜像，并同时推送到 GHCR 和 Docker Hub。整个发布过程不需要在本地构建镜像。
 
@@ -169,9 +182,13 @@ npm run build
 
 工作流还会把仓库根目录的 `README.md` 同步到 Docker Hub 仓库说明。GitHub 仓库需要配置 Actions Secrets：`DOCKERHUB_USERNAME`（值为 `Jaykserks`）以及具有 `read/write/delete` 权限的 `DOCKERHUB_TOKEN`。
 
-普通分支构建会发布 `edge` 和 `sha-<commit>`，不会覆盖稳定版 `latest`。修改根目录 `VERSION` 才会触发正式发布，并自动创建同名 Git Tag 和 GitHub Release。
+`main` / `master` 的普通推送会发布 `edge` 和 `sha-<short-commit>`，不会覆盖稳定版 `latest`。修改根目录 `VERSION` 才会触发正式发布，并自动创建同名 Git Tag 和 GitHub Release。
 
 稳定版 `1.2.3` 会发布 `v1.2.3`、`1.2.3`、`1.2`、`1`、`latest` 和提交标签；`1.3.0-rc.1` 等预发布版只发布精确版本与提交标签，不更新稳定别名。精确 SemVer 标签在 Docker Hub 中自动设为不可变，`latest`、主版本和次版本别名保持可移动。
+
+正式发布任务可安全重跑：已有 Git tag 必须仍指向当前发布提交；工作流会校验 Docker Hub 与 GHCR 中 `vX.Y.Z`、`X.Y.Z` 的多架构清单摘要。任一 registry 留有完整或局部发布结果时，会从已有摘要跨 registry 补齐精确标签，并重新指向缺失或过期的稳定别名与提交标签，不会重推已有不可变标签；发现摘要冲突则停止发布。
+
+版本号严格禁止 core 数字和纯数字预发布标识的前导零；由于容器标签无法无损表达 `+`，正式版本不使用 build metadata。工作流引用的第三方 Actions 均固定到完整 commit SHA。
 
 正式发布只需更新 `VERSION` 并推送：
 
@@ -184,12 +201,17 @@ git push origin HEAD:main
 
 完整版本规则、发布检查和回滚约定见 [发布与标签管理](docs/RELEASING.md)。
 
-Compose 可通过 `DOCKER_IMAGE` 选择远程镜像。部署机拉取镜像后，可用 `--no-build` 阻止本地重新构建：
+Compose 通过受忽略的 `backend/.env` 同时向服务和 Compose 插值提供配置。先从示例创建并编辑它，将 `DOCKER_IMAGE` 改为已发布的精确版本，再拉取镜像；`--no-build` 会阻止部署机本地构建：
 
 ```bash
-DOCKER_IMAGE=jaykserks/summerain:1.0.0 docker compose -f backend/docker-compose.deploy.yml pull
-DOCKER_IMAGE=jaykserks/summerain:1.0.0 docker compose -f backend/docker-compose.deploy.yml up -d --no-build
+cp backend/.env.example backend/.env
+chmod 0600 backend/.env
+# 编辑 backend/.env 中的镜像版本、数据库密码、Cookie 与 imgproxy 密钥
+docker compose --env-file backend/.env -f backend/docker-compose.deploy.yml pull
+docker compose --env-file backend/.env -f backend/docker-compose.deploy.yml up -d --no-build
 ```
+
+跨架构部署如需 digest 级固定，应使用 OCI 多架构索引 digest；平台专属的 child manifest digest 不应在 `amd64` 与 `arm64` 之间复用。依赖镜像锁定策略见 [`requirements.lock`](requirements.lock)。
 
 生产环境的 nginx/Cloudflare 前置和回滚流程见 [部署与使用文档](docs/USAGE.md)。
 
@@ -217,11 +239,13 @@ npx vitest run
 
 | 项目 | 当前值 |
 |---|---|
-| 单文件上限 | 10 MB |
-| 单个后端上传请求 | 最多 20 个文件 |
-| 前端上传并发 | 5 个请求 |
-| 上传输入格式 | PNG / JPG / JPEG / WebP / GIF |
-| 直链输出格式 | WebP / AVIF / JPG / JPEG / PNG / GIF |
+| 单个源文件上限 | 15 MB |
+| 单图像素上限 | 50 MP |
+| 客户端处理 / 上传流水线 | 1 / 2 |
+| 浏览器活跃上传会话 | 4（后端每用户上限 8） |
+| 上传部件并发 | 初始 2，成功后自适应到 3 |
+| 上传输入格式 | 静态 JPG / JPEG / PNG / BMP / WebP / AVIF |
+| V2 持久化格式 | WebP |
 | 默认/最小用户配额 | 500 MB |
 | 配额预警阈值 | 90% |
 | 图片短链 | 12 位 hex（48 bit 熵，冲突时重试） |
@@ -230,7 +254,7 @@ npx vitest run
 | 设备身份令牌 | 90 天，每个平台最多 3 个 |
 | 设备 API 会话 | 15 分钟，活动时续期 |
 | 私密图片令牌 | 10 分钟～3 天 |
-| 转码尺寸 | `w/h` 最大 4096 |
+| V2 固定访问变体 | `master`、400×400 `gallery`、120×160 `admin`（CSS 60×80，2x）、最长边 2048 `publish` |
 
 完整配置和接口约定分别见 [docs/USAGE.md](docs/USAGE.md) 与 [docs/API.md](docs/API.md)。
 

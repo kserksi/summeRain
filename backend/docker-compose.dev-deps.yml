@@ -1,0 +1,68 @@
+services:
+  mysql:
+    image: mysql:8.4.10
+    restart: unless-stopped
+    stop_grace_period: 30s
+    environment:
+      MYSQL_ROOT_PASSWORD: summerain-dev
+      MYSQL_DATABASE: summerain
+    ports:
+      - "127.0.0.1:${SUMMERAIN_DEV_MYSQL_PORT:-13306}:3306"
+    volumes:
+      - mysql_dev_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-psummerain-dev"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 20s
+    cpus: "0.75"
+    mem_limit: 1024m
+    pids_limit: 256
+
+  redis:
+    image: redis:8.8.0-alpine
+    restart: unless-stopped
+    stop_grace_period: 10s
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "128mb", "--maxmemory-policy", "noeviction"]
+    ports:
+      - "127.0.0.1:${SUMMERAIN_DEV_REDIS_PORT:-16379}:6379"
+    volumes:
+      - redis_dev_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 8
+    cpus: "0.15"
+    mem_limit: 192m
+    pids_limit: 128
+
+  imgproxy:
+    image: ghcr.io/imgproxy/imgproxy:v4.0.11
+    restart: unless-stopped
+    stop_grace_period: 15s
+    environment:
+      IMGPROXY_BIND: :8080
+      IMGPROXY_LOCAL_FILESYSTEM_ROOT: /data
+      IMGPROXY_MAX_SRC_RESOLUTION: "50"
+      IMGPROXY_MAX_ANIMATION_FRAMES: "1"
+      IMGPROXY_WORKERS: ${IMGPROXY_WORKERS:-2}
+      IMGPROXY_REQUESTS_QUEUE_SIZE: "4"
+      IMGPROXY_WATERMARK_PATH: /data/images/watermark.svg
+    ports:
+      - "127.0.0.1:${SUMMERAIN_DEV_IMGPROXY_PORT:-18081}:8080"
+    volumes:
+      - ../.dev-data:/data:ro
+    healthcheck:
+      test: ["CMD", "imgproxy", "health"]
+      interval: 5s
+      timeout: 3s
+      retries: 8
+    cpus: "0.70"
+    mem_limit: 512m
+    pids_limit: 128
+
+volumes:
+  mysql_dev_data:
+  redis_dev_data:

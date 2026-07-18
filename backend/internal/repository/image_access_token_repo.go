@@ -4,10 +4,17 @@
 package repository
 
 import (
+	"errors"
 	"time"
 
 	"github.com/kserksi/summerain/internal/model"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
+)
+
+var (
+	ErrAccessTokenImageNotFound = errors.New("access token image not found")
+	ErrAccessTokenForbidden     = errors.New("access token image access forbidden")
 )
 
 type ImageAccessTokenRepo struct {
@@ -18,8 +25,33 @@ func NewImageAccessTokenRepo(db *gorm.DB) *ImageAccessTokenRepo {
 	return &ImageAccessTokenRepo{db: db}
 }
 
-func (r *ImageAccessTokenRepo) Create(token *model.ImageAccessToken) error {
-	return r.db.Create(token).Error
+// ReplaceActiveForImage serializes issuance on the image row so concurrent
+// callers cannot leave more than one non-revoked token behind.
+func (r *ImageAccessTokenRepo) ReplaceActiveForImage(actorID, imageID uint64, isAdmin bool, accessToken *model.ImageAccessToken, revokedAt time.Time) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		var image model.Image
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Select("id", "user_id").
+			First(&image, imageID).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrAccessTokenImageNotFound
+			}
+			return err
+		}
+		if image.UserID != actorID && !isAdmin {
+			return ErrAccessTokenForbidden
+		}
+
+		if err := tx.Model(&model.ImageAccessToken{}).
+			Where("image_id = ? AND revoked_at IS NULL", imageID).
+			Update("revoked_at", revokedAt).Error; err != nil {
+			return err
+		}
+
+		accessToken.ImageID = imageID
+		accessToken.UserID = actorID
+		return tx.Create(accessToken).Error
+	})
 }
 
 // FindActiveByImageID returns the single active (non-revoked, non-expired)
@@ -43,9 +75,9 @@ func (r *ImageAccessTokenRepo) FindByToken(token string) (*model.ImageAccessToke
 	return &t, nil
 }
 
-// RevokeActiveByImageID marks the image's active token as revoked. Returns the
-// number of tokens revoked (0 = no active token). Enforces the one-active-per-
-// image invariant: a new issue revokes the old active token via this method.
+// RevokeActiveByImageID marks the image's active token as revoked and returns
+// the number of affected rows. Issuance uses ReplaceActiveForImage so its
+// revoke-and-create sequence remains atomic.
 func (r *ImageAccessTokenRepo) RevokeActiveByImageID(imageID uint64, revokedAt time.Time) (int64, error) {
 	res := r.db.Model(&model.ImageAccessToken{}).
 		Where("image_id = ? AND revoked_at IS NULL", imageID).

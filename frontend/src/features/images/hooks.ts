@@ -95,8 +95,8 @@ export function useIssueToken() {
   return useMutation({
     mutationFn: (vars: { id: number; ttlMs: number }) =>
       issueToken(vars.id, vars.ttlMs),
-    onSuccess: (img) => {
-      qc.invalidateQueries({ queryKey: QUERY_KEYS.imageDetail(img.id) })
+    onSuccess: (_token, vars) => {
+      qc.invalidateQueries({ queryKey: QUERY_KEYS.imageDetail(vars.id) })
       toast.success(i18n.t('images.toast.tokenIssued'))
     },
     onError: () => toast.error(i18n.t('images.toast.issueFailed')),

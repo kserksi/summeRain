@@ -84,6 +84,24 @@ describe('buildCopyText', () => {
   it('empty list returns empty string', () => {
     expect(buildCopyText(origin, [], 'url', 'webp')).toBe('')
   })
+
+  it('V2 markdown always uses the fixed publish asset', () => {
+    expect(
+      buildCopyText(
+        origin,
+        [
+          {
+            uniqueLink: 'legacy-link',
+            fileName: 'photo.avif',
+            pipelineVersion: 2,
+            assetLink: 'asset-link',
+          },
+        ],
+        'markdown',
+        'avif',
+      ),
+    ).toBe('![photo](https://img.example.com/i/asset-link.webp)')
+  })
 })
 
 describe('prefs persistence', () => {

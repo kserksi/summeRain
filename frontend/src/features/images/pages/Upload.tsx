@@ -3,291 +3,535 @@
 
 import {
   IconCheck,
-  IconChevronDown,
   IconLink,
   IconLoader2,
   IconPhoto,
   IconRefresh,
   IconUpload,
   IconX,
-} from '@tabler/icons-react'
-import { useQueryClient } from '@tanstack/react-query'
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router'
-import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
+} from "@tabler/icons-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router";
+import { useTranslation } from "react-i18next";
+import { toast } from "sonner";
 
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
-import { Label } from '@/components/ui/label'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { Progress } from '@/components/ui/progress'
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select'
-import { Separator } from '@/components/ui/separator'
-import { API_BASE_URL } from '@/config/constants'
-import { useCopy } from '@/lib/use-copy'
-import { getCsrfToken } from '@/lib/csrf'
-import { useAuthStore } from '@/store/auth-store'
+} from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import { useCopy } from "@/lib/use-copy";
+import { useAuthStore } from "@/store/auth-store";
 
+import { buildCopyText } from "../copy-format";
+import { processClientImage } from "../client-processing/processor";
+import { createProcessedPreviewURL } from "../processed-preview";
+import { ConcurrencyGate, runWithConcurrency } from "../upload-concurrency";
+import { beginV1Upload, type V1UploadResult } from "../v1-upload";
 import {
-  buildCopyText,
-  loadPrefs,
-  savePrefs,
-  type CopyImageFormat,
-  type CopyLinkFormat,
-} from '../copy-format'
-import { runWithConcurrency } from '../upload-concurrency'
+  beginV2Upload,
+  createV2IdempotencyKey,
+  getV2Recipe,
+  isV2UploadEnabled,
+  nextV2UploadAttempt,
+  v2UploadRetryDisposition,
+  waitForV2Upload,
+  type V2UploadResult,
+} from "../v2-upload";
 
-type Status = 'queued' | 'uploading' | 'done' | 'failed'
+type Status = "queued" | "processing" | "uploading" | "serverProcessing" | "done" | "failed";
+type RetryMode = "resume" | "reuse" | "new";
+type CompletedUploadResult = V1UploadResult | V2UploadResult;
 
 interface QueueItem {
-  id: string
-  file: File
-  preview: string
-  progress: number
-  status: Status
-  uniqueLink?: string
+  id: string;
+  attempt: number;
+  file: File;
+  preview?: string;
+  progress: number;
+  status: Status;
+  uploadId?: string;
+  retryMode?: RetryMode;
+  attemptVisibility?: "public" | "private";
+  uniqueLink?: string;
+  assetLink?: string;
+  pipelineVersion?: number;
 }
 
 function formatBytes(bytes: number): string {
-  if (!bytes) return '0 B'
-  const units = ['B', 'KB', 'MB', 'GB']
-  const i = Math.min(
-    Math.floor(Math.log(bytes) / Math.log(1024)),
-    units.length - 1,
-  )
-  return `${(bytes / Math.pow(1024, i)).toFixed(i === 0 ? 0 : 1)} ${units[i]}`
+  if (!bytes) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  return `${(bytes / Math.pow(1024, i)).toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
 }
 
-const STATUS_VARIANT: Record<Status, 'default' | 'secondary' | 'destructive' | 'outline'> = {
-  queued: 'outline',
-  uploading: 'secondary',
-  done: 'default',
-  failed: 'destructive',
+const STATUS_VARIANT: Record<Status, "default" | "secondary" | "destructive" | "outline"> = {
+  queued: "outline",
+  processing: "secondary",
+  uploading: "secondary",
+  serverProcessing: "secondary",
+  done: "default",
+  failed: "destructive",
+};
+
+const PIPELINE_CONCURRENCY = 2;
+// The backend permits eight active sessions per user. Keep half available for
+// status recovery or another tab while still keeping the single publish worker busy.
+const ACTIVE_SESSION_CONCURRENCY = 4;
+const MAX_SOURCE_BYTES = 15 * 1024 * 1024;
+
+const ALLOWED_EXTS = [".png", ".jpg", ".jpeg", ".bmp", ".webp", ".avif"];
+
+function createQueueID(): string {
+  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  return Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("");
 }
 
-const CONCURRENCY = 5
-
-const ALLOWED_EXTS = ['.png', '.jpg', '.jpeg', '.webp', '.gif']
-const ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif']
+function createSerialExecutor() {
+  let tail = Promise.resolve();
+  return async <T,>(task: () => Promise<T>): Promise<T> => {
+    const previous = tail;
+    let release: () => void = () => {};
+    tail = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await previous;
+    try {
+      return await task();
+    } finally {
+      release();
+    }
+  };
+}
 
 export default function Upload() {
-  const { t } = useTranslation()
-  const [items, setItems] = useState<QueueItem[]>([])
-  const [visibility, setVisibility] = useState<'public' | 'private'>('public')
-  const [dragging, setDragging] = useState(false)
-  const [uploading, setUploading] = useState(false)
-  const [linkFormat, setLinkFormat] = useState<CopyLinkFormat>(() => loadPrefs().link)
-  const [imageFormat, setImageFormat] = useState<CopyImageFormat>(() => loadPrefs().image)
-  const [copyMenuOpen, setCopyMenuOpen] = useState(false)
-  const inputRef = useRef<HTMLInputElement>(null)
-  const navigate = useNavigate()
-  const qc = useQueryClient()
-  const refreshUser = useAuthStore((s) => s.refreshUser)
-  const { copied, copy } = useCopy()
+  const { t } = useTranslation();
+  const [items, setItems] = useState<QueueItem[]>([]);
+  const [visibility, setVisibility] = useState<"public" | "private">("public");
+  const [dragging, setDragging] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const mountedRef = useRef(false);
+  const uploadingRef = useRef(false);
+  const activeControllersRef = useRef(new Map<string, AbortController>());
+  const previewURLsRef = useRef(new Set<string>());
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+  const refreshUser = useAuthStore((s) => s.refreshUser);
+  const { copied, copy } = useCopy();
 
+  const itemsRef = useRef(items);
   useEffect(() => {
-    savePrefs({ link: linkFormat, image: imageFormat })
-  }, [linkFormat, imageFormat])
-
-  const itemsRef = useRef(items)
+    itemsRef.current = items;
+  });
   useEffect(() => {
-    itemsRef.current = items
-  })
-  useEffect(
-    () => () => {
-      itemsRef.current.forEach((i) => URL.revokeObjectURL(i.preview))
-    },
-    [],
-  )
+    const activeControllers = activeControllersRef.current;
+    const previewURLs = previewURLsRef.current;
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      for (const controller of activeControllers.values()) {
+        controller.abort(new DOMException("Upload page unmounted", "AbortError"));
+      }
+      activeControllers.clear();
+      for (const preview of previewURLs) URL.revokeObjectURL(preview);
+      previewURLs.clear();
+    };
+  }, []);
 
   const addFiles = useCallback((files: FileList | File[]) => {
     const next = Array.from(files)
       .filter((f) => {
-        const dot = f.name.lastIndexOf('.')
-        const ext = dot >= 0 ? f.name.slice(dot).toLowerCase() : ''
-        return ALLOWED_EXTS.includes(ext) && ALLOWED_TYPES.includes(f.type)
+        const dot = f.name.lastIndexOf(".");
+        const ext = dot >= 0 ? f.name.slice(dot).toLowerCase() : "";
+        return ALLOWED_EXTS.includes(ext) && f.size > 0 && f.size <= MAX_SOURCE_BYTES;
       })
       .map((f) => ({
-        id: `${f.name}-${f.size}-${Math.random().toString(36).slice(2, 8)}`,
+        id: createQueueID(),
+        attempt: 0,
         file: f,
-        preview: URL.createObjectURL(f),
         progress: 0,
-        status: 'queued' as Status,
-      }))
-    if (next.length) setItems((prev) => [...prev, ...next])
-  }, [])
+        status: "queued" as Status,
+      }));
+    if (next.length) setItems((prev) => [...prev, ...next]);
+  }, []);
 
   const removeItem = (id: string) => {
     setItems((prev) =>
       prev.filter((i) => {
-        if (i.id === id) URL.revokeObjectURL(i.preview)
-        return i.id !== id
+        if (i.id === id && i.preview) {
+          URL.revokeObjectURL(i.preview);
+          previewURLsRef.current.delete(i.preview);
+        }
+        return i.id !== id;
       }),
-    )
-  }
+    );
+  };
 
-  const uploadOne = (item: QueueItem) =>
-    new Promise<'done' | 'failed'>((resolve) => {
-      const fd = new FormData()
-      fd.append('images', item.file)
-      fd.append('visibility', visibility)
+  const patchItem = (id: string, value: Partial<QueueItem>) => {
+    if (!mountedRef.current) return;
+    setItems((previous) =>
+      previous.map((candidate) => (candidate.id === id ? { ...candidate, ...value } : candidate)),
+    );
+  };
 
-      const xhr = new XMLHttpRequest()
-      xhr.open('POST', `${API_BASE_URL}/images/`)
-      xhr.withCredentials = true
-      const csrf = getCsrfToken()
-      if (csrf) xhr.setRequestHeader('X-CSRF-Token', csrf)
+  const finishItem = (item: QueueItem, result: CompletedUploadResult): "done" => {
+    patchItem(item.id, {
+      status: "done",
+      progress: 100,
+      uploadId: result.uploadId,
+      retryMode: undefined,
+      uniqueLink: result.uniqueLink,
+      assetLink: "assetLink" in result ? result.assetLink : undefined,
+      pipelineVersion: result.pipelineVersion,
+    });
+    return "done";
+  };
 
-      const patch = (p: Partial<QueueItem>) =>
-        setItems((prev) =>
-          prev.map((i) => (i.id === item.id ? { ...i, ...p } : i)),
-        )
+  const failItem = (
+    item: QueueItem,
+    error: unknown,
+    phase: "begin" | "poll" = "begin",
+    uploadId?: string,
+  ): "failed" => {
+    if (isAbortError(error)) return "failed";
+    const message = error instanceof Error ? error.message : t("upload.toast.uploadAllFailed");
+    toast.error(t("upload.toast.itemFailed", { name: item.file.name, msg: message }));
+    const disposition = v2UploadRetryDisposition(error);
+    patchItem(item.id, {
+      status: "failed",
+      uploadId: uploadId ?? item.uploadId,
+      retryMode:
+        phase === "poll" && uploadId
+          ? disposition === "new-attempt"
+            ? "new"
+            : "resume"
+          : disposition === "new-attempt"
+            ? "new"
+            : "reuse",
+    });
+    return "failed";
+  };
 
-      xhr.upload.onprogress = (e) => {
-        if (e.lengthComputable) {
-          patch({
-            progress: Math.min(99, Math.round((e.loaded / e.total) * 100)),
-            status: 'uploading',
-          })
+  const attachProcessedPreview = (item: QueueItem, processed: Parameters<typeof createProcessedPreviewURL>[0]) => {
+    if (item.preview) return;
+    const preview = createProcessedPreviewURL(processed);
+    if (!preview) return;
+    previewURLsRef.current.add(preview);
+    if (!mountedRef.current) {
+      URL.revokeObjectURL(preview);
+      previewURLsRef.current.delete(preview);
+      return;
+    }
+    setItems((previous) =>
+      previous.map((candidate) => {
+        if (candidate.id !== item.id) return candidate;
+        if (candidate.preview) {
+          URL.revokeObjectURL(preview);
+          previewURLsRef.current.delete(preview);
+          return candidate;
         }
+        return { ...candidate, preview };
+      }),
+    );
+  };
+
+  const beginUpload = async (
+    item: QueueItem,
+    processSerially: <T>(task: () => Promise<T>) => Promise<T>,
+    pendingPolls: Array<Promise<"done" | "failed">>,
+    controller: AbortController,
+    releaseSession: () => void,
+  ): Promise<"done" | "failed" | "pending"> => {
+    const patch = (value: Partial<QueueItem>) => patchItem(item.id, value);
+    let knownUploadId = item.uploadId;
+    const attemptVisibility = item.attemptVisibility ?? visibility;
+
+    try {
+      patch({ attemptVisibility });
+      const recipe = await getV2Recipe(controller.signal);
+      if (!isV2UploadEnabled(recipe)) {
+        patch({ status: "uploading", progress: 10 });
+        const result = await beginV1Upload(item.file, attemptVisibility, controller.signal);
+        return finishItem(item, result);
       }
-      xhr.onload = () => {
-        let failed = true
-        let errMsg = ''
-        let link = ''
-        try {
-          const json = JSON.parse(xhr.responseText)
-          if (json.code === 0 && json.data?.results?.length) {
-            const r = json.data.results[0]
-            failed = !r.success
-            if (failed) errMsg = r.error || t('upload.toast.errorCode', { code: r.error_code || '?' })
-            else link = r.unique_link || ''
-          } else if (json.code !== 0) {
-            failed = true
-            errMsg = json.message || t('upload.toast.errorCode', { code: json.code })
+      const processed = await processSerially(async () => {
+        patch({ status: "processing", progress: 0 });
+        return processClientImage(item.file, (percent) => {
+          patch({ status: "processing", progress: Math.min(40, Math.round(percent * 0.4)) });
+        }, controller.signal);
+      });
+      attachProcessedPreview(item, processed);
+      patch({ status: "uploading", progress: 40 });
+
+      const started = await beginV2Upload({
+        fileName: item.file.name,
+        visibility: attemptVisibility,
+        idempotencyKey: createV2IdempotencyKey(item.id, item.attempt),
+        processed,
+        onSession: (uploadId) => {
+          knownUploadId = uploadId;
+          patch({ uploadId });
+        },
+        onProgress: (phase, percent) => {
+          if (phase === "uploading") {
+            patch({ status: "uploading", progress: 40 + Math.round(percent * 0.5) });
+          } else {
+            patch({
+              status: "serverProcessing",
+              progress: Math.min(99, 90 + Math.round(percent * 0.09)),
+            });
           }
-        } catch {
-          failed = true
-          errMsg = t('upload.toast.parseFailed')
-        }
-        if (failed && errMsg) toast.error(t('upload.toast.itemFailed', { name: item.file.name, msg: errMsg }))
-        patch({ status: failed ? 'failed' : 'done', progress: 100, uniqueLink: link || undefined })
-        resolve(failed ? 'failed' : 'done')
-      }
-      xhr.onerror = () => {
-        patch({ status: 'failed' })
-        resolve('failed')
-      }
+        },
+        signal: controller.signal,
+      });
+      knownUploadId = started.uploadId;
+      patch({ uploadId: started.uploadId });
+      if (started.completed) return finishItem(item, started.completed);
 
-      patch({ status: 'uploading', progress: 0 })
-      xhr.send(fd)
-    })
+      patch({ status: "serverProcessing", progress: 90 });
+      const polling = waitForV2Upload(
+        started.uploadId,
+        (_phase, percent) => {
+          patch({
+            status: "serverProcessing",
+            progress: Math.min(99, 90 + Math.round(percent * 0.09)),
+          });
+        },
+        controller.signal,
+      )
+        .then((result) => finishItem(item, result))
+        .catch((error: unknown) => failItem(item, error, "poll", started.uploadId))
+        .finally(() => {
+          clearActiveController(item.id, controller);
+          releaseSession();
+        });
+      pendingPolls.push(polling);
+      return "pending";
+    } catch (error) {
+      return failItem(item, error, "begin", knownUploadId);
+    }
+  };
+
+  const beginStatusResume = (
+    item: QueueItem,
+    pendingPolls: Array<Promise<"done" | "failed">>,
+    controller: AbortController,
+    releaseSession: () => void,
+  ): "pending" | "failed" => {
+    const uploadId = item.uploadId;
+    if (!uploadId) return failItem(item, new Error("Upload status cannot be resumed"));
+    patchItem(item.id, {
+      status: "serverProcessing",
+      progress: Math.max(90, item.progress),
+      retryMode: undefined,
+    });
+    try {
+      const polling = waitForV2Upload(
+        uploadId,
+        (_phase, percent) => {
+          patchItem(item.id, {
+            status: "serverProcessing",
+            progress: Math.min(99, 90 + Math.round(percent * 0.09)),
+          });
+        },
+        controller.signal,
+      )
+        .then((result) => finishItem(item, result))
+        .catch((error: unknown) => failItem(item, error, "poll", uploadId))
+        .finally(() => {
+          clearActiveController(item.id, controller);
+          releaseSession();
+        });
+      pendingPolls.push(polling);
+      return "pending";
+    } catch (error) {
+      return failItem(item, error, "poll", uploadId);
+    }
+  };
 
   const runUploads = async (toUpload: QueueItem[]) => {
-    if (!toUpload.length || uploading) return
-    setUploading(true)
-    const statuses = await runWithConcurrency(toUpload, uploadOne, CONCURRENCY)
-    setUploading(false)
-    qc.invalidateQueries({ queryKey: ['images'] })
-    refreshUser()
-    const ok = statuses.filter((s) => s === 'done').length
-    const fail = statuses.length - ok
-    if (fail === 0) toast.success(t('upload.toast.uploadSuccess', { count: ok }))
-    else if (ok === 0) toast.error(t('upload.toast.uploadAllFailed'))
-    else toast.warning(t('upload.toast.uploadPartial', { ok, fail }))
-  }
+    if (!toUpload.length || uploadingRef.current) return;
+    uploadingRef.current = true;
+    setUploading(true);
+    const processSerially = createSerialExecutor();
+    const activeSessions = new ConcurrencyGate(ACTIVE_SESSION_CONCURRENCY);
+    const pendingPolls: Array<Promise<"done" | "failed">> = [];
+    const started = await runWithConcurrency(
+      toUpload,
+      async (item) => {
+        const controller = new AbortController();
+        if (!mountedRef.current) {
+          controller.abort(abortError("Upload page unmounted"));
+        }
+        activeControllersRef.current.get(item.id)?.abort(abortError("Upload attempt superseded"));
+        activeControllersRef.current.set(item.id, controller);
+        let releaseSession: (() => void) | undefined;
+        try {
+          releaseSession = await activeSessions.acquire(controller.signal);
+        } catch {
+          clearActiveController(item.id, controller);
+          return "failed";
+        }
+        const result =
+          item.retryMode === "resume" && item.uploadId
+            ? beginStatusResume(item, pendingPolls, controller, releaseSession)
+            : await beginUpload(
+                item,
+                processSerially,
+                pendingPolls,
+                controller,
+                releaseSession,
+              );
+        if (result !== "pending") {
+          releaseSession();
+          clearActiveController(item.id, controller);
+        }
+        return result;
+      },
+      PIPELINE_CONCURRENCY,
+    );
+    const statuses = [
+      ...started.filter((status): status is "done" | "failed" => status !== "pending"),
+      ...(await Promise.all(pendingPolls)),
+    ];
+    uploadingRef.current = false;
+    if (!mountedRef.current) return;
+    setUploading(false);
+    qc.invalidateQueries({ queryKey: ["images"] });
+    refreshUser();
+    const ok = statuses.filter((s) => s === "done").length;
+    const fail = statuses.length - ok;
+    if (fail === 0) toast.success(t("upload.toast.uploadSuccess", { count: ok }));
+    else if (ok === 0) toast.error(t("upload.toast.uploadAllFailed"));
+    else toast.warning(t("upload.toast.uploadPartial", { ok, fail }));
+  };
 
-  const startUpload = () => runUploads(items.filter((i) => i.status === 'queued'))
-  const retryAllFailed = () => runUploads(items.filter((i) => i.status === 'failed'))
-  const retryOne = (id: string) =>
-    runUploads(items.filter((i) => i.id === id && i.status === 'failed'))
+  const startUpload = () => runUploads(items.filter((i) => i.status === "queued"));
+  const retryFailed = (id?: string) => {
+    const retried = items
+      .filter((item) => item.status === "failed" && (!id || item.id === id))
+      .map((item) => {
+        const startsNewAttempt = item.retryMode === "new";
+        return {
+          ...item,
+          attempt: startsNewAttempt ? nextV2UploadAttempt(item.attempt) : item.attempt,
+          status: "queued" as const,
+          progress: item.retryMode === "resume" ? Math.max(90, item.progress) : 0,
+          uploadId: startsNewAttempt ? undefined : item.uploadId,
+          retryMode: item.retryMode === "resume" ? ("resume" as const) : undefined,
+          attemptVisibility: startsNewAttempt ? undefined : item.attemptVisibility,
+          uniqueLink: undefined,
+          assetLink: undefined,
+          pipelineVersion: undefined,
+        };
+      });
+    const replacements = new Map(retried.map((item) => [item.id, item]));
+    setItems((current) => current.map((item) => replacements.get(item.id) ?? item));
+    void runUploads(retried);
+  };
+  const retryAllFailed = () => retryFailed();
+  const retryOne = (id: string) => retryFailed(id);
+
+  const clearActiveController = (id: string, controller: AbortController) => {
+    if (activeControllersRef.current.get(id) === controller) {
+      activeControllersRef.current.delete(id);
+    }
+  };
 
   const onDrop = (e: React.DragEvent) => {
-    e.preventDefault()
-    setDragging(false)
-    if (e.dataTransfer.files?.length) addFiles(e.dataTransfer.files)
-  }
+    e.preventDefault();
+    setDragging(false);
+    if (e.dataTransfer.files?.length) addFiles(e.dataTransfer.files);
+  };
 
-  const hasQueued = items.some((i) => i.status === 'queued')
-  const completedLinks = items.filter((i) => i.status === 'done' && i.uniqueLink)
-  const failedCount = items.filter((i) => i.status === 'failed').length
+  const hasQueued = items.some((i) => i.status === "queued");
+  const completedLinks = items.filter((i) => i.status === "done" && i.uniqueLink);
+  const failedCount = items.filter((i) => i.status === "failed").length;
 
   const copyAllLinks = async () => {
-    if (!completedLinks.length) return
+    if (!completedLinks.length) return;
     const text = buildCopyText(
       window.location.origin,
-      completedLinks.map((i) => ({ uniqueLink: i.uniqueLink!, fileName: i.file.name })),
-      linkFormat,
-      imageFormat,
-    )
-    const fmt = `${t(`upload.copy.linkFormats.${linkFormat}`)}·${t(`upload.copy.imageFormats.${imageFormat}`)}`
-    const ok = await copy(text, t('upload.toast.copied', { count: completedLinks.length, format: fmt }))
-    if (ok) setCopyMenuOpen(false)
-  }
+      completedLinks.map((i) => ({
+        uniqueLink: i.uniqueLink!,
+        fileName: i.file.name,
+        pipelineVersion: i.pipelineVersion,
+        assetLink: i.assetLink,
+      })),
+      "markdown",
+      "webp",
+    );
+    await copy(
+      text,
+      t("upload.toast.copied", {
+        count: completedLinks.length,
+        format: `${t("upload.copy.linkFormats.markdown")}·${t("upload.copy.imageFormats.webp")}`,
+      }),
+    );
+  };
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">{t('upload.title')}</h1>
+      <h1 className="text-2xl font-bold">{t("upload.title")}</h1>
 
       <div
         role="button"
         tabIndex={0}
         onClick={() => inputRef.current?.click()}
         onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') inputRef.current?.click()
+          if (e.key === "Enter" || e.key === " ") inputRef.current?.click();
         }}
         onDragOver={(e) => {
-          e.preventDefault()
-          setDragging(true)
+          e.preventDefault();
+          setDragging(true);
         }}
         onDragLeave={() => setDragging(false)}
         onDrop={onDrop}
         className={`grid cursor-pointer place-items-center rounded-3xl border-2 border-dashed p-10 text-center transition-colors ${
-          dragging
-            ? 'border-primary bg-primary/5'
-            : 'border-border hover:bg-muted/50'
+          dragging ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50"
         }`}
       >
         <input
           ref={inputRef}
           type="file"
-          accept=".png,.jpg,.jpeg,.webp,.gif,image/png,image/jpeg,image/webp,image/gif"
+          accept=".png,.jpg,.jpeg,.bmp,.webp,.avif,image/png,image/jpeg,image/bmp,image/webp,image/avif"
           multiple
           className="hidden"
           onChange={(e) => {
-            if (e.target.files?.length) addFiles(e.target.files)
-            e.target.value = ''
+            if (e.target.files?.length) addFiles(e.target.files);
+            e.target.value = "";
           }}
         />
         <IconUpload className="size-10 text-muted-foreground" />
-        <p className="mt-3 font-medium">{t('upload.dropzone')}</p>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {t('upload.dropzoneHint')}
-        </p>
+        <p className="mt-3 font-medium">{t("upload.dropzone")}</p>
+        <p className="mt-1 text-sm text-muted-foreground">{t("upload.dropzoneHint")}</p>
       </div>
 
       <Card>
         <CardContent className="flex items-center gap-3 p-5">
-          <Label className="text-sm">{t('upload.visibility')}</Label>
+          <Label className="text-sm">{t("upload.visibility")}</Label>
           <Select
             value={visibility}
-            onValueChange={(v) => setVisibility(v as 'public' | 'private')}
+            disabled={uploading}
+            onValueChange={(v) => setVisibility(v as "public" | "private")}
           >
             <SelectTrigger className="h-9 w-36">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="public">{t('upload.visibilityPublic')}</SelectItem>
-              <SelectItem value="private">{t('upload.visibilityPrivate')}</SelectItem>
+              <SelectItem value="public">{t("upload.visibilityPublic")}</SelectItem>
+              <SelectItem value="private">{t("upload.visibilityPrivate")}</SelectItem>
             </SelectContent>
           </Select>
         </CardContent>
@@ -297,130 +541,56 @@ export default function Upload() {
         <Card>
           <CardContent className="space-y-3 p-5">
             <div className="flex items-center justify-between">
-              <p className="font-medium">{t('upload.queue', { count: items.length })}</p>
+              <p className="font-medium">{t("upload.queue", { count: items.length })}</p>
               <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  disabled={!hasQueued || uploading}
-                  onClick={startUpload}
-                >
-                  {uploading ? (
-                    <IconLoader2 className="animate-spin" />
-                  ) : (
-                    <IconUpload />
-                  )}
-                  {uploading ? t('upload.uploading') : t('upload.startUpload')}
+                <Button size="sm" disabled={!hasQueued || uploading} onClick={startUpload}>
+                  {uploading ? <IconLoader2 className="animate-spin" /> : <IconUpload />}
+                  {uploading ? t("upload.uploading") : t("upload.startUpload")}
                 </Button>
                 <Button
                   size="sm"
                   variant="outline"
                   disabled={uploading}
-                  onClick={() => navigate('/images')}
+                  onClick={() => navigate("/images")}
                 >
-                  {t('upload.done')}
+                  {t("upload.done")}
                 </Button>
                 {failedCount > 0 && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={uploading}
-                    onClick={retryAllFailed}
-                  >
+                  <Button size="sm" variant="outline" disabled={uploading} onClick={retryAllFailed}>
                     <IconRefresh />
-                    {t('upload.retryAll', { count: failedCount })}
+                    {t("upload.retryAll", { count: failedCount })}
                   </Button>
                 )}
                 {completedLinks.length > 0 && (
-                  <Popover open={copyMenuOpen} onOpenChange={setCopyMenuOpen}>
-                    <PopoverTrigger asChild>
-                      <Button size="sm" variant="outline">
-                        {copied ? (
-                          <IconCheck className="text-primary" />
-                        ) : (
-                          <IconLink />
-                        )}
-                        {t('upload.copy.button')} ({completedLinks.length})
-                        <IconChevronDown className="size-3.5 opacity-60" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent align="end" className="w-64">
-                      <div className="space-y-3">
-                        <div className="space-y-1.5">
-                          <Label className="text-xs text-muted-foreground">
-                            {t('upload.copy.linkFormatLabel')}
-                          </Label>
-                          <ToggleGroup
-                            type="single"
-                            variant="outline"
-                            size="sm"
-                            orientation="vertical"
-                            value={linkFormat}
-                            onValueChange={(v) => v && setLinkFormat(v as CopyLinkFormat)}
-                            className="w-full"
-                          >
-                            {(['url', 'markdown', 'bbs', 'html'] as const).map((f) => (
-                              <ToggleGroupItem
-                                key={f}
-                                value={f}
-                                className="w-full justify-start"
-                              >
-                                {t(`upload.copy.linkFormats.${f}`)}
-                              </ToggleGroupItem>
-                            ))}
-                          </ToggleGroup>
-                        </div>
-                        <Separator />
-                        <div className="space-y-1.5">
-                          <Label className="text-xs text-muted-foreground">
-                            {t('upload.copy.imageFormatLabel')}
-                          </Label>
-                          <ToggleGroup
-                            type="single"
-                            variant="outline"
-                            size="sm"
-                            orientation="vertical"
-                            value={imageFormat}
-                            onValueChange={(v) => v && setImageFormat(v as CopyImageFormat)}
-                            className="w-full"
-                          >
-                            {(['original', 'webp', 'avif'] as const).map((f) => (
-                              <ToggleGroupItem
-                                key={f}
-                                value={f}
-                                className="w-full justify-start"
-                              >
-                                {t(`upload.copy.imageFormats.${f}`)}
-                              </ToggleGroupItem>
-                            ))}
-                          </ToggleGroup>
-                        </div>
-                        <Separator />
-                        <Button onClick={copyAllLinks} className="w-full">
-                          <IconLink />
-                          {t('upload.copy.action', { count: completedLinks.length })}
-                        </Button>
-                      </div>
-                    </PopoverContent>
-                  </Popover>
+                  <Button size="sm" variant="outline" onClick={copyAllLinks}>
+                    {copied ? <IconCheck className="text-primary" /> : <IconLink />}
+                    {t("upload.copy.button")} ({completedLinks.length})
+                  </Button>
                 )}
               </div>
             </div>
             <Separator />
             <ul className="space-y-3">
               {items.map((item) => {
-                const variant = STATUS_VARIANT[item.status]
+                const variant = STATUS_VARIANT[item.status];
                 return (
                   <li key={item.id} className="flex items-center gap-3">
-                    <img
-                      src={item.preview}
-                      alt={item.file.name}
-                      className="size-14 shrink-0 rounded-xl object-cover ring-1 ring-border"
-                    />
+                    {item.preview ? (
+                      <img
+                        src={item.preview}
+                        alt={item.file.name}
+                        loading="lazy"
+                        decoding="async"
+                        className="size-14 shrink-0 rounded-xl object-cover ring-1 ring-border"
+                      />
+                    ) : (
+                      <div className="grid size-14 shrink-0 place-items-center rounded-xl bg-muted ring-1 ring-border">
+                        <IconPhoto className="size-5 text-muted-foreground" />
+                      </div>
+                    )}
                     <div className="min-w-0 flex-1 space-y-1">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="truncate text-sm font-medium">
-                          {item.file.name}
-                        </span>
+                        <span className="truncate text-sm font-medium">{item.file.name}</span>
                         <span className="shrink-0 text-xs text-muted-foreground">
                           {formatBytes(item.file.size)}
                         </span>
@@ -428,20 +598,22 @@ export default function Upload() {
                       <Progress value={item.progress} className="h-2" />
                     </div>
                     <Badge variant={variant} className="shrink-0">
-                      {item.status === 'done' && <IconCheck />}
-                      {item.status === 'uploading' && (
+                      {item.status === "done" && <IconCheck />}
+                      {(item.status === "processing" ||
+                        item.status === "uploading" ||
+                        item.status === "serverProcessing") && (
                         <IconLoader2 className="animate-spin" />
                       )}
                       {t(`upload.status.${item.status}`)}
                     </Badge>
-                    {item.status === 'failed' && (
+                    {item.status === "failed" && (
                       <Button
                         type="button"
                         size="icon-sm"
                         variant="ghost"
                         disabled={uploading}
                         onClick={() => retryOne(item.id)}
-                        aria-label={t('upload.retry')}
+                        aria-label={t("upload.retry")}
                       >
                         <IconRefresh />
                       </Button>
@@ -452,12 +624,12 @@ export default function Upload() {
                       variant="ghost"
                       disabled={uploading}
                       onClick={() => removeItem(item.id)}
-                      aria-label={t('upload.remove')}
+                      aria-label={t("upload.remove")}
                     >
                       <IconX />
                     </Button>
                   </li>
-                )
+                );
               })}
             </ul>
           </CardContent>
@@ -467,9 +639,17 @@ export default function Upload() {
       {items.length === 0 && (
         <div className="grid place-items-center py-6 text-center text-muted-foreground">
           <IconPhoto className="mb-2 size-8 opacity-40" />
-          <p className="text-sm">{t('upload.empty')}</p>
+          <p className="text-sm">{t("upload.empty")}</p>
         </div>
       )}
     </div>
-  )
+  );
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === "AbortError";
+}
+
+function abortError(message: string): DOMException {
+  return new DOMException(message, "AbortError");
 }

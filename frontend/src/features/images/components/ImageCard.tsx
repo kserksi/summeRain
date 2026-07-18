@@ -14,6 +14,7 @@ import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import type { Image } from '@/lib/types'
+import { resolveImageAssetUrl } from '../asset-url'
 
 export interface ImageCardProps {
   image: Image
@@ -30,7 +31,7 @@ export function ImageCard({
 }: ImageCardProps) {
   const navigate = useNavigate()
   const { t } = useTranslation()
-  const src = `/i/${image.unique_link}.webp?w=400`
+  const src = resolveImageAssetUrl(image, 'gallery')
   const isPrivate = image.visibility === 'private'
 
   const handleClick = () => {

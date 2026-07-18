@@ -33,6 +33,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { useProfile } from '@/features/user/hooks'
 import { useImages } from '@/features/images/hooks'
+import { resolveImageAssetUrl } from '@/features/images/asset-url'
 import { useAdminStats } from '@/features/admin/hooks'
 import { useAuthStore } from '@/store/auth-store'
 import { ROUTES, USER_ROLES } from '@/config/constants'
@@ -151,7 +152,7 @@ function RecentImage({ image }: { image: Image }) {
     >
       <div className="aspect-square w-full overflow-hidden bg-muted">
         <img
-          src={`/i/${image.unique_link}.webp?w=400`}
+          src={resolveImageAssetUrl(image, 'gallery')}
           alt={image.title || image.filename}
           loading="lazy"
           className="size-full object-cover transition-transform duration-300 group-hover:scale-105"

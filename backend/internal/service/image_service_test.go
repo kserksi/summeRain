@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/kserksi/summerain/internal/model"
+	"github.com/kserksi/summerain/internal/pkg/errcode"
+	"github.com/kserksi/summerain/internal/repository"
 )
 
 func TestClampTTLms(t *testing.T) {
@@ -72,8 +74,8 @@ func TestValidateAccessTokenClassification(t *testing.T) {
 	}
 }
 
-func TestIssueAccessTokenRevokesExistingBeforeCreatingNew(t *testing.T) {
-	repo := &fakeImageAccessTokenRepo{revokeCount: 1}
+func TestIssueAccessTokenReplacesActiveTokenAtomically(t *testing.T) {
+	repo := &fakeImageAccessTokenRepo{}
 	svc := &ImageService{
 		imageRepo: &fakeImageRepo{foundImage: &model.Image{ID: 7, UserID: 3}},
 		tokenRepo: repo,
@@ -94,7 +96,10 @@ func TestIssueAccessTokenRevokesExistingBeforeCreatingNew(t *testing.T) {
 		t.Fatalf("stored token does not match returned token")
 	}
 	if repo.revokeCalledImageID != 7 {
-		t.Fatalf("RevokeActiveByImageID called for image %d, want 7", repo.revokeCalledImageID)
+		t.Fatalf("ReplaceActiveForImage called for image %d, want 7", repo.revokeCalledImageID)
+	}
+	if repo.replaceActorID != 3 {
+		t.Fatalf("ReplaceActiveForImage actor = %d, want 3", repo.replaceActorID)
 	}
 	if repo.created[0].ExpiresAt.Sub(time.Now()) < time.Duration(PrivateTokenDefaultTTLms-500)*time.Millisecond {
 		t.Fatalf("expiry not clamped to default TTL; got %v", repo.created[0].ExpiresAt)
@@ -103,14 +108,25 @@ func TestIssueAccessTokenRevokesExistingBeforeCreatingNew(t *testing.T) {
 
 func TestIssueAccessTokenRejectsNonOwner(t *testing.T) {
 	svc := &ImageService{
-		imageRepo: &fakeImageRepo{foundImage: &model.Image{ID: 7, UserID: 3}},
-		tokenRepo: &fakeImageAccessTokenRepo{},
+		tokenRepo: &fakeImageAccessTokenRepo{replaceErr: repository.ErrAccessTokenForbidden},
 	}
 
 	_, appErr := svc.IssueAccessToken(99, 7, false, 0)
 
 	if appErr == nil || appErr.HTTP != 403 {
 		t.Fatalf("IssueAccessToken non-owner error = %v, want 403", appErr)
+	}
+}
+
+func TestIssueAccessTokenReturnsNotFound(t *testing.T) {
+	svc := &ImageService{
+		tokenRepo: &fakeImageAccessTokenRepo{replaceErr: repository.ErrAccessTokenImageNotFound},
+	}
+
+	_, appErr := svc.IssueAccessToken(3, 999, false, 0)
+
+	if appErr == nil || appErr.HTTP != 404 {
+		t.Fatalf("IssueAccessToken missing image error = %v, want 404", appErr)
 	}
 }
 
@@ -128,6 +144,20 @@ func TestIssueAccessTokenAllowsAdmin(t *testing.T) {
 	}
 	if len(repo.created) != 1 {
 		t.Fatalf("admin should be able to issue; created %d", len(repo.created))
+	}
+	if !repo.replaceIsAdmin {
+		t.Fatal("admin authority was not passed to the atomic replacement")
+	}
+}
+
+func TestIssueAccessTokenStrictlyHandlesReplacementError(t *testing.T) {
+	repo := &fakeImageAccessTokenRepo{replaceErr: errors.New("revoke failed")}
+	svc := &ImageService{tokenRepo: repo}
+
+	result, appErr := svc.IssueAccessToken(3, 7, false, 0)
+
+	if result != nil || appErr != errcode.ErrDatabase {
+		t.Fatalf("IssueAccessToken() = %#v, %#v; want database error", result, appErr)
 	}
 }
 
@@ -206,12 +236,21 @@ type fakeImageAccessTokenRepo struct {
 	revokeCount         int64
 	revokeErr           error
 	revokeCalledImageID uint64
+	replaceActorID      uint64
+	replaceIsAdmin      bool
+	replaceErr          error
 	created             []*model.ImageAccessToken
 	incrementedID       uint64
 	incrementErr        error
 }
 
-func (f *fakeImageAccessTokenRepo) Create(t *model.ImageAccessToken) error {
+func (f *fakeImageAccessTokenRepo) ReplaceActiveForImage(actorID, imageID uint64, isAdmin bool, t *model.ImageAccessToken, revokedAt time.Time) error {
+	f.replaceActorID = actorID
+	f.replaceIsAdmin = isAdmin
+	f.revokeCalledImageID = imageID
+	if f.replaceErr != nil {
+		return f.replaceErr
+	}
 	f.created = append(f.created, t)
 	return nil
 }

@@ -46,7 +46,7 @@ func (h *AdminHandler) ListUsers(c *gin.Context) {
 }
 
 type setUserStatusReq struct {
-	Status string `json:"status" binding:"required,oneof=active suspended pending"`
+	Status string `json:"status" binding:"required,oneof=active suspended"`
 }
 
 func (h *AdminHandler) SetUserStatus(c *gin.Context) {

@@ -54,6 +54,7 @@ type authSessionRepository interface {
 	DeleteByUserID(userID uint64) error
 	UpdateHeartbeat(id uint64) error
 	CreateCSRFToken(csrf *model.CSRFToken) error
+	RefreshCSRFToken(sessionID uint64, currentHash, replacementHash string, expiresAt time.Time) (bool, error)
 	DeleteCSRFBySessionID(sessionID uint64) error
 	CheckNonce(ctx context.Context, nonceHash string, identityTokenID uint64) (bool, error)
 	CheckRateLimit(ctx context.Context, key string, limit int64, window time.Duration) (bool, error)
@@ -177,7 +178,7 @@ func (s *AuthService) Register(ctx context.Context, input *RegisterInput, remote
 		Email:        input.Email,
 		PasswordHash: string(hash),
 		Role:         "user",
-		Status:       "active",
+		Status:       model.UserStatusActive,
 	}
 	if err := s.userRepo.Create(user); err != nil {
 		return nil, errcode.ErrDatabase
@@ -200,7 +201,7 @@ func (s *AuthService) Login(ctx context.Context, input *LoginInput, ip string, u
 	if bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(input.Password)) != nil {
 		return nil, errcode.ErrInvalidCredentials
 	}
-	if user.Status == "suspended" {
+	if !model.UserStatusAllowsAuthentication(user.Status) {
 		return nil, errcode.New(4030, "账户已被禁用", 403)
 	}
 
@@ -257,6 +258,35 @@ func (s *AuthService) Logout(sessionID uint64) *errcode.AppError {
 	return nil
 }
 
+func (s *AuthService) RefreshCSRFToken(sessionID uint64, currentToken string) (string, *errcode.AppError) {
+	if sessionID == 0 {
+		return "", errcode.New(4010, "未认证", 401)
+	}
+
+	replacementPlain, replacementHash, err := token.Generate(32)
+	if err != nil {
+		return "", errcode.ErrInternal
+	}
+	currentHash := ""
+	if currentToken != "" {
+		currentHash = token.SHA256(currentToken)
+	}
+
+	reused, err := s.sessionRepo.RefreshCSRFToken(
+		sessionID,
+		currentHash,
+		replacementHash,
+		time.Now().Add(24*time.Hour),
+	)
+	if err != nil {
+		return "", errcode.ErrDatabase
+	}
+	if reused {
+		return currentToken, nil
+	}
+	return replacementPlain, nil
+}
+
 func (s *AuthService) GetMe(userID uint64) (*model.User, *errcode.AppError) {
 	user, err := s.userRepo.FindByID(userID)
 	if err != nil {
@@ -282,7 +312,7 @@ func (s *AuthService) DeviceLogin(input *DeviceLoginInput, platform string, ip s
 		})
 		return nil, errcode.ErrInvalidCredentials
 	}
-	if user.Status == "suspended" {
+	if !model.UserStatusAllowsAuthentication(user.Status) {
 		return nil, errcode.New(4030, "账户已被禁用", 403)
 	}
 
@@ -391,6 +421,11 @@ func (s *AuthService) DeviceBootstrap(identityTokenPlain string, input *DeviceBo
 			IPAddress: ip,
 		})
 		return nil, errcode.ErrSessionExpired
+	}
+
+	user, err := s.userRepo.FindByID(identity.UserID)
+	if err != nil || user == nil || !model.UserStatusAllowsAuthentication(user.Status) {
+		return nil, errcode.New(4030, "账户已被禁用", 403)
 	}
 
 	if identity.DeviceID != input.DeviceID {

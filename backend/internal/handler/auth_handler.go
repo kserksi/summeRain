@@ -68,7 +68,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 	c.SetSameSite(http.SameSiteStrictMode)
 	c.SetCookie("__Host-session_token", result.SessionToken, 2592000, "/", "", true, true)
-	c.SetCookie("__Host-csrf_token", result.CSRFToken, 2592000, "/", "", true, false)
+	setCSRFTokenCookie(c, result.CSRFToken)
 
 	response.Success(c, gin.H{
 		"user": result.User,
@@ -92,6 +92,31 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 	c.SetCookie("__Host-csrf_token", "", -1, "/", "", true, false)
 
 	response.Success(c, nil)
+}
+
+// RefreshCSRF is intentionally not protected by the ordinary CSRF validator.
+// Register it behind authMw.Required() and csrfMw.RefreshGuard().
+func (h *AuthHandler) RefreshCSRF(c *gin.Context) {
+	if middleware.GetPlatform(c) != "web" {
+		response.Error(c, errcode.ErrCSRFRefreshRejected)
+		return
+	}
+
+	currentToken, _ := c.Cookie("__Host-csrf_token")
+	csrfToken, appErr := h.authService.RefreshCSRFToken(middleware.GetSessionID(c), currentToken)
+	if appErr != nil {
+		response.Error(c, appErr)
+		return
+	}
+
+	c.Header("Cache-Control", "no-store")
+	setCSRFTokenCookie(c, csrfToken)
+	response.Success(c, nil)
+}
+
+func setCSRFTokenCookie(c *gin.Context, csrfToken string) {
+	c.SetSameSite(http.SameSiteStrictMode)
+	c.SetCookie("__Host-csrf_token", csrfToken, 2592000, "/", "", true, false)
 }
 
 func (h *AuthHandler) Me(c *gin.Context) {

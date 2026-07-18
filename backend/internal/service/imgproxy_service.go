@@ -4,6 +4,7 @@
 package service
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
@@ -11,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -24,7 +26,7 @@ type ImgproxyService struct {
 }
 
 func NewImgproxyService(cfg *config.ImgproxyConfig) *ImgproxyService {
-	return &ImgproxyService{cfg: cfg, client: &http.Client{Timeout: 10 * time.Second}}
+	return &ImgproxyService{cfg: cfg, client: &http.Client{Timeout: 90 * time.Second}}
 }
 
 func (s *ImgproxyService) signPath(path string) string {
@@ -53,7 +55,7 @@ var imgproxyGravity = map[string]bool{
 }
 
 func (s *ImgproxyService) ProcessedURL(sourcePath string, watermarkEnabled bool, watermarkText string, watermarkOpacity string, watermarkPosition string, watermarkSize string, watermarkColor string) string {
-	path := "/quality:75"
+	path := "/quality:80"
 	if watermarkEnabled && watermarkText != "" {
 		if !validOpacity(watermarkOpacity) {
 			watermarkOpacity = "0.5"
@@ -95,4 +97,51 @@ func (s *ImgproxyService) Process(url string) ([]byte, error) {
 	}
 
 	return io.ReadAll(resp.Body)
+}
+
+// ProcessToFile is the bounded streaming path used by V2 publish jobs. V1
+// keeps Process for compatibility, while large V2 payloads never accumulate in
+// a single Go byte slice.
+func (s *ImgproxyService) ProcessToFile(ctx context.Context, url, destination string, maxBytes int64) (string, int64, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return "", 0, err
+	}
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return "", 0, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", 0, fmt.Errorf("imgproxy returned status %d", resp.StatusCode)
+	}
+
+	file, err := os.OpenFile(destination, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0640)
+	if err != nil {
+		return "", 0, err
+	}
+	keep := false
+	defer func() {
+		_ = file.Close()
+		if !keep {
+			_ = os.Remove(destination)
+		}
+	}()
+
+	hasher := sha256.New()
+	written, err := io.Copy(io.MultiWriter(file, hasher), io.LimitReader(resp.Body, maxBytes+1))
+	if err != nil {
+		return "", 0, err
+	}
+	if written > maxBytes {
+		return "", 0, fmt.Errorf("imgproxy response exceeds %d bytes", maxBytes)
+	}
+	if err := file.Sync(); err != nil {
+		return "", 0, err
+	}
+	if err := file.Close(); err != nil {
+		return "", 0, err
+	}
+	keep = true
+	return hex.EncodeToString(hasher.Sum(nil)), written, nil
 }

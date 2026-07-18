@@ -23,8 +23,20 @@ const (
 )
 
 type AuthMiddleware struct {
-	sessionRepo *repository.SessionRepo
-	userRepo    *repository.UserRepo
+	sessionRepo authSessionRepository
+	userRepo    authUserRepository
+}
+
+type authSessionRepository interface {
+	FindByTokenHash(string) (*model.Session, error)
+	FindByTokenHashAndType(string, string) (*model.Session, error)
+	Delete(uint64) error
+	UpdateExpiry(uint64, time.Time) error
+	CreateAuditLog(*model.AuditLog) error
+}
+
+type authUserRepository interface {
+	FindByID(uint64) (*model.User, error)
 }
 
 func NewAuthMiddleware(sessionRepo *repository.SessionRepo, userRepo *repository.UserRepo) *AuthMiddleware {
@@ -84,9 +96,12 @@ func (m *AuthMiddleware) tryBearer(c *gin.Context) bool {
 	}
 
 	user, err := m.userRepo.FindByID(session.UserID)
-	if err != nil || user.Status == "suspended" {
+	if err != nil || user == nil || !model.UserStatusAllowsAuthentication(user.Status) {
 		response.Error(c, errcode.New(4030, "账户已被禁用", 403))
 		return true
+	}
+	if user.Status == model.UserStatusPendingDeletion {
+		c.Set("pendingDeletion", true)
 	}
 
 	declaredPlatform := c.GetHeader("X-Platform")
@@ -156,11 +171,11 @@ func (m *AuthMiddleware) tryCookie(c *gin.Context) bool {
 	}
 
 	user, err := m.userRepo.FindByID(session.UserID)
-	if err != nil || user.Status == "suspended" {
+	if err != nil || user == nil || !model.UserStatusAllowsAuthentication(user.Status) {
 		response.Error(c, errcode.New(4030, "账户已被禁用", 403))
 		return true
 	}
-	if user.Status == "pending_deletion" {
+	if user.Status == model.UserStatusPendingDeletion {
 		c.Set("pendingDeletion", true)
 	}
 
@@ -206,14 +221,14 @@ func (m *AuthMiddleware) BootstrapAuth() gin.HandlerFunc {
 			return
 		}
 
-	user, err := m.userRepo.FindByID(session.UserID)
-	if err != nil || user.Status == "suspended" {
-		response.Error(c, errcode.New(4030, "账户已被禁用", 403))
-		return
-	}
-	if user.Status == "pending_deletion" {
-		c.Set("pendingDeletion", true)
-	}
+		user, err := m.userRepo.FindByID(session.UserID)
+		if err != nil || user == nil || !model.UserStatusAllowsAuthentication(user.Status) {
+			response.Error(c, errcode.New(4030, "账户已被禁用", 403))
+			return
+		}
+		if user.Status == model.UserStatusPendingDeletion {
+			c.Set("pendingDeletion", true)
+		}
 
 		clientVersion := c.GetHeader("X-Client-Version")
 		if clientVersion != "" {
@@ -269,7 +284,7 @@ func (m *AuthMiddleware) lookupSession(tokenHash, requirePlatform string) (uint6
 		return 0, "", false
 	}
 	user, err := m.userRepo.FindByID(session.UserID)
-	if err != nil || user.Status == "suspended" {
+	if err != nil || user == nil || !model.UserStatusAllowsAuthentication(user.Status) {
 		return 0, "", false
 	}
 	return user.ID, user.Role, true

@@ -27,6 +27,9 @@ export interface Image {
   user_id: number
   image_file_id: number
   unique_link: string
+  pipeline_version?: number
+  processing_status?: string
+  asset_link?: string
   title: string
   filename: string
   description?: string

@@ -59,7 +59,7 @@
   "upload": {
     "title": "上传图片",
     "dropzone": "点击或拖拽图片到此处上传",
-    "dropzoneHint": "支持 JPG / PNG / GIF / WebP 等格式，可多选",
+    "dropzoneHint": "支持 JPG / PNG / BMP / WebP / AVIF，可多选，单张最大 15 MB",
     "visibility": "可见性",
     "visibilityPublic": "公开",
     "visibilityPrivate": "私密",
@@ -71,7 +71,9 @@
     "empty": "还没有添加任何图片",
     "status": {
       "queued": "等待中",
+      "processing": "本地处理中",
       "uploading": "上传中",
+      "serverProcessing": "发布处理中",
       "done": "完成",
       "failed": "失败"
     },
@@ -324,6 +326,7 @@
         "active": "正常",
         "banned": "封禁",
         "deleting": "注销中",
+        "deletionInProgress": "正在永久删除",
         "remainingHours": "（剩 {{hours}}h）"
       },
       "unban": "解封",
@@ -417,7 +420,7 @@
       "bucketLabel": "Bucket 名称",
       "publicUrlLabel": "公开访问域名",
       "publicUrlHint": "绑定 R2 Bucket 的自定义域名（需在 Cloudflare 后台配置）",
-      "r2MigrateHint": "启用后新上传图片仅存储在 R2。配置前上传的图片保留在本地，可点击\"迁移到 R2\"同步。",
+      "r2MigrateHint": "启用后仅影响新上传图片；历史图片保留当前存储归属，后续由独立迁移工具处理。",
       "testing": "测试中...",
       "testConnection": "测试连接",
       "affectsAll": "修改将影响全站",

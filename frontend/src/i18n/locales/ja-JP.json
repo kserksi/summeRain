@@ -59,7 +59,7 @@
   "upload": {
     "title": "画像をアップロード",
     "dropzone": "クリックまたはドラッグして画像をアップロード",
-    "dropzoneHint": "JPG / PNG / GIF / WebP などに対応、複数選択可能",
+    "dropzoneHint": "JPG / PNG / BMP / WebP / AVIF、1枚15 MBまで",
     "visibility": "公開設定",
     "visibilityPublic": "公開",
     "visibilityPrivate": "プライベート",
@@ -71,7 +71,9 @@
     "empty": "まだ画像が追加されていません",
     "status": {
       "queued": "待機中",
+      "processing": "端末で処理中",
       "uploading": "アップロード中",
+      "serverProcessing": "公開画像を処理中",
       "done": "完了",
       "failed": "失敗"
     },
@@ -324,6 +326,7 @@
         "active": "正常",
         "banned": "BAN中",
         "deleting": "削除処理中",
+        "deletionInProgress": "完全削除処理中",
         "remainingHours": "（残り {{hours}}h）"
       },
       "unban": "BAN解除",
@@ -417,7 +420,7 @@
       "bucketLabel": "Bucket 名",
       "publicUrlLabel": "公開アクセスドメイン",
       "publicUrlHint": "R2 Bucket にバインドしたカスタムドメイン（Cloudflare 管理画面で設定）",
-      "r2MigrateHint": "有効化後、新規アップロード画像はR2にのみ保存されます。設定前にアップロードした画像はローカルに残り、「R2へ移行」で同期できます。",
+      "r2MigrateHint": "有効化後は新規アップロードのみが対象です。既存画像は、独立した移行ツールが提供されるまで現在の保存先を維持します。",
       "testing": "テスト中...",
       "testConnection": "接続テスト",
       "affectsAll": "変更はサイト全体に影響します",
