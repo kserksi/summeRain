@@ -162,6 +162,8 @@ require_text "$ci" "DOCKER_METADATA_SHORT_SHA_LENGTH: 12"
 require_text "$ci" 'if [ "$version_changed" != "true" ]; then'
 require_text "$ci" 'bash scripts/validate-release-version.sh "$version"'
 require_text "$ci" 'version="$(< VERSION)"'
+require_text "$ci" 'notes_file="docs/releases/${RELEASE_TAG}.md"'
+require_text "$ci" 'args+=(--notes-file "$notes_file")'
 if grep -Fq "tr -d '[:space:]' < VERSION" "$ci"; then
   fail "release workflow must preserve malformed whitespace for strict validation"
 fi

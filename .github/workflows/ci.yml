@@ -296,7 +296,13 @@ jobs:
             exit 0
           fi
 
-          args=(release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$RELEASE_TAG" --generate-notes)
+          args=(release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$RELEASE_TAG")
+          notes_file="docs/releases/${RELEASE_TAG}.md"
+          if [ -f "$notes_file" ]; then
+            args+=(--notes-file "$notes_file")
+          else
+            args+=(--generate-notes)
+          fi
           if [ "$PRERELEASE" = "true" ]; then
             args+=(--prerelease)
           fi
