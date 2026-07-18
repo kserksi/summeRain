@@ -170,6 +170,7 @@ if grep -Eq 'mode=mutable|set-dockerhub-tag-policy\.sh[[:space:]]+mutable' "$ci"
 fi
 
 bash "${repo_root}/.github/scripts/test-reconcile-release-images.sh"
+bash "${repo_root}/.github/scripts/test-set-dockerhub-tag-policy.sh"
 
 while IFS= read -r action_ref; do
   if [[ "$action_ref" == ./* ]]; then
@@ -206,12 +207,12 @@ if bash "$version_validator" "$too_long_version"; then
 fi
 
 tag_rule="$(bash "$tag_policy" print-rule)"
-for tag in 0.0.0 v1.2.3 1.2.3-0 v1.2.3-rc.1; do
+for tag in 0.0.0 v1.2.3 1.2.3-0 v1.2.3-rc.1 1.2.3-alpha- 1.2.3--; do
   [[ "$tag" =~ $tag_rule ]] || fail "valid immutable image tag rejected: ${tag}"
 done
-for tag in 01.2.3 v1.02.3 1.2.03 1.2.3-01 v1.2.3-alpha..1 latest edge; do
+for tag in latest edge sha-abcdef123456 1.2 1; do
   if [[ "$tag" =~ $tag_rule ]]; then
-    fail "invalid immutable image tag accepted: ${tag}"
+    fail "moving image tag unexpectedly made immutable: ${tag}"
   fi
 done
 

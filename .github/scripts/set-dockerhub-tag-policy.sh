@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-tag_rule='^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(\.(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*)?$'
+# Keep the registry rule deliberately simple: Docker Hub returned HTTP 500 for
+# the nested strict-SemVer expression. validate-release-version.sh enforces
+# strict SemVer; this compatible superset covers every generated exact tag.
+tag_rule='^v?[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'
 
 if [ "${1:-}" = "print-rule" ]; then
   printf '%s\n' "$tag_rule"
@@ -19,6 +22,9 @@ auth_payload="$(jq -nc \
   --arg secret "$DOCKERHUB_TOKEN" \
   '{identifier: $identifier, secret: $secret}')"
 auth_response="$(curl --fail-with-body --silent --show-error \
+  --retry 5 \
+  --retry-delay 2 \
+  --retry-max-time 30 \
   --request POST \
   --header 'Content-Type: application/json' \
   --data "$auth_payload" \
@@ -26,6 +32,9 @@ auth_response="$(curl --fail-with-body --silent --show-error \
 hub_token="$(jq -er '.access_token' <<< "$auth_response")"
 
 curl --fail-with-body --silent --show-error \
+  --retry 5 \
+  --retry-delay 2 \
+  --retry-max-time 30 \
   --request PATCH \
   --header "Authorization: Bearer ${hub_token}" \
   --header 'Content-Type: application/json' \

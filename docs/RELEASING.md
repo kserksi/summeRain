@@ -38,7 +38,7 @@ git push origin HEAD:main
 
 `VERSION` 遵循 SemVer 2.0.0 的 core 与 pre-release 语法：主版本、次版本、修订版本以及纯数字预发布标识都不能有前导零。因此 `1.2.3`、`1.2.3-rc.1` 合法，`01.2.3`、`1.2.3-01` 非法。由于 Docker 标签无法无损表达 `+`，项目发布版本不接受 build metadata；版本最多 127 个 ASCII 字符，以便 `v<version>` 仍满足 Docker 的 128 字符标签上限。可在提交前运行 `bash scripts/validate-release-version.sh "$(< VERSION)"`。
 
-每次 `main` / `master` 镜像发布成功后，`dockerhub_metadata` job 都会再次应用精确 SemVer 标签不可变策略，并把根目录 `README.md` 同步到 `jaykserks/summerain`。`latest`、`X`、`X.Y`、`edge` 与提交标签不匹配不可变规则，因此仍可按上述策略移动。
+每次 `main` / `master` 镜像发布成功后，`dockerhub_metadata` job 都会把根目录 `README.md` 同步到 `jaykserks/summerain`；只有正式发布会在推送精确标签前及元数据阶段刷新不可变策略，并对 Docker Hub 管理 API 的临时 5xx 响应进行有限重试。`latest`、`X`、`X.Y`、`edge` 与提交标签不匹配不可变规则，因此仍可按上述策略移动。
 
 正式发布重跑会读取 Docker Hub 与 GHCR 中精确版本标签的 registry descriptor digest。只要任一 registry 已有 `vX.Y.Z` 或 `X.Y.Z`，该摘要就是恢复源：工作流会补齐两端缺失的精确标签，并把 `latest`、`X`、`X.Y` 与本次 `sha-<commit>` 重新指向同一摘要，不再构建或覆盖已有不可变标签。registry 内或跨 registry 的精确标签摘要不一致时，工作流会失败并要求人工核查，绝不会猜测哪份镜像正确。
 

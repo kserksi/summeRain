@@ -175,6 +175,7 @@ jobs:
           test -n "$DOCKERHUB_TOKEN" || { echo "::error::DOCKERHUB_TOKEN secret is not configured"; exit 1; }
 
       - name: Enforce immutable release tags
+        if: needs.release_info.outputs.is_release == 'true'
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -314,6 +315,7 @@ jobs:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
 
       - name: Enforce immutable release tags
+        if: needs.release_info.outputs.is_release == 'true'
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
