@@ -5,6 +5,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 config="${repo_root}/.gitbook.yaml"
 summary="${repo_root}/SUMMARY.md"
 incident="docs/incident-2026-07-14.md"
+public_site="https://summerain-1.gitbook.io/summerain/"
 
 fail() {
   echo "GitBook documentation verification failed: $*" >&2
@@ -21,6 +22,12 @@ expected_config=$'root: ./\n\nstructure:\n  readme: README.md\n  summary: SUMMAR
 if LC_ALL=C grep -n '[^ -~]' "${repo_root}/README.md" >/dev/null; then
   fail "README.md must remain ASCII English"
 fi
+
+grep -Fq "[Documentation](${public_site})" "${repo_root}/README.md" ||
+  fail "README.md must link its primary Documentation entry to ${public_site}"
+grep -Fq "[summerain-1.gitbook.io/summerain](${public_site})" \
+  "${repo_root}/docs/GITBOOK.md" ||
+  fail "docs/GITBOOK.md must identify ${public_site} as the canonical public site"
 
 if git -C "$repo_root" ls-files --error-unmatch "$incident" >/dev/null 2>&1; then
   fail "$incident must never be tracked"

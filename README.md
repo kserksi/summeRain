@@ -14,7 +14,7 @@
 > defaults may change frequently. Review every changelog, back up MySQL and the image
 > volume, and pin an exact release tag or OCI index digest in production.
 
-[Documentation](./SUMMARY.md) | [V2.0.0 release notes](./docs/releases/v2.0.0.md) | [Docker Hub](https://hub.docker.com/r/jaykserks/summerain) | [GHCR](https://github.com/kserksi/summeRain/pkgs/container/summerain)
+[Documentation](https://summerain-1.gitbook.io/summerain/) | [V2.0.0 release notes](./docs/releases/v2.0.0.md) | [Docker Hub](https://hub.docker.com/r/jaykserks/summerain) | [GHCR](https://github.com/kserksi/summeRain/pkgs/container/summerain)
 
 ## Overview
 
@@ -307,8 +307,10 @@ request -> middleware -> handler -> service -> repository -> MySQL / Redis
 
 ## Documentation
 
-All tracked project documentation is included in the GitBook navigation in
-[`SUMMARY.md`](./SUMMARY.md). The primary references are:
+The canonical online documentation is published at
+[summerain-1.gitbook.io/summerain](https://summerain-1.gitbook.io/summerain/).
+All tracked project documentation is included in the GitBook navigation source
+in [`SUMMARY.md`](./SUMMARY.md). The primary references are:
 
 - [Deployment and Usage](./docs/USAGE.md)
 - [API Reference](./docs/API.md)

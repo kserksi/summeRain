@@ -1,5 +1,8 @@
 # GitBook Publication
 
+The canonical public documentation site is
+[summerain-1.gitbook.io/summerain](https://summerain-1.gitbook.io/summerain/).
+
 This repository is the source of truth for the summeRain documentation. GitBook
 Git Sync reads the repository root according to [`.gitbook.yaml`](../.gitbook.yaml),
 uses the root [`README.md`](../README.md) as the documentation home page, and
