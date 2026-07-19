@@ -1,136 +1,163 @@
-# summeRain 后端 API 文档
+# summeRain Backend API Reference
 
-> 本文档基于 `backend/` 源码（Go + Gin + GORM/MySQL + Redis + imgproxy）逐文件核对生成，作为前后端对接契约。
+> This reference was verified file by file against the `backend/` source (Go +
+> Gin + GORM/MySQL + Redis + imgproxy) and serves as the integration contract
+> between the frontend and backend.
 >
-> - **Base URL**：`/api/v1`
-> - **默认端口**：`8080`（`SERVER_PORT`）
-> - **图片直链**：`GET /i/:link`（不在 `/api/v1` 下）
-> - **校对基线**：`v2.0.0`；早期 V2 版本可能频繁调整，以对应版本源码和发布说明为最终依据
+> - **Base URL:** `/api/v1`
+> - **Default port:** `8080` (`SERVER_PORT`)
+> - **Direct image route:** `GET /i/:link` (outside `/api/v1`)
+> - **Verification baseline:** `v2.0.0`. Early V2 releases may change frequently;
+>   the source and release notes for the relevant version take precedence.
 
 ---
 
-## 目录
+## Contents
 
-1. [通用约定](#1-通用约定)
-2. [鉴权与 CSRF](#2-鉴权与-csrf)
-3. [认证 Auth](#3-认证-auth)
-4. [图片 Images](#4-图片-images)
-5. [图片访问令牌 Access Tokens](#5-图片访问令牌-access-tokens)
-6. [用户 User](#6-用户-user)
-7. [通知 Notifications](#7-通知-notifications)
-8. [后台 Admin](#8-后台-admin)
-9. [公共 Public](#9-公共-public)
-10. [错误码参考](#10-错误码参考)
-11. [前端对接说明](#11-前端对接说明)
+1. [General Conventions](#1-general-conventions)
+2. [Authentication and CSRF](#2-authentication-and-csrf)
+3. [Authentication](#3-authentication)
+4. [Images](#4-images)
+5. [Image Access Tokens](#5-image-access-tokens)
+6. [User](#6-user)
+7. [Notifications](#7-notifications)
+8. [Administration](#8-administration)
+9. [Public Endpoints](#9-public-endpoints)
+10. [Error Code Reference](#10-error-code-reference)
+11. [Frontend Integration Notes](#11-frontend-integration-notes)
 
 ---
 
-## 1. 通用约定
+## 1. General Conventions
 
-### 统一响应体
+### Response Envelope
 
-所有接口返回如下结构（`response.Response`）：
+Application API endpoints return the following `response.Response` envelope:
 
 ```json
 {
   "code": 0,
   "message": "success",
   "data": { },
-  "request_id": "可选，仅错误时返回"
+  "request_id": "optional; returned only for errors"
 }
 ```
 
-| 字段 | 说明 |
+| Field | Description |
 |---|---|
-| `code` | `0` = 成功；非 `0` = 业务错误码（见[第 10 节](#10-错误码参考)） |
-| `message` | 文案 |
-| `data` | 业务数据，成功时必有；错误时省略（除非带附加数据） |
-| `request_id` | 请求追踪 ID，**仅错误响应返回** |
+| `code` | `0` indicates success; any other value is an application error code. See [Section 10](#10-error-code-reference). |
+| `message` | Human-readable message |
+| `data` | Application data; present on success and omitted on errors unless the error includes additional data |
+| `request_id` | Request trace ID, **returned only in error responses** |
 
-- HTTP 状态码与业务语义一致（200 成功 / 201 创建 / 400 参数 / 401 未认证 / 403 无权 / 404 不存在 / 413 文件过大 / 429 限流 / 500 服务端错误）。
+- HTTP status codes follow application semantics: 200 success, 201 created, 400 invalid parameters, 401 unauthenticated, 403 forbidden, 404 not found, 413 payload too large, 429 rate limited, and 500 server error.
 
-### 数据模型字段命名
+### Data Model Field Names
 
-后端 JSON 一律 **snake_case**，例如 `storage_used`、`created_at`、`view_count`、`unique_link`、`user_id`。
+Backend JSON uses **snake_case** throughout, for example `storage_used`,
+`created_at`, `view_count`, `unique_link`, and `user_id`.
 
-### 运行依赖
+### Runtime Dependencies
 
-服务启动需 MySQL + Redis 可连通（`main.go` 启动时 `Ping` 失败会 `Fatal`）。imgproxy 用于有界的 V1 动态转换，以及启用水印时的 V2 发布阶段；已有持久化变体可直接读取。基础设施可用 `docker-compose.yml` 一键启动。
+MySQL and Redis must be reachable when the service starts; `main.go` calls
+`Fatal` if either `Ping` fails. imgproxy handles bounded V1 dynamic
+transformations and the V2 publication stage when watermarking is enabled.
+Existing persisted variants can be read directly. The infrastructure can be
+started with `docker-compose.yml`.
 
-健康检查：
-- `GET /health` → `{"status":"ok"}`
-- `GET /ready` → 校验 DB + Redis 连通性，503 表示不可用
-- `GET /metrics` → Prometheus 指标
+Health endpoints:
+
+- `GET /health` -> `{"status":"ok"}`
+- `GET /ready` -> checks DB and Redis connectivity; returns 503 when unavailable
+- `GET /metrics` -> Prometheus metrics
 
 ---
 
-## 2. 鉴权与 CSRF
+## 2. Authentication and CSRF
 
-系统支持两种鉴权方式：
+The system supports two authentication methods.
 
-### 2.1 Web 端 —— Cookie 鉴权（前端对接用此方式）
+### 2.1 Web: Cookie Authentication
 
-登录成功后服务端设置两个 Cookie：
+After a successful login, the server sets two cookies:
 
-| Cookie | 用途 | HttpOnly | 有效期 |
+| Cookie | Purpose | HttpOnly | Lifetime |
 |---|---|---|---|
-| `__Host-session_token` | 会话凭证 | ✅ 是 | 30 天（2592000 秒） |
-| `__Host-csrf_token` | CSRF 防护 | ❌ 否（前端可读） | Cookie Max-Age 30 天；服务端记录 24 小时 |
+| `__Host-session_token` | Session credential | Yes | 30 days (2592000 seconds) |
+| `__Host-csrf_token` | CSRF protection | No; readable by the frontend | Cookie Max-Age of 30 days; server record of 24 hours |
 
-- Cookie 为 `__Host-` 前缀，要求 **HTTPS + 同站**，`SameSite=Strict`、`Secure`。
-- 前端只需 `credentials: 'include'` 发请求即可，浏览器自动带 cookie。
-- CSRF 服务端记录在有效写操作后续期；过期时可通过 `POST /api/v1/auth/csrf/refresh` 恢复，前端仅对显式幂等请求自动刷新并重放。
+- The cookies use the `__Host-` prefix and require **HTTPS and same-site deployment**, `SameSite=Strict`, and `Secure`.
+- The frontend only needs to send requests with `credentials: 'include'`; the browser attaches the cookies automatically.
+- The server-side CSRF record is renewed after valid write operations. When it expires, `POST /api/v1/auth/csrf/refresh` can restore it. The frontend automatically refreshes and replays only explicitly idempotent requests.
 
-### 2.2 CSRF 保护（关键）
+### 2.2 CSRF Protection
 
-**所有写操作（POST/PUT/PATCH/DELETE）在使用 Cookie 鉴权时，必须携带请求头：**
+**Every write operation (POST, PUT, PATCH, or DELETE) authenticated by cookie
+must include this request header:**
 
+```text
+X-CSRF-Token: <value of the __Host-csrf_token cookie>
 ```
-X-CSRF-Token: <__Host-csrf_token cookie 的值>
-```
 
-规则（`middleware/csrf.go`）：
-- GET / HEAD / OPTIONS 不校验。
-- 使用 `Authorization: Bearer <token>` 的请求**跳过** CSRF 校验（设备端）。
-- Cookie 鉴权下：缺头返回 `4035 CSRF token required`；值不匹配返回 `4036 Invalid CSRF token`。
+Rules from `middleware/csrf.go`:
 
-> 前端实现：从 `__Host-csrf_token` cookie 读取值，所有非 GET 请求加 `X-CSRF-Token` 头。
+- GET, HEAD, and OPTIONS requests are not checked.
+- Requests using `Authorization: Bearer <token>` **skip** CSRF validation for device clients.
+- With cookie authentication, a missing header returns `4035 CSRF token required`; a mismatched value returns `4036 Invalid CSRF token`.
 
-### 2.3 设备端 —— Bearer Token 鉴权（客户端用，Web 不涉及）
+> Frontend implementation: read the `__Host-csrf_token` cookie and add the
+> `X-CSRF-Token` header to every non-GET request.
 
-`Authorization: Bearer <session_token>`，并配合 `X-Platform: android|windows`、`X-Client-Version` 头。涉及 device-login / bootstrap / heartbeat 等流程，Web 端对接可忽略。
+### 2.3 Device Clients: Bearer Token Authentication
+
+Send `Authorization: Bearer <session_token>` together with the
+`X-Platform: android|windows` and `X-Client-Version` headers. The device-login,
+bootstrap, and heartbeat flows do not apply to Web integration.
 
 ---
 
-## 3. 认证 Auth
+## 3. Authentication
 
-### 3.1 注册
+### 3.1 Registration
 
 `POST /api/v1/auth/register`
 
-> ⚠️ 仅限 Web 端：若带 `X-Platform` 且非 `web`，返回 `4034 注册仅限 Web 端`。受登录限流中间件保护。
+> [!WARNING]
+> Web only. If `X-Platform` is present and is not `web`, the endpoint returns
+> `4034 Registration is restricted to Web clients`. Login rate limiting applies.
 
-**请求体**
+**Request body**
+
 ```json
 {
   "username": "alice",
   "email": "alice@example.com",
-  "password": "至少8位",
+  "password": "at least 8 characters",
   "captcha": {
     "provider": "recaptcha|turnstile|geetest_v4",
     "token": "recaptcha / turnstile token",
     "action": "register",
-    "lot_number": "极验 v4",
-    "captcha_output": "极验 v4",
-    "pass_token": "极验 v4",
-    "gen_time": "极验 v4"
+    "lot_number": "GeeTest v4",
+    "captcha_output": "GeeTest v4",
+    "pass_token": "GeeTest v4",
+    "gen_time": "GeeTest v4"
   }
 }
 ```
-校验：`username` 3-50，`email` 合法邮箱 ≤100，`password` 8-72。
-> `captcha` 载荷形态由当前 `captcha_provider` 决定（见 [9.1](#91-公共配置)）；`provider=none` 时可不传。recaptcha 需 `token`+`action`；turnstile 需 `token`；geetest_v4 需 `lot_number`/`captcha_output`/`pass_token`/`gen_time`。前端传错 provider 会被拒。默认 `CROSS_ORIGIN_ISOLATION=true` 时不支持 `geetest_v4`，详见 [9.1](#91-公共配置)。
 
-**成功 201**
+Validation: `username` must contain 3-50 characters, `email` must be a valid
+email address of at most 100 characters, and `password` must contain 8-72
+characters.
+
+> The `captcha` payload depends on the current `captcha_provider`; see
+> [Section 9.1](#91-public-configuration). It can be omitted when
+> `provider=none`. reCAPTCHA requires `token` and `action`; Turnstile requires
+> `token`; GeeTest v4 requires `lot_number`, `captcha_output`, `pass_token`, and
+> `gen_time`. A mismatched provider is rejected. GeeTest v4 is unavailable with
+> the default `CROSS_ORIGIN_ISOLATION=true`; see [Section 9.1](#91-public-configuration).
+
+**Success: 201**
+
 ```json
 {
   "code": 0,
@@ -138,20 +165,27 @@ X-CSRF-Token: <__Host-csrf_token cookie 的值>
   "data": { "id": 12, "username": "alice", "email": "alice@example.com" }
 }
 ```
-> 注册**不会**自动登录，需另行调用登录接口。
 
-### 3.2 登录
+> Registration **does not** create a login session. Call the login endpoint
+> separately.
+
+### 3.2 Login
 
 `POST /api/v1/auth/login`
 
-**请求体**
+**Request body**
+
 ```json
 { "username": "alice", "password": "xxxxxx",
   "captcha": { "provider": "recaptcha", "token": "...", "action": "login" } }
 ```
-> `username` 可为用户名。受 IP + 用户名限流，频繁失败返回 `2008`。`captcha` 载荷同[注册](#31-注册)。
 
-**成功 200** —— 同时 Set-Cookie（`__Host-session_token`、`__Host-csrf_token`）
+> `username` accepts a username. IP and username rate limits apply; repeated
+> failures return `2008`. The `captcha` payload matches
+> [registration](#31-registration).
+
+**Success: 200** - also sets `__Host-session_token` and `__Host-csrf_token`
+
 ```json
 {
   "code": 0,
@@ -161,13 +195,15 @@ X-CSRF-Token: <__Host-csrf_token cookie 的值>
   }
 }
 ```
-> `UserSummary` 仅含 `id`、`username`、`role`。
 
-### 3.3 当前用户
+> `UserSummary` contains only `id`, `username`, and `role`.
 
-`GET /api/v1/auth/me` 🔒
+### 3.3 Current User
 
-**成功 200**
+`GET /api/v1/auth/me` (authentication required)
+
+**Success: 200**
+
 ```json
 {
   "code": 0,
@@ -179,54 +215,66 @@ X-CSRF-Token: <__Host-csrf_token cookie 的值>
   }
 }
 ```
-> 返回完整 `model.User`（`password_hash` 已 `json:"-"` 隐藏）。
 
-### 3.4 登出
+> Returns the complete `model.User`; `password_hash` is hidden by `json:"-"`.
 
-`POST /api/v1/auth/logout` 🔒 CSRF
+### 3.4 Logout
 
-清除两个 Cookie，服务端删除会话。返回 `{"code":0,"data":null}`。
+`POST /api/v1/auth/logout` (authentication and CSRF required)
 
-### 3.5 恢复 CSRF Token
+Clears both cookies and deletes the server-side session. Returns
+`{"code":0,"data":null}`.
 
-`POST /api/v1/auth/csrf/refresh` 🔒
+### 3.5 Refresh a CSRF Token
 
-该接口用于长时间上传期间恢复过期的 CSRF token，不要求旧 `X-CSRF-Token`，但必须是同源 Web 请求；服务端校验 `Origin`，并在浏览器提供时校验 `Sec-Fetch-Site: same-origin`。成功后重新设置 `__Host-csrf_token`。只有具备幂等语义的请求可以在刷新后自动重放。
+`POST /api/v1/auth/csrf/refresh` (authentication required)
 
-### 3.6 设备端接口（Web 对接可忽略）
+This endpoint restores an expired CSRF token during a long-running upload. It
+does not require the old `X-CSRF-Token`, but it must be a same-origin Web
+request. The server validates `Origin` and, when the browser supplies it,
+`Sec-Fetch-Site: same-origin`. On success it resets `__Host-csrf_token`. Only
+requests with idempotent semantics may be replayed automatically after a
+refresh.
 
-| 方法 | 路径 | 说明 |
+### 3.6 Device Endpoints
+
+Web integrations can ignore these endpoints.
+
+| Method | Path | Description |
 |---|---|---|
-| POST | `/auth/device-login` | 设备登录，返回 identity_token |
-| POST | `/auth/device-bootstrap` | 用 identity_token 换 session_token |
-| POST | `/auth/device-heartbeat` | 心跳保活 |
-| DELETE | `/auth/device-shutdown` | 终止设备会话 |
-| GET | `/auth/device-identities` | 列出设备身份 |
-| DELETE | `/auth/device-identities/:id` | 吊销身份 CSRF |
-| GET | `/auth/sessions` | 列出活跃会话 |
-| DELETE | `/auth/sessions/:id` | 吊销会话 CSRF |
+| POST | `/auth/device-login` | Log in a device and return an identity_token |
+| POST | `/auth/device-bootstrap` | Exchange an identity_token for a session_token |
+| POST | `/auth/device-heartbeat` | Keep the session alive with a heartbeat |
+| DELETE | `/auth/device-shutdown` | Terminate a device session |
+| GET | `/auth/device-identities` | List device identities |
+| DELETE | `/auth/device-identities/:id` | Revoke an identity; CSRF required |
+| GET | `/auth/sessions` | List active sessions |
+| DELETE | `/auth/sessions/:id` | Revoke a session; CSRF required |
 
 ---
 
-## 4. 图片 Images
+## 4. Images
 
-> 所有接口 🔒 需登录。图片归属用户：`GET /images/:id` 校验 `image.user_id == 当前用户`，否则 `4031 无权访问`。
+> All endpoints in this section require authentication. Images are scoped to
+> their owner: `GET /images/:id` verifies `image.user_id == current user` and
+> otherwise returns `4031 Forbidden`.
 
-### 4.1 图片列表（游标分页）
+### 4.1 Image List with Cursor Pagination
 
 `GET /api/v1/images/`
 
-**Query 参数**
+**Query parameters**
 
-| 参数 | 默认 | 说明 |
+| Parameter | Default | Description |
 |---|---|---|
-| `cursor` | 空 | 分页游标（取上页 `next_cursor`） |
-| `limit` | `20` | 每页数量 |
-| `sort` | `-created_at` | 排序，`-` 前缀为降序 |
-| `visibility` | 空 | 过滤：`public` / `private` |
-| `search` | 空 | 关键词搜索 |
+| `cursor` | Empty | Pagination cursor from the previous response's `next_cursor` |
+| `limit` | `20` | Items per page |
+| `sort` | `-created_at` | Sort expression; a `-` prefix selects descending order |
+| `visibility` | Empty | Filter by `public` or `private` |
+| `search` | Empty | Keyword search |
 
-**成功 200**
+**Success: 200**
+
 ```json
 {
   "code": 0,
@@ -235,44 +283,53 @@ X-CSRF-Token: <__Host-csrf_token cookie 的值>
                   "title": "", "visibility": "public", "view_count": 5,
                   "width": 800, "height": 600, "file_size": 123456,
                   "created_at": "2026-06-18T10:00:00Z", "updated_at": "..." } ],
-    "next_cursor": "下一页游标，无更多则为空字符串",
+    "next_cursor": "cursor for the next page; empty when there are no more results",
     "has_more": true
   }
 }
 ```
 
-`Image` 字段（`model/image.go`）：
+`Image` fields from `model/image.go`:
 
-| 字段 | 类型 | 说明 |
+| Field | Type | Description |
 |---|---|---|
-| `id` | uint64 | 图片 ID |
-| `user_id` | uint64 | 所有者 |
-| `image_file_id` | uint64 | 底层文件记录 |
-| `unique_link` | string | 唯一短链，拼出图地址 `/i/<unique_link>` |
-| `title` / `filename` / `description` | string | 元信息 |
-| `visibility` | string | `public` / `private` |
-| `pipeline_version` | uint16 | `1` 为历史管线，`2` 为客户端预处理管线 |
-| `processing_status` | string | `pending` / `processing` / `completed` / `failed` |
-| `asset_link` | string? | V2 当前原站别名；私密图片为 `<unique_link>S` |
-| `view_count` | uint64 | 浏览量 |
-| `width` / `height` | int | 尺寸 |
-| `file_size` | int64 | 字节 |
-| `created_at` / `updated_at` | time | 时间 |
+| `id` | uint64 | Image ID |
+| `user_id` | uint64 | Owner |
+| `image_file_id` | uint64 | Underlying file record |
+| `unique_link` | string | Unique short link used to build `/i/<unique_link>` |
+| `title` / `filename` / `description` | string | Metadata |
+| `visibility` | string | `public` or `private` |
+| `pipeline_version` | uint16 | `1` for the historical pipeline; `2` for client preprocessing |
+| `processing_status` | string | `pending`, `processing`, `completed`, or `failed` |
+| `asset_link` | string? | Current V2 origin alias; private images use `<unique_link>S` |
+| `view_count` | uint64 | View count |
+| `width` / `height` | int | Dimensions |
+| `file_size` | int64 | Bytes |
+| `created_at` / `updated_at` | time | Timestamps |
 
-> ⚠️ **后端 Image 模型无 `category` / `tags` 字段**。前端若需分类标签，需后端扩展或前端本地维护。
+> [!WARNING]
+> The backend `Image` model has no `category` or `tags` fields. Categories or
+> tags require a backend extension or local frontend storage.
 
-### 4.2 V2 客户端预处理上传
+### 4.2 V2 Client-Preprocessed Uploads
 
-V2 默认启用。浏览器接受静态 JPG/JPEG、PNG、BMP、WebP、AVIF，拒绝动图，并在客户端生成四份 WebP：`master`（原分辨率，Q80）、`gallery`（400x400 cover，Q60）、`admin`（120x160 cover，Q60，在 Image Management 中以 CSS 60x80 显示，提供 2x 像素密度）和 `publish_source`（最长边 2048，Q80）。服务端流式接收、校验完整 WebP 容器，并仅在后台为最终 `publish` 产物应用水印。
+V2 is enabled by default. The browser accepts static JPG/JPEG, PNG, BMP, WebP,
+and AVIF files, rejects animation, and generates four WebP parts:
+`master` at the original resolution and Q80; `gallery` as a 400x400 cover crop
+at Q60; `admin` as a 120x160 cover crop at Q60, displayed in Image Management
+at 60x80 CSS pixels for 2x pixel density; and `publish_source` with a longest
+edge of 2048 at Q80. The server receives and validates complete WebP containers
+while streaming and applies a watermark only to the final `publish` asset in
+the background.
 
-1. `GET /api/v1/uploads/recipe` 🔒：获取当前配方、部件上限、像素上限和会话 TTL。响应中的 `v2_enabled` 是新建上传的能力开关；为 `false` 时 Web 客户端不执行本地预处理，改走 V1 multipart。
-2. `POST /api/v1/uploads/` 🔒 CSRF：创建会话。必须发送最长 64 字符的 `Idempotency-Key`；同一 key 只能重放完全相同的清单。
-3. `PUT /api/v1/uploads/:uploadID/parts/:kind` 🔒 CSRF：按响应的 `put_url` 上传 `image/webp` 原始请求体；`Content-Length`、SHA-256、尺寸和完整 RIFF 容器必须与清单一致。
-4. `POST /api/v1/uploads/:uploadID/complete` 🔒 CSRF：原子固化 `master`、`gallery`、`admin`，并创建从 `publish_source` 生成 `publish` 的持久化发布任务。
-5. `POST /api/v1/uploads/status` 🔒 CSRF：批量查询 1-100 个 `upload_ids`；缺失或无权 ID 返回统一 404，不返回部分结果。
-6. `GET /api/v1/uploads/:uploadID` 🔒：查询单个状态。`DELETE` 同一路径可取消尚未进入处理阶段的会话。
+1. `GET /api/v1/uploads/recipe` (authentication required): returns the active recipe, part limits, pixel limit, and session TTL. `v2_enabled` is the capability switch for new uploads. When it is `false`, the Web client skips local preprocessing and uses V1 multipart upload.
+2. `POST /api/v1/uploads/` (authentication and CSRF required): creates a session. Send an `Idempotency-Key` of at most 64 characters. A key can replay only an identical manifest.
+3. `PUT /api/v1/uploads/:uploadID/parts/:kind` (authentication and CSRF required): uploads the raw `image/webp` request body to the response's `put_url`. `Content-Length`, SHA-256, dimensions, and the complete RIFF container must match the manifest.
+4. `POST /api/v1/uploads/:uploadID/complete` (authentication and CSRF required): atomically promotes `master`, `gallery`, and `admin`, then creates a durable publication job that produces `publish` from `publish_source`.
+5. `POST /api/v1/uploads/status` (authentication and CSRF required): queries 1-100 `upload_ids` in a batch. Missing or unauthorized IDs produce a uniform 404 without partial results.
+6. `GET /api/v1/uploads/:uploadID` (authentication required): queries one status. `DELETE` on the same path can cancel a session that has not entered processing.
 
-**创建清单示例**
+**Manifest example**
 
 ```json
 {
@@ -290,7 +347,7 @@ V2 默认启用。浏览器接受静态 JPG/JPEG、PNG、BMP、WebP、AVIF，拒
 }
 ```
 
-**会话响应**
+**Session response**
 
 ```json
 {
@@ -303,29 +360,41 @@ V2 默认启用。浏览器接受静态 JPG/JPEG、PNG、BMP、WebP、AVIF，拒
 }
 ```
 
-状态依次为 `initiated`、`uploading`、`processing`、`completed`；`failed`、`cancelled` 为终态。发布完成后持久化的四个访问变体为 `master`、`gallery`、`admin`、`publish`，中间 `publish_source` 会被删除。`cleanup_pending` 带 `image_id`、`unique_link` 和 `asset_link` 时表示图片已经发布，仅剩中间文件清理；否则按失败终态处理。客户端轮询上限为 10 分钟。
+The normal status sequence is `initiated`, `uploading`, `processing`, then
+`completed`; `failed` and `cancelled` are terminal. After publication, the four
+persisted access variants are `master`, `gallery`, `admin`, and `publish`.
+The intermediate `publish_source` is deleted. A `cleanup_pending` response with
+`image_id`, `unique_link`, and `asset_link` means the image has been published
+and only intermediate cleanup remains; otherwise treat it as a failed terminal
+state. Client polling has a ten-minute limit.
 
-`POST /api/v1/images/` 只在 `V2_UPLOAD_ENABLED=false` 时保留 V1 multipart 兼容；V2 启用时返回 `4262`。配方端点始终可查询，关闭 V2 时返回 `"v2_enabled": false`，以便客户端在处理源图之前选择兼容管线。
+`POST /api/v1/images/` remains as the V1 multipart compatibility endpoint only
+when `V2_UPLOAD_ENABLED=false`; it returns `4262` while V2 is enabled. The recipe
+endpoint is always available and returns `"v2_enabled": false` when V2 is off,
+allowing the client to choose the compatibility pipeline before processing the
+source image.
 
-### 4.3 图片详情
+### 4.3 Image Details
 
-`GET /api/v1/images/:id` 🔒（owner 或 admin）
+`GET /api/v1/images/:id` (authentication required; owner or admin)
 
-返回单个 `Image`（同列表项结构）。**私密图**且请求者为 owner/admin 时，响应额外附带当前统一令牌：
+Returns one `Image` with the same structure as a list item. For a **private
+image**, an owner or admin response also includes the current unified token:
 
 ```json
 { "code": 0, "data": {
-    "...Image 字段...": "...",
-    "access_token": "当前统一令牌明文（无活跃令牌则不带）",
+    "...Image fields...": "...",
+    "access_token": "current plaintext unified token; omitted when none is active",
     "token_expires_at": "2026-06-18T11:00:00Z"
 }}
 ```
 
-### 4.4 删除图片
+### 4.4 Delete an Image
 
-`DELETE /api/v1/images/:id` 🔒 CSRF
+`DELETE /api/v1/images/:id` (authentication and CSRF required)
 
-**成功 200**（`DeleteResult`）
+**Success: 200** (`DeleteResult`)
+
 ```json
 { "code": 0, "data": {
     "image_id": 50,
@@ -335,72 +404,88 @@ V2 默认启用。浏览器接受静态 JPG/JPEG、PNG、BMP、WebP、AVIF，拒
 }}
 ```
 
-### 4.5 切换可见性
+### 4.5 Change Visibility
 
-`PATCH /api/v1/images/:id/visibility` 🔒 CSRF
+`PATCH /api/v1/images/:id/visibility` (authentication and CSRF required)
 
-**请求体**：`{ "visibility": "public" }`（必须 `public` 或 `private`）
+**Request body:** `{ "visibility": "public" }` (`public` or `private` only)
 
-**成功 200**（`VisibilityResult`）
+**Success: 200** (`VisibilityResult`)
+
 ```json
 { "code": 0, "data": {
     "image_id": 50,
     "visibility": "public",
     "tokens_revoked": 2,
-    "warning": "private → public 切换已撤销此图片的全部访问令牌",
-    "asset_link": "V2 当前生效的发布短链；私密状态会在文件名后附加 S"
+    "warning": "Changing from private to public revoked every access token for this image",
+    "asset_link": "current V2 publication link; private state appends S to the filename"
 }}
 ```
 
-`tokens_revoked` 仅在 `private → public` 时可能大于 0；`public → private` 会立即切换到带 `S` 的 V2 `asset_link`，旧公开地址的 CDN 缓存最长保留 10 分钟并同时进入 purge outbox。
+`tokens_revoked` can be greater than zero only for a `private` to `public`
+change. A `public` to `private` change immediately switches the V2 `asset_link`
+to the alias with an `S` suffix. The CDN may retain the old public URL for at
+most ten minutes, and a purge event is also added to the outbox.
 
 ---
 
-## 5. 私密图片访问令牌（统一令牌模型）
+## 5. Image Access Tokens
 
-每张私密图**至多一把统一令牌**；令牌字符**不可变**，吊销后须 owner/admin 再次手动申请（在此之前对第三方永久不可分享）。
+Each private image has **at most one unified token**. The token value is
+**immutable**. After revocation, an owner or admin must explicitly issue a new
+one; until then, the image cannot be shared with third parties.
 
-### 5.1 签发 / 重签令牌
+### 5.1 Issue or Reissue a Token
 
-`POST /api/v1/images/:id/tokens` 🔒 CSRF（owner / admin）
+`POST /api/v1/images/:id/tokens` (authentication and CSRF required; owner or admin)
 
-**请求体**：`{ "ttl_ms": 3600000 }`（可选；缺省取系统配置 `private_token_ttl_default_ms`，clamp 到 `[600000, 259200000]` ms，即 10 分钟 ~ 3 天）
+**Request body:** `{ "ttl_ms": 3600000 }` (optional). The default comes from
+`private_token_ttl_default_ms` and is clamped to `[600000, 259200000]` ms, or
+ten minutes through three days.
 
-> 签发会**自动作废**该图原有活跃令牌（保持"单活跃"），返回一把全新明文令牌。
+> Issuing a token **automatically invalidates** the image's existing active
+> token, preserving the one-active-token rule, and returns a new plaintext token.
 
-**成功 200**（`AccessTokenResult`）
+**Success: 200** (`AccessTokenResult`)
+
 ```json
 { "code": 0, "data": {
     "token_id": 7,
-    "token": "明文令牌",
+    "token": "plaintext token",
     "expires_at": "2026-06-18T11:00:00Z",
-    "warning": "请立即保存此令牌。令牌字符不可变，吊销后需重新申请。"
+    "warning": "Save this token now. Its value is immutable, and a revoked token must be reissued."
 }}
 ```
 
-### 5.2 撤销令牌
+### 5.2 Revoke a Token
 
-`DELETE /api/v1/images/:id/tokens` 🔒 CSRF（owner / admin）→ `{ "image_id": 7, "revoked": true }`
+`DELETE /api/v1/images/:id/tokens` (authentication and CSRF required; owner or admin) -> `{ "image_id": 7, "revoked": true }`
 
-> `revoked=false` 表示原本就没有活跃令牌。撤销后该图对第三方永久不可分享，直至重新签发。
+> `revoked=false` means no active token existed. After revocation, the image
+> cannot be shared with third parties until another token is issued.
 
-### 5.3 当前令牌（随详情返回）
+### 5.3 Current Token
 
-无单独列表接口；owner/admin 调 `GET /api/v1/images/:id` 时，私密图响应附带 `access_token` 与 `token_expires_at`（无活跃令牌则不带）。详见 [4.3](#43-图片详情)。
+There is no separate list endpoint. When an owner or admin calls
+`GET /api/v1/images/:id`, a private image response includes `access_token` and
+`token_expires_at` when a token is active. See [Section 4.3](#43-image-details).
 
-### 5.4 上传队列状态
+### 5.4 Upload Queue Status
 
-`GET /api/v1/upload/queue/:id` 🔒 —— 查询异步上传队列记录（`upload_queue`）。
+`GET /api/v1/upload/queue/:id` (authentication required) queries an asynchronous
+`upload_queue` record.
 
 ---
 
-## 6. 用户 User
+## 6. User
 
-### 6.1 个人资料
+### 6.1 Profile
 
-`GET /api/v1/user/profile` 🔒
+`GET /api/v1/user/profile` (authentication required)
 
-**成功 200**（`UserProfile`，比 `model.User` 多算 `storage_percent`）
+**Success: 200** (`UserProfile`, which adds the calculated `storage_percent` to
+`model.User`)
+
 ```json
 {
   "code": 0,
@@ -415,75 +500,98 @@ V2 默认启用。浏览器接受静态 JPG/JPEG、PNG、BMP、WebP、AVIF，拒
 }
 ```
 
-### 6.2 修改密码
+### 6.2 Change Password
 
-`PATCH /api/v1/user/password` 🔒 CSRF
+`PATCH /api/v1/user/password` (authentication and CSRF required)
 
-**请求体**：`{ "old_password": "旧密码", "new_password": "新密码至少8位" }`
+**Request body:** `{ "old_password": "old password", "new_password": "new password of at least 8 characters" }`
 
-> 改密成功后会**清除该用户所有会话**（强制重新登录），并发通知。旧密码错误返回 `2001`。
+> A successful password change **deletes every session for the user**, forcing
+> a new login, and sends a notification. An incorrect old password returns
+> `2001`.
 
 ---
 
-## 7. 通知 Notifications
+## 7. Notifications
 
-> 🔒 全部需登录；写操作需 CSRF。`model/notification.go`。
+> Every endpoint requires authentication; write operations require CSRF. See
+> `model/notification.go`.
 
-| 方法 | 路径 | 说明 |
+| Method | Path | Description |
 |---|---|---|
-| GET | `/notifications/` | 通知列表 |
-| PATCH | `/notifications/:id/read` | 标记已读 CSRF |
-| PATCH | `/notifications/batch-read` | 全部已读 CSRF |
-| DELETE | `/notifications/:id` | 删除一条 CSRF |
-| DELETE | `/notifications/clear` | 清空 CSRF |
+| GET | `/notifications/` | List notifications |
+| PATCH | `/notifications/:id/read` | Mark one as read; CSRF required |
+| PATCH | `/notifications/batch-read` | Mark all as read; CSRF required |
+| DELETE | `/notifications/:id` | Delete one; CSRF required |
+| DELETE | `/notifications/clear` | Delete all; CSRF required |
 
-`Notification` 字段：`id`、`user_id`、`type`、`title`、`message`、`is_read`、`metadata`(JSON 字符串)、`created_at`。
+`Notification` fields are `id`, `user_id`, `type`, `title`, `message`, `is_read`,
+`metadata` as a JSON string, and `created_at`.
 
 ---
 
-## 8. 后台 Admin
+## 8. Administration
 
-> 🔒 需登录 **且** `platform == "web"` **且** `role == "admin"`（三重校验，`RequireAdmin`）。整个 admin 路由组都挂了 CSRF。
+> Every endpoint requires authentication, `platform == "web"`, and
+> `role == "admin"`; `RequireAdmin` performs all three checks. CSRF middleware
+> applies to the entire admin route group.
 
-### 8.1 用户列表（分页）
+### 8.1 Paginated User List
 
 `GET /api/v1/admin/users?page=1&page_size=20`
 
-**成功 200**（`UserListResult`）
+**Success: 200** (`UserListResult`)
+
 ```json
 { "code": 0, "data": {
-    "items": [ { /* model.User 全字段 */ } ],
+    "items": [ { /* every model.User field */ } ],
     "total": 42, "page": 1
 }}
 ```
-> `page_size` 上限 100。`items` 按 `id ASC`。每项含 `storage_used`/`storage_quota`/`image_count`/`status` 等。
 
-### 8.2 修改用户状态
+> `page_size` has a maximum of 100. `items` are ordered by `id ASC`. Each item
+> includes `storage_used`, `storage_quota`, `image_count`, `status`, and the
+> other user fields.
 
-`PATCH /api/v1/admin/users/:id/status` CSRF
+### 8.2 Change User Status
 
-**请求体**：`{ "status": "active" }`
+`PATCH /api/v1/admin/users/:id/status` (CSRF required)
 
-`status` 仅允许 `active` / `suspended`。`pending_deletion` 与 `deleting` 由注销状态机维护，不能通过本接口直接写入。
+**Request body:** `{ "status": "active" }`
 
-> 设为 `suspended` 时：后续鉴权会拒绝该用户的现有会话（效果为强制下线），并发送"账号已被禁用"通知。注意：后端无 `banned`，对应概念是 `suspended`。用户不存在返回 `4041`。
+`status` accepts only `active` or `suspended`. The account-deletion state
+machine controls `pending_deletion` and `deleting`; this endpoint cannot set
+them directly.
 
-### 8.3 请求或取消用户注销
+> Setting `suspended` causes subsequent authentication to reject the user's
+> existing sessions, effectively forcing logout, and sends an "Account
+> disabled" notification. The backend has no `banned` state; the corresponding
+> concept is `suspended`. A missing user returns `4041`.
 
-| 方法 | 路径 | 请求 | 说明 |
+### 8.3 Request or Cancel User Deletion
+
+| Method | Path | Request | Description |
 |---|---|---|---|
-| POST | `/admin/users/:id/request-deletion?admin=<管理员用户名>` | `{ "username": "待注销用户名" }` | 仅允许 `active` 普通用户；进入 `pending_deletion` 并安排 24 小时后删除 |
-| POST | `/admin/users/:id/cancel-deletion` | 无 | 仅允许 `pending_deletion`；恢复为 `active` |
+| POST | `/admin/users/:id/request-deletion?admin=<administrator username>` | `{ "username": "username to delete" }` | Accepts only an `active` non-admin user; enters `pending_deletion` and schedules deletion after 24 hours |
+| POST | `/admin/users/:id/cancel-deletion` | None | Accepts only `pending_deletion`; restores `active` |
 
-请求注销会清除目标用户的全部会话。锁定期内用户可重新登录并批量下载数据，但上传、删除图片及修改图片会返回 `4038`。到期 Worker 抢占任务后状态进入内部阶段 `deleting`，此时鉴权与业务访问均 fail-closed，且不能再取消；物理文件删除通过持久化 outbox 重试。
+Requesting deletion clears every session for the target user. During the lock
+period the user can log in again and batch-download their data, but uploads,
+image deletion, and image modification return `4038`. When the deadline worker
+claims the task, the account enters the internal `deleting` phase. Authentication
+and business access then fail closed, cancellation is no longer possible, and
+physical file deletion retries through the durable outbox.
 
-重复请求、不允许的源状态或并发状态变化返回 `4095`；用户名不匹配返回 `3000`；管理员账户不能注销。两个接口成功均返回 `{"code":0,"data":null}`。
+Repeated requests, disallowed source states, or concurrent state changes return
+`4095`; a username mismatch returns `3000`; administrator accounts cannot be
+deleted. Both endpoints return `{"code":0,"data":null}` on success.
 
-### 8.4 系统统计
+### 8.4 System Statistics
 
 `GET /api/v1/admin/stats`
 
-**成功 200**（`SystemStats`）
+**Success: 200** (`SystemStats`)
+
 ```json
 { "code": 0, "data": {
     "total_users": 42,
@@ -494,20 +602,20 @@ V2 默认启用。浏览器接受静态 JPG/JPEG、PNG、BMP、WebP、AVIF，拒
 }}
 ```
 
-### 8.5 系统配置
+### 8.5 System Configuration
 
-| 方法 | 路径 | 说明 |
+| Method | Path | Description |
 |---|---|---|
-| GET | `/admin/configs` | 取全部配置项（`config_key`/`config_value`/...） |
-| PATCH | `/admin/configs` | 批量更新，请求体 `{ "items": [ { "key": "...", "value": "..." } ] }` |
+| GET | `/admin/configs` | Return all configuration entries (`config_key`, `config_value`, and related fields) |
+| PATCH | `/admin/configs` | Update a batch with `{ "items": [ { "key": "...", "value": "..." } ] }` |
 
 ---
 
-## 9. 公共 Public
+## 9. Public Endpoints
 
-### 9.1 公共配置
+### 9.1 Public Configuration
 
-`GET /api/v1/public/config` （无需登录）
+`GET /api/v1/public/config` (no authentication required)
 
 ```json
 { "code": 0, "data": {
@@ -516,33 +624,40 @@ V2 默认启用。浏览器接受静态 JPG/JPEG、PNG、BMP、WebP、AVIF，拒
     "site_language": "en-US"
 }}
 ```
-| 字段 | 说明 |
+
+| Field | Description |
 |---|---|
-| `captcha_provider` | `none` / `recaptcha` / `turnstile` / `geetest_v4`；可被 admin 经 `/admin/configs`（键 `captcha_provider`）覆盖 |
-| `captcha_site_key` | 当前 provider 的客户端公钥（recaptcha/turnstile→site key；geetest→captcha_id；`none`→空） |
-| `site_language` | 站点语言，如 `en-US` / `zh-CN`；前端启动时据此切换语言 |
+| `captcha_provider` | `none`, `recaptcha`, `turnstile`, or `geetest_v4`; an admin can override it through `/admin/configs` with key `captcha_provider` |
+| `captcha_site_key` | Client public key for the active provider: site key for reCAPTCHA/Turnstile, `captcha_id` for GeeTest, or empty for `none` |
+| `site_language` | Site language such as `en-US` or `zh-CN`; the frontend selects its language at startup |
 
-默认 `CROSS_ORIGIN_ISOLATION=true` 会下发 COOP/COEP，以启用 wasm-vips 的 50MP 大图处理路径。GeeTest v4 的外部脚本资源不满足该隔离策略，因此服务端在隔离开启时拒绝把 `captcha_provider` 配置为 `geetest_v4`；请使用 `none`、`recaptcha` 或 `turnstile`。显式关闭跨源隔离虽可使用 GeeTest，但会失去 V2 大图所需的隔离执行路径，不建议用于 50MP 上传部署。
+The default `CROSS_ORIGIN_ISOLATION=true` sends COOP/COEP headers to enable the
+wasm-vips 50 MP processing path. GeeTest v4 external script resources do not
+satisfy this isolation policy, so the server rejects `captcha_provider=geetest_v4`
+while isolation is enabled. Use `none`, `recaptcha`, or `turnstile`. Explicitly
+disabling cross-origin isolation enables GeeTest but removes the isolated
+execution path required for V2 large-image processing and is not recommended
+for 50 MP upload deployments.
 
-### 9.2 图片直链服务
+### 9.2 Direct Image Service
 
 `GET /i/:link`
 
-- V2 发布图：`GET /i/<asset_link>.webp`。
-- V2 固定变体：`GET /i/<asset_link>/master.webp`、`gallery.webp`、`admin.webp`、`publish.webp`；查询参数不会触发新的尺寸生成。`master` 与 `admin` 只允许 owner/admin 访问。
-- V1 `link` 仍可写成 `<unique_link>` 或 `<unique_link>.<ext>`（ext ∈ webp/avif/jpg/jpeg/png/gif）。无扩展名返回原图；已有的无尺寸 WebP 与后台 AVIF 可直接读取，其余格式或 `w`/`h`（≤4096）/`q` 请求使用有界的 imgproxy 兼容路径。任意尺寸等动态结果只在请求期间使用临时文件，同参数并发请求会合并，最后一个响应释放后删除。
-- **私密图片**：
-  - owner/admin（同源会话，`__Host-session_token` / `Bearer`）→ **直接放行**，无需令牌。
-  - 第三方：query `?token=xxx`、头 `X-Image-Token` 或 `Authorization: Bearer xxx`。
-    - 有效 → 放行（`no-store`）
-    - 未带 / 错令牌 / 已过期 → **`4037`(403)**
-    - 已吊销 → **`4042`(404)**
-- 每次访问异步累加浏览量（Redis `views:<id>`，由 `view_flusher` worker 落库）。
-- 缓存头：私密图 `no-store`；公开原站响应最长缓存 10 分钟，变更可见性时同时写入持久化 CDN purge outbox。
+- V2 published image: `GET /i/<asset_link>.webp`.
+- V2 fixed variants: `GET /i/<asset_link>/master.webp`, `gallery.webp`, `admin.webp`, and `publish.webp`. Query parameters do not generate additional sizes. Only owners and admins can access `master` and `admin`.
+- A V1 `link` can still be `<unique_link>` or `<unique_link>.<ext>`, where `ext` is webp, avif, jpg, jpeg, png, or gif. A link without an extension returns the original. Existing no-size WebP and background AVIF variants are read directly; other formats or requests with `w`/`h` up to 4096 and `q` use the bounded imgproxy compatibility path. Arbitrary-size dynamic results use temporary files only while the request is active. Concurrent identical requests are coalesced, and the file is deleted after the final response releases it.
+- **Private images:**
+  - An owner or admin with a same-origin session through `__Host-session_token` or `Bearer` is admitted directly without an image token.
+  - A third party can use query parameter `?token=xxx`, header `X-Image-Token`, or `Authorization: Bearer xxx`.
+    - A valid token is admitted with `no-store`.
+    - A missing, incorrect, or expired token returns **`4037` (403)**.
+    - A revoked token returns **`4042` (404)**.
+- Every access asynchronously increments the Redis `views:<id>` counter, which the `view_flusher` worker persists.
+- Cache headers: private images use `no-store`; public origin responses are cached for at most ten minutes. A visibility change also writes a durable CDN purge event to the outbox.
 
-### 9.3 公开统计
+### 9.3 Public Statistics
 
-`GET /api/v1/public/stats` （无需登录）
+`GET /api/v1/public/stats` (no authentication required)
 
 ```json
 { "code": 0, "data": {
@@ -553,100 +668,105 @@ V2 默认启用。浏览器接受静态 JPG/JPEG、PNG、BMP、WebP、AVIF，拒
 }}
 ```
 
-| 字段 | 说明 |
+| Field | Description |
 |---|---|
-| `images` | 托管图片总数 |
-| `users` | 活跃注册用户数（`status=active`） |
-| `views` | 累计浏览量（`SUM(view_count)`，约 60s 延迟落库） |
-| `storage_used` | 全站已用存储（字节） |
+| `images` | Total hosted images |
+| `users` | Active registered users with `status=active` |
+| `views` | Cumulative views from `SUM(view_count)`, persisted with approximately 60 seconds of delay |
+| `storage_used` | Site-wide storage usage in bytes |
 
 ---
 
-## 10. 错误码参考
+## 10. Error Code Reference
 
-| code | HTTP | 含义 |
+| code | HTTP | Meaning |
 |---|---|---|
-| 1000 | 500 | 内部服务器错误 |
-| 1001 | 500 | 数据库错误 |
-| 1002 | 500 | 缓存服务错误 |
-| 1003 | 500 | 图片处理服务错误（imgproxy） |
-| 1004 | 503 | reCAPTCHA 服务不可用 |
-| 2001 | 401 | 用户名或密码错误 |
-| 2008 | 429 | 登录尝试过于频繁 |
-| 2009 | 403 | reCAPTCHA 校验失败 |
-| 2090 | 429 | Bootstrap 请求过于频繁 |
-| 3000 | 400 | 参数校验错误 |
-| 3001 | 400 | 缺少文件 / 无效 ID |
-| 3002 | 413 | 文件大小超出限制 |
-| 3003 | 415 | 不支持的文件类型 |
-| 3004 | 400 | 文件数量超出限制 |
-| 3005 | 400/404 | V2 上传清单、上传 ID 或部件参数无效 |
-| 3006 | 400 | 上传流读取失败或 R2 URL 配置无效 |
-| 3007 | 422 | 上传部件 SHA-256 校验失败 |
-| 3008 | 422 | 上传部件图片尺寸与清单不一致 |
-| 3010 | 400 | 图片尺寸超出限制 |
-| 4010 | 401 | 未认证 / 无效令牌 |
-| 4011 | 401 | 会话已过期 |
-| 4012 | 403 | 存储配额已满 |
-| 4029 | 429 | 上传过于频繁 |
-| 4030 | 403 | 权限不足 / 账户已被禁用 |
-| 4031 | 403 | 设备数量上限 / 无权访问此图片 |
-| 4032 | 403 | 管理接口仅限 Web 端 |
-| 4033 | 403 | identity_token 不可用于 API |
-| 4034 | 403 | 注册仅限 Web 端 |
+| 1000 | 500 | Internal server error |
+| 1001 | 500 | Database error |
+| 1002 | 500 | Cache service error |
+| 1003 | 500 | Image processing service error (imgproxy) |
+| 1004 | 503 | reCAPTCHA service unavailable |
+| 2001 | 401 | Incorrect username or password |
+| 2008 | 429 | Too many login attempts |
+| 2009 | 403 | reCAPTCHA validation failed |
+| 2090 | 429 | Too many bootstrap requests |
+| 3000 | 400 | Parameter validation error |
+| 3001 | 400 | Missing file or invalid ID |
+| 3002 | 413 | File exceeds the size limit |
+| 3003 | 415 | Unsupported file type |
+| 3004 | 400 | Too many files |
+| 3005 | 400/404 | Invalid V2 upload manifest, upload ID, or part parameter |
+| 3006 | 400 | Upload stream read failure or invalid R2 URL configuration |
+| 3007 | 422 | Upload part SHA-256 verification failed |
+| 3008 | 422 | Upload part dimensions do not match the manifest |
+| 3010 | 400 | Image dimensions exceed the limit |
+| 4010 | 401 | Unauthenticated or invalid token |
+| 4011 | 401 | Session expired |
+| 4012 | 403 | Storage quota exhausted |
+| 4029 | 429 | Upload rate limit exceeded |
+| 4030 | 403 | Insufficient permission or suspended account |
+| 4031 | 403 | Device limit reached or image access forbidden |
+| 4032 | 403 | Admin endpoint restricted to Web clients |
+| 4033 | 403 | identity_token cannot be used for API access |
+| 4034 | 403 | Registration restricted to Web clients |
 | 4035 | 403 | CSRF token required |
 | 4036 | 403 | Invalid CSRF token |
-| 4037 | 403 | 私密图片令牌无效或已过期 |
-| 4038 | 403 | 账号处于注销锁定期，禁止写入图片 |
-| 4039 | 403 | 注销锁定期批量下载次数已用尽 |
-| 4040 | 404 | 通知不存在 |
-| 4041 | 404 | 用户/文件不存在 |
-| 4042 | 404 | 私密图片令牌已吊销 |
-| 4043 | 404 | 上传会话不存在、已过期或无权访问 |
-| 4090 | 409 | Nonce 重放 |
-| 4091 | 409 | 上传会话状态冲突 |
-| 4092 | 409 | 上传部件尚未全部完成 |
-| 4093 | 409 | 图片仍在处理或清理中 |
-| 4094 | 409 | R2 存储目标仍被历史文件或待清理对象引用，禁止切换 |
-| 4095 | 409 | 用户当前状态不允许请求的状态迁移 |
-| 4261 | 426 | 客户端图片配方版本不受支持 |
-| 4262 | 426 | 当前部署要求 V2 客户端预处理上传 |
-| 4260 | 426 | 客户端版本过低 |
-| 4291 | 429 | 上传并发或活跃会话已满 |
-| 5030 | 503 | 服务器存储压力过高 |
-| 5031 | 503 | V2 上传暂未启用 |
+| 4037 | 403 | Private-image token invalid or expired |
+| 4038 | 403 | Image writes forbidden during the account-deletion lock period |
+| 4039 | 403 | Batch-download allowance exhausted during the deletion lock period |
+| 4040 | 404 | Notification not found |
+| 4041 | 404 | User or file not found |
+| 4042 | 404 | Private-image token revoked |
+| 4043 | 404 | Upload session missing, expired, or inaccessible |
+| 4090 | 409 | Nonce replay |
+| 4091 | 409 | Upload session state conflict |
+| 4092 | 409 | Upload parts incomplete |
+| 4093 | 409 | Image still processing or cleaning up |
+| 4094 | 409 | R2 storage target still referenced by historical files or pending cleanup and cannot be changed |
+| 4095 | 409 | Current user state does not allow the requested transition |
+| 4261 | 426 | Client image recipe version unsupported |
+| 4262 | 426 | Deployment requires V2 client-preprocessed upload |
+| 4260 | 426 | Client version too old |
+| 4291 | 429 | Upload concurrency or active-session capacity exhausted |
+| 5030 | 503 | Server storage pressure too high |
+| 5031 | 503 | V2 upload temporarily disabled |
 
 ---
 
-## 11. 前端对接说明
+## 11. Frontend Integration Notes
 
-### 11.1 请求封装要点
+### 11.1 Request Wrapper Requirements
 
-1. **凭据**：所有请求带 `credentials: 'include'`（cookie 自动随请求）。
-2. **CSRF**：从 `__Host-csrf_token` cookie 读值，所有非 GET 请求加头 `X-CSRF-Token`。
-3. **响应判断**：以 `body.code === 0` 判定成功，否则取 `message` 提示；401 跳登录。
-4. **`__Host-` cookie 限制**：必须 HTTPS + 同源部署，本地开发（http://localhost）下浏览器可能拒绝设置，需用代理同源或自签证书。
+1. **Credentials:** set `credentials: 'include'` on every request so the browser sends cookies automatically.
+2. **CSRF:** read the `__Host-csrf_token` cookie and add `X-CSRF-Token` to every non-GET request.
+3. **Response handling:** treat `body.code === 0` as success; otherwise display `message`. Redirect 401 responses to login.
+4. **`__Host-` cookie constraints:** HTTPS and same-origin deployment are mandatory. A browser may reject these cookies on local `http://localhost`; use a same-origin proxy or a self-signed certificate.
 
-### 11.2 与现有前端 mock 的字段映射
+### 11.2 Existing Frontend Mock Field Mapping
 
-| 前端 mock 字段 | 后端字段 | 备注 |
+| Frontend mock field | Backend field | Notes |
 |---|---|---|
 | `userId` | `user_id` | snake_case |
-| `uploadedAt` | `created_at` | ISO8601 字符串 |
+| `uploadedAt` | `created_at` | ISO 8601 string |
 | `views` | `view_count` | |
 | `size` | `file_size` | |
-| `isPublic: boolean` | `visibility: "public"\|"private"` | 布尔 → 字符串 |
-| `id` (string) | `id` (uint64) | 数字 |
-| `url`/`thumb` | `/i/<unique_link>` | 需前端拼接直链 |
-| 状态 `banned` | `suspended` | 后端无 banned |
+| `isPublic: boolean` | `visibility: "public"|"private"` | Boolean to string |
+| `id` (string) | `id` (uint64) | Numeric |
+| `url`/`thumb` | `/i/<unique_link>` | Frontend must construct the direct URL |
+| `banned` status | `suspended` | The backend has no `banned` state |
 
-### 11.3 后端未覆盖的前端功能（需协调）
+### 11.3 Frontend Features Not Covered by the Backend
 
-- **公开图库 / 发现页**：后端无公开图片列表接口，`images` 列表仅按用户返回。需新增 `GET /images/public` 或前端移除该功能。
-- **分类 / 标签**：`Image` 模型无 `category`/`tags` 字段。
+- **Public gallery or discovery page:** the backend has no public image-list endpoint; `images` returns only the current user's images. Add `GET /images/public` or remove the feature from the frontend.
+- **Categories or tags:** the `Image` model has no `category` or `tags` fields.
 
-现有前端已对接管理员图片列表/删除、用户注销请求/取消，以及 `pending_deletion` / `deleting` 状态展示；这些不再属于能力缺口。
+The current frontend already integrates administrator image listing and
+deletion, user deletion requests and cancellation, and display of
+`pending_deletion` and `deleting`; these are no longer capability gaps.
 
 ---
 
-*文档生成依据：`cmd/server/main.go`、`internal/handler/*`、`internal/service/*`、`internal/model/*`、`internal/middleware/{auth,csrf}.go`、`internal/pkg/{response,errcode}/*`。*
+*Sources used to generate this document: `cmd/server/main.go`,
+`internal/handler/*`, `internal/service/*`, `internal/model/*`,
+`internal/middleware/{auth,csrf}.go`, and
+`internal/pkg/{response,errcode}/*`.*

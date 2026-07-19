@@ -1,4 +1,4 @@
-# 后端调整方案（仅方案，不含实现）
+# Backend Adjustment Plan (Design Only, No Implementation)
 
 > [!WARNING]
 > **Archived design record.** This document captures a pre-V2 implementation
@@ -6,113 +6,211 @@
 > implemented or superseded. Use the current source, API reference, and release
 > notes as the authoritative behavior.
 
-- **日期**：2026-06-18
-- **状态**：方案，待实现
-- **范围**：为支持前端设计（见 `docs/design/frontend-architecture/`）的两项既定规则，列出 Go 后端（`backend/`）需配套调整的 delta。
-- **原则**：本文仅描述"改什么、在哪、为什么"，不写实现代码。
+- **Date:** June 18, 2026
+- **Status:** Design; pending implementation at the time of writing
+- **Scope:** List the changes required in the Go backend (`backend/`) to support
+  two established frontend rules documented in
+  `docs/design/frontend-architecture/`.
+- **Principle:** This document describes what to change, where to change it, and
+  why. It does not contain implementation code.
 
 ---
 
-## 一、私密图片：统一令牌模型
+## 1. Private Images: Unified Token Model
 
-### 现状（与目标不符）
-- `internal/service/image_service.go`：`GenerateAccessToken/ListTokens/RevokeAccessToken` 为**多令牌 + 过期**模型
-- `internal/handler/public_handler.go::ServeImage`：私密图缺令牌返 `4010`(401)，**无 owner/admin 会话旁路**；吊销令牌访问无 `404` 语义
-- `internal/handler/image_handler.go::Get`：`Image` 响应不含当前令牌
+### Previous State (Did Not Meet the Target)
 
-### 目标规则（前端已据此设计）
-- 每张私密图**一把统一令牌**；令牌**字符不可变**
-- **TTL**：默认 1h（3,600,000 ms），后端**毫秒**校验；owner/admin 生成时可选，范围 **600,000 ms ～ 259,200,000 ms**
-- **吊销**：仅 owner/admin；**吊销后不自动重签**，须 owner/admin 再次手动申请；在此之前对第三方永久不可分享
-- **owner/admin（同源会话）直接查看**：自动授权，`/i/` 无需令牌；API 返回当前统一令牌供展示
-- 第三方：未带/错令牌/过期 → **403**；已吊销令牌 → **404**
+- `internal/service/image_service.go`:
+  `GenerateAccessToken/ListTokens/RevokeAccessToken` implemented a
+  **multiple-token model with expiration**.
+- `internal/handler/public_handler.go::ServeImage`: a private image request
+  without a token returned `4010` (401), with **no owner/admin session bypass**;
+  access with a revoked token had no `404` semantics.
+- `internal/handler/image_handler.go::Get`: the `Image` response did not include
+  the current token.
 
-### 调整项
+### Target Rules Used by the Frontend Design
 
-**1) 模型 / 仓储**（`model/image_access_token.go`、`repository/image_access_token_repo.go`）
-- 约束"每图至多一条有效令牌"（唯一活跃：未吊销且未过期）；令牌字段（字符串、`expires_at`、`revoked_at`、`status`）
-- 新增/调整方法：`FindActiveByImageID(imageID)`、`Issue(imageID, ttlMs)`（若存在活跃令牌则先失效再签发，保持"统一=单活跃"）、`Revoke(imageID)`、`Validate(imageID, token)` 返回枚举（`valid` / `expired` / `revoked` / `not_found`）
+- Each private image has **one unified token**, and the token's characters are
+  **immutable**.
+- **TTL:** 1h (3,600,000 ms) by default, validated by the backend in
+  **milliseconds**. The owner/admin may choose a value when issuing it, within
+  **600,000 ms to 259,200,000 ms**.
+- **Revocation:** only the owner/admin may revoke a token. Revocation must **not
+  automatically reissue** a token; the owner/admin must explicitly request a new
+  one. Until then, the image remains permanently unshareable with third parties.
+- **Direct owner/admin access through a same-origin session:** authorize
+  automatically, so `/i/` does not require a token. The API returns the current
+  unified token for display.
+- Third parties: missing, incorrect, or expired token -> **403**; revoked token
+  -> **404**.
 
-**2) 服务层**（`service/image_service.go`）
-- 用 `IssueAccessToken(userID, imageID, ttlMs)`（owner/admin 校验）+ `RevokeAccessToken(userID, imageID)` 取代多令牌套件
-- TTL 入参由 handler 传入，服务层 clamp 到 `[600000, 259200000]`，缺省 `3600000`
-- 移除任何"自动重签"路径；签发为显式动作
+### Required Changes
 
-**3) 图片直链**（`handler/public_handler.go::ServeImage`）
-- 私密图分支先做**可选会话解析**（读 `__Host-session_token` / Bearer，复用 `middleware` 的查询逻辑，但不强制）：若为 owner 或 admin → 直接放行
-- 否则进入令牌校验：`Validate` 结果分流 → `valid` 放行（`no-store`）；`expired`/`not_found` → **403**；`revoked` → **404**
-- 缺令牌也归 **403**（区别于现 `4010`）
+**1) Model / repository** (`model/image_access_token.go`,
+`repository/image_access_token_repo.go`)
 
-**4) 图片详情**（`handler/image_handler.go::Get`）
-- 当请求者为 owner/admin 时，响应附带 `access_token`（当前统一令牌明文，仅此接口返回）与 `token_expires_at`
+- Enforce at most one active token per image. An active token is neither revoked
+  nor expired. Token fields include the string, `expires_at`, `revoked_at`, and
+  `status`.
+- Add or adjust `FindActiveByImageID(imageID)`, `Issue(imageID, ttlMs)` (invalidate
+  an existing active token before issuing another to preserve one unified active
+  token), `Revoke(imageID)`, and `Validate(imageID, token)`. `Validate` returns
+  `valid`, `expired`, `revoked`, or `not_found`.
 
-**5) 错误码**（`internal/pkg/errcode/errcode.go`）
-- 新增 `4037 私密图片令牌无效或已过期`(403)
-- 新增 `4042 私密图片令牌已吊销`(404)
-- （原 `4010` 在 `/i/` 缺令牌场景被 `4037` 取代）
+**2) Service layer** (`service/image_service.go`)
 
-**6) 配置**（`model/system_config.go` + `/admin/configs`）
-- 新增 `private_token_ttl_default_ms`（默认 3600000，admin 可调，服务层再 clamp 到固定上下限）
-- 上下限 `600000`/`259200000` 为**代码常量**（不放配置，避免被改破规则）
+- Replace the multiple-token suite with
+  `IssueAccessToken(userID, imageID, ttlMs)` (including owner/admin validation)
+  and `RevokeAccessToken(userID, imageID)`.
+- The handler supplies TTL. The service clamps it to `[600000, 259200000]`, with
+  `3600000` as the default.
+- Remove every automatic reissue path. Issuance must be an explicit action.
 
-**7) `docs/API.md` 同步**：`/i/:link` 私密访问语义（owner/admin 旁路、403/404）、`POST /images/:id/tokens` 入参改 `ttl_ms`、`GET /images/:id` 返回 `access_token` 字段。
+**3) Direct image URL** (`handler/public_handler.go::ServeImage`)
+
+- In the private-image branch, first perform **optional session parsing**. Read
+  `__Host-session_token` / Bearer by reusing the query logic from `middleware`,
+  but do not require authentication. Allow access immediately when the session
+  belongs to the owner or an admin.
+- Otherwise validate the token and branch on the `Validate` result: allow
+  `valid` with `no-store`; return **403** for `expired` / `not_found`; return
+  **404** for `revoked`.
+- A missing token also maps to **403**, replacing the previous `4010` behavior.
+
+**4) Image details** (`handler/image_handler.go::Get`)
+
+- When the requester is the owner/admin, add `access_token` (the plaintext
+  current unified token, returned only by this endpoint) and `token_expires_at`
+  to the response.
+
+**5) Error codes** (`internal/pkg/errcode/errcode.go`)
+
+- Add `4037 Private image token is invalid or expired` (403).
+- Add `4042 Private image token has been revoked` (404).
+- The `/i/` missing-token case uses `4037` instead of the previous `4010`.
+
+**6) Configuration** (`model/system_config.go` + `/admin/configs`)
+
+- Add `private_token_ttl_default_ms`, defaulting to `3600000`. An admin may
+  configure it, and the service clamps it again to the fixed bounds.
+- Keep the `600000` / `259200000` bounds as **code constants**, not configuration,
+  so configuration changes cannot violate the rule.
+
+**7) Update `docs/API.md`:** document private access semantics for `/i/:link`
+(owner/admin bypass and 403/404), change the `POST /images/:id/tokens` input to
+`ttl_ms`, and add `access_token` to the `GET /images/:id` response.
 
 ---
 
-## 二、人机验证：可插拔三 Provider
+## 2. CAPTCHA: Three Pluggable Providers
 
-### 现状（与目标不符）
-- 仅 `internal/service/recaptcha.go`（reCAPTCHA v3），`auth_service` 经 `recaptchaVerifier` 接口注入
-- `config.go::RecaptchaConfig` 仅 reCAPTCHA 字段；`public_config_service.go` 仅返回 `recaptcha_enabled`/`recaptcha_site_key`
-- `LoginInput`/`RegisterInput` 仅 `recaptcha_token`/`recaptcha_action`
+### Previous State (Did Not Meet the Target)
 
-### 目标规则
-- `captcha_provider` ∈ `none`(默认) | `recaptcha` | `turnstile` | `geetest_v4`，管理员经 `/admin/configs` 配置
-- `none` 时**不校验、前端不加载脚本**
-- 登录/注册接收**该 provider 对应载荷**；后端按 provider 调对应校验
+- Only `internal/service/recaptcha.go` (reCAPTCHA v3) existed, injected into
+  `auth_service` through the `recaptchaVerifier` interface.
+- `config.go::RecaptchaConfig` contained only reCAPTCHA fields;
+  `public_config_service.go` returned only `recaptcha_enabled` /
+  `recaptcha_site_key`.
+- `LoginInput` / `RegisterInput` contained only `recaptcha_token` /
+  `recaptcha_action`.
 
-### 调整项
+### Target Rules
 
-**1) 配置**（`config.go`）
-- `RecaptchaConfig` → `CaptchaConfig`：增 `Provider string`、Turnstile（`SiteKey`/`Secret`）、GeeTest（`CaptchaID`/`CaptchaKey`）；保留 reCAPTCHA 字段
-- 默认 `Provider=none`
-- 环境变量：`CAPTCHA_PROVIDER`、`TURNSTILE_SITE_KEY`/`TURNSTILE_SECRET`、`GEETEST_CAPTCHA_ID`/`GEETEST_CAPTCHA_KEY`（兼容旧 `RECAPTCHA_*`）
+- `captcha_provider` is one of `none` (default), `recaptcha`, `turnstile`, or
+  `geetest_v4`, configured by an administrator through `/admin/configs`.
+- With `none`, the backend performs **no validation** and the frontend loads no
+  script.
+- Login and registration accept the payload for the selected provider, and the
+  backend calls that provider's validator.
 
-**2) 校验抽象与实现**（`service/`）
-- 抽出 `CaptchaVerifier` 接口：`Verify(ctx, payload, remoteIP, requestHost) *errcode.AppError`
-- `recaptcha.go` 实现该接口（保持现状逻辑）
-- 新增 `turnstile.go`：POST `https://challenges.cloudflare.com/turnstile/v0/siteverify`，表单 `secret`+`response`(+`remoteip`)，判 `success`；超时/失败按 `FailClosed`
-- 新增 `geetest_v4.go`：用 `lot_number`+`captcha_output`+`pass_token`+`gen_time` + `captcha_id`，`captcha_key` 做 HMAC-SHA256 签名，POST `https://gcaptcha4.geetest.com/verify`，判 `result=="success"`
-- 工厂 `NewCaptchaVerifier(cfg)` 按 `Provider` 返回对应实现或 nil（none）
+### Required Changes
 
-**3) Auth 服务 / Handler**（`service/auth_service.go`、`handler/auth_handler.go`）
-- 注入 `CaptchaVerifier` 替代 `recaptchaVerifier`
-- `LoginInput`/`RegisterInput` 扩展为通用 captcha 载荷：`captcha_provider` + `{recaptcha_token, recaptcha_action}` 或 `{turnstile_token}` 或 `{lot_number, captcha_output, pass_token, gen_time}`（建议用嵌套 `captcha` 对象，按 provider 取值）
-- `Login`/`Register` 按**配置的 provider** 校验对应字段（provider=none 跳过）；前端传错 provider 须拒
+**1) Configuration** (`config.go`)
 
-**4) 公共配置**（`service/public_config_service.go`、`handler/public_handler.go::GetConfig`）
-- 返回 `captcha_provider` + 该 provider 客户端公钥（recaptcha/turnstile→`site_key`；geetest→`captcha_id`）；provider=none 时公钥为空
+- Replace `RecaptchaConfig` with `CaptchaConfig`. Add `Provider string`,
+  Turnstile (`SiteKey` / `Secret`), and GeeTest (`CaptchaID` / `CaptchaKey`),
+  while retaining the reCAPTCHA fields.
+- Default to `Provider=none`.
+- Add environment variables `CAPTCHA_PROVIDER`,
+  `TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET`, and
+  `GEETEST_CAPTCHA_ID` / `GEETEST_CAPTCHA_KEY`, while retaining compatibility
+  with the old `RECAPTCHA_*` variables.
 
-**5) 限流与错误**
-- 复用现有登录限流；`2009`(校验失败)/`1004`(服务不可用) 不变
-- 速率：建议对"校验失败"也计入限流计数，防爆破
+**2) Validation abstraction and implementations** (`service/`)
 
-**6) `docs/API.md` 同步**：`/public/config` 新字段、登录/注册 captcha 载荷多形态、`/admin/configs` 新增 captcha 配置项。
+- Extract a `CaptchaVerifier` interface:
+  `Verify(ctx, payload, remoteIP, requestHost) *errcode.AppError`.
+- Make `recaptcha.go` implement that interface without changing its behavior.
+- Add `turnstile.go`: POST to
+  `https://challenges.cloudflare.com/turnstile/v0/siteverify` with form fields
+  `secret` + `response` (+ `remoteip`), and check `success`. Handle timeouts and
+  failures according to `FailClosed`.
+- Add `geetest_v4.go`: use `lot_number` + `captcha_output` + `pass_token` +
+  `gen_time` + `captcha_id`, sign with `captcha_key` using HMAC-SHA256, POST to
+  `https://gcaptcha4.geetest.com/verify`, and require `result=="success"`.
+- Add a `NewCaptchaVerifier(cfg)` factory that returns the selected provider
+  implementation, or nil for `none`.
+
+**3) Auth service / handler** (`service/auth_service.go`,
+`handler/auth_handler.go`)
+
+- Inject `CaptchaVerifier` instead of `recaptchaVerifier`.
+- Extend `LoginInput` / `RegisterInput` with a generic CAPTCHA payload:
+  `captcha_provider` plus either `{recaptcha_token, recaptcha_action}`,
+  `{turnstile_token}`, or
+  `{lot_number, captcha_output, pass_token, gen_time}`. A nested `captcha` object
+  selected by provider is recommended.
+- `Login` / `Register` validate the fields for the **configured provider** and
+  skip validation when `provider=none`. Reject a provider sent by the frontend
+  when it does not match the configured provider.
+
+**4) Public configuration** (`service/public_config_service.go`,
+`handler/public_handler.go::GetConfig`)
+
+- Return `captcha_provider` plus the client public key for that provider:
+  `site_key` for reCAPTCHA/Turnstile or `captcha_id` for GeeTest. Return an empty
+  public key when `provider=none`.
+
+**5) Rate limiting and errors**
+
+- Reuse the existing login rate limit. Keep `2009` (validation failed) and
+  `1004` (service unavailable) unchanged.
+- Count validation failures toward the rate limit to reduce brute-force abuse.
+
+**6) Update `docs/API.md`:** document the new `/public/config` fields, the
+polymorphic login/registration CAPTCHA payloads, and the new CAPTCHA settings in
+`/admin/configs`.
 
 ---
 
-## 三、数据库迁移（AutoMigrate 会自动处理结构变更，需注意数据）
+## 3. Database Migration (AutoMigrate Handles Schema Changes; Data Still Needs Attention)
 
-- `image_access_tokens`：加 `revoked_at`、调整唯一约束（per image 单活跃）；存量多令牌数据需清理脚本（保留最新活跃一条/全部吊销）
-- `system_configs`：新增 `private_token_ttl_default_ms`、`captcha_provider`、各 provider key 记录
-- 迁移须在 `cmd/server/main.go::AutoMigrate` 之外补一份**数据迁移脚本**（清理存量令牌、写入默认配置）
+- `image_access_tokens`: add `revoked_at` and adjust the uniqueness constraint
+  to one active token per image. Existing multiple-token data needs a cleanup
+  script that either retains the newest active token or revokes all tokens.
+- `system_configs`: add `private_token_ttl_default_ms`, `captcha_provider`, and
+  records for each provider key.
+- In addition to `cmd/server/main.go::AutoMigrate`, provide a **data migration
+  script** that cleans existing tokens and writes default configuration values.
 
-## 四、不在本文范围
-- 实现代码、单元测试、CI 调整（待方案确认后另行排期）
-- 前端实现（已在 `frontend-architecture/` 各板块定义）
+## 4. Out of Scope
 
-## 五、风险与取舍
-- **私密图 owner/admin 旁路**：需在公开路由 `/i/:link` 上做"可选会话解析"，注意不要把该路由纳入强制鉴权（否则第三方带 token 访问会失败）——仅"尝试解析，成功且属主/管理员才旁路"
-- **TTL 毫秒校验**：Go 内部用 ns，存储/比较统一以 `UnixMilli` 口径，避免精度误差
-- **极验签名算法**须严格按其官方 v4 文档（签名串拼接顺序 + HMAC-SHA256），实现前以官方 demo 校验
-- **中国可用性**：reCAPTCHA 即便 `recaptcha.net` 镜像在大陆仍不稳；主受众场景建议 provider 选 `turnstile` 或 `geetest_v4`
+- Implementation code, unit tests, and CI changes, which were to be scheduled
+  after design approval.
+- Frontend implementation, already defined throughout `frontend-architecture/`.
+
+## 5. Risks and Trade-offs
+
+- **Private-image owner/admin bypass:** the public route `/i/:link` needs
+  optional session parsing. Do not place the route behind mandatory
+  authentication, because that would break third-party token access. Attempt to
+  parse the session and bypass token validation only for the owner/admin.
+- **Millisecond TTL validation:** Go uses nanoseconds internally. Store and
+  compare consistently using `UnixMilli` to avoid precision errors.
+- **GeeTest signing algorithm:** follow its official v4 documentation exactly,
+  including signing-string order and HMAC-SHA256. Validate the implementation
+  against the official demo before use.
+- **Availability in China:** reCAPTCHA remains unreliable in mainland China even
+  through the `recaptcha.net` mirror. For the primary audience, prefer
+  `turnstile` or `geetest_v4`.

@@ -1,53 +1,53 @@
-# 07 · 生产产物规范（硬性要求）
+# 07 · Production Artifact Standards (Mandatory)
 
 > [!WARNING]
 > **Archived design record.** This page predates the completed V2 frontend and
 > may contain obsolete versions, paths, or implementation status.
 
-> 所属：[前端架构设计（索引）](./README.md)
+> Part of: [Frontend Architecture Design (Index)](./README.md)
 
-> 以下为最终生产产物（`backend/web/`）的强制规范。**开发/测试阶段可豁免**（dev 走 Vite 未签名产物，不计 SRI/版本）。
+> The following rules are mandatory for the final production artifacts in `backend/web/`. **Development and testing are exempt** because development uses unsigned Vite output, which is not subject to SRI or release-version requirements.
 
-## 模块化与原子化
+## Modularity and Atomicity
 
-- JS/CSS 一律按特性 + 路由拆分为最小原子模块（feature-based 目录 + React.lazy 路由分包，见 [02 架构](02-architecture.md)），杜绝单文件巨型 bundle。
-- 组件、hook、工具均为单一职责的独立可复用单元。
+- Split all JavaScript and CSS into the smallest practical atomic modules by feature and route (feature-based directories plus route-level React.lazy bundles; see [02 Architecture](02-architecture.md)). Do not produce a monolithic bundle.
+- Every component, hook, and utility must be an independent, reusable unit with a single responsibility.
 
-## SRI 完整性（SHA512）+ SemVer 版本号
+## SRI Integrity (SHA512) + SemVer Versions
 
-- 生产构建对**每一份** JS/CSS 产物计算 **SHA512** 完整性哈希，并生成 `backend/web/assets.manifest.json`：`{ "<文件名>": { "version": "<semver>", "integrity": "sha512-..." } }`。
-- **版本号遵循 Semantic Versioning 2.0.0**。版本粒度：以**发布版本**（整个 build 的 SemVer，如 `1.0.0`，源自 `package.json` 的 `version`）统一标注该次产物的所有文件；每份文件各自记录独立的 SRI 哈希。（如未来需要模块级独立版本，可在 manifest 扩展 `moduleVersion` 字段。）
-- **bump 规则**：发布时**人工**改 `package.json` 的 `version`——修复 `patch`、新增功能 `minor`、不兼容变更 `major`；CI 据此 `version` 打 Git tag 并写入 manifest。未 bump 不发布（构建产物的 `version` 即所打 tag）。当前不引入 changesets/standard-version 等工具（YAGNI），流程纯人工+CI tag。
-- 跨域/外链资源（本项目已无，见下节）若引入，必须带 SRI，否则不引入。
-- **覆盖范围（重要）**：
-  - **入口与静态产物**（入口 JS/CSS 及 index.html 内 `<link rel="modulepreload">`）→ 由 `vite-plugin-sri3` 在 `index.html` 注入 `integrity="sha512-..."`，浏览器原生校验。
-  - **动态分包**（React.lazy 经 `import()` 加载的 chunk）→ 浏览器**原生 `integrity` 机制不覆盖运行时 `import()`**，仅靠插件注入 index.html 静态标签无法保护。因此**必须额外实现运行时完整性守卫**：在动态 import 前以 `assets.manifest.json` 中的 SHA512 校验目标 chunk（fetch 后比对哈希、不匹配则拒绝执行并上报）。该项为实现期硬性子任务，不得省略。
-  - 备选：若采用能改写 Vite modulepreload polyfill、对运行时创建的 preload link 注入 `integrity` 的插件方案，亦可，但须验证其对懒加载 chunk 确实生效。
-  - 风险背景：本站所有产物同源（无 CDN，见下节），降低了 SRI 主要防范的第三方源篡改面；但既已声明"每一份校验"为硬性要求，动态 chunk 须以上述守卫补齐，而非豁免。
+- The production build must calculate a **SHA512** integrity hash for **every** JavaScript and CSS artifact and generate `backend/web/assets.manifest.json` in the form `{ "<file-name>": { "version": "<semver>", "integrity": "sha512-..." } }`.
+- **Versions follow Semantic Versioning 2.0.0.** Version granularity is the **release version**: the whole build's SemVer (for example, `1.0.0`, sourced from the `version` in `package.json`) labels every artifact in that build, while each file records its own SRI hash. If per-module versions become necessary, the manifest may later add a `moduleVersion` field.
+- **Bump rule:** before a release, manually change the `version` in `package.json`: `patch` for fixes, `minor` for new features, and `major` for incompatible changes. CI uses that `version` for the Git tag and manifest. Do not release without a bump; the artifact `version` must match the tag. Do not introduce tools such as changesets or standard-version yet (YAGNI); use a manual-plus-CI-tag process.
+- Any cross-origin or externally hosted resource introduced in the future must include SRI or must not be used. The current project has none; see the next section.
+- **Coverage (important):**
+  - **Entrypoints and static artifacts** (entry JavaScript/CSS and `<link rel="modulepreload">` elements in `index.html`) -> `vite-plugin-sri3` injects `integrity="sha512-..."` into `index.html` for native browser verification.
+  - **Dynamic bundles** (chunks loaded through React.lazy and `import()`) -> the browser's **native `integrity` mechanism does not cover runtime `import()`**. Injecting integrity only into static `index.html` elements is insufficient. Therefore, the implementation **must add a runtime integrity guard** that fetches each dynamic chunk before import, compares its SHA512 value with `assets.manifest.json`, and refuses execution and reports an error on mismatch. This is a mandatory implementation subtask.
+  - As an alternative, a plugin may rewrite the Vite modulepreload polyfill and add `integrity` to preload links created at runtime, but it must be verified to cover lazy-loaded chunks in practice.
+  - Risk context: all artifacts are same-origin and do not use a CDN (see the next section), which reduces the third-party-tampering threat that SRI primarily addresses. Nevertheless, because “verify every artifact” is a hard requirement, dynamic chunks must be covered by the guard above and may not be exempted.
 
-## 外部资源本地化
+## Local External Resources
 
-- **禁止运行时引用任何跨域/CDN 资源**：所有第三方依赖经 Vite 打包内联为本地产物；字体使用系统字体栈（不引 webfont）；无远程图片/图标。
-- 构建后需校验产物中不存在 `https://`、`http://` 形态的外链（仅允许后端同源的 `/api`、`/i` 相对路径）。
-- **唯一受控豁免：人机验证**。当且仅当管理员启用了某家 captcha（`captcha_provider ≠ none`，见 [03](03-features.md#人机验证可插拔管理员决定默认无)），**仅该 provider 的官方脚本**作为外链加载（reCAPTCHA/Turnstile/极验均无法自托管）。**默认 `none` → 零外链**，本节硬性要求完全成立；启用哪家就豁免哪家，且需在构建校验白名单中显式登记该 provider 域名。
+- **Runtime references to cross-origin/CDN resources are prohibited.** Vite must bundle every third-party dependency into local artifacts; typography uses the system font stack with no webfont; and there are no remote images or icons.
+- After building, verify that the artifacts contain no external links in `https://` or `http://` form. Only same-origin relative backend paths under `/api` and `/i` are allowed.
+- **The only controlled exception is CAPTCHA.** Only when an administrator enables a provider (`captcha_provider ≠ none`; see [03](03-features.md#pluggable-captcha-administrator-selected-default-none)) may the official script for that provider be loaded externally. reCAPTCHA, Turnstile, and Geetest cannot be self-hosted. The default `none` setting means **zero external links**, so this section's mandatory rule is fully satisfied. Enabling a provider exempts only that provider, and its domain must be explicitly registered in the build-validation allowlist.
 
-## 变量与常量规范
+## Variables and Constants
 
-- **无魔法值**：所有字面量（数值上限、超时、分页大小、存储单位、路由路径、Query key、存储键名等）一律收口于 `src/config/constants.ts`，导出常量统一 **UPPER_SNAKE_CASE**，遵循 MDN 常量命名规范（与 [08 编码规范](08-coding-standards.md) 一致），组件内不得出现裸数字/裸字符串。
-- **JS/TS 变量**：camelCase（MDN 规范）。
-- **CSS 自定义属性**：按 CSS 规范使用 kebab-case（`--coffee-bg` 等，此为语言强制，不与"驼峰"冲突）。
-- **编码**：所有源文件与产物统一 **UTF-8**（无 BOM）；`index.html` 含 `<meta charset="UTF-8">`。
+- **No magic values:** centralize all literals, including numeric limits, timeouts, page sizes, storage units, route paths, Query keys, and storage keys, in `src/config/constants.ts`. Export constants in **UPPER_SNAKE_CASE**, following MDN's naming guidance (aligned with [08 Coding Standards](08-coding-standards.md)). Components may not contain bare numbers or strings.
+- **JavaScript/TypeScript variables:** camelCase, following MDN guidance.
+- **CSS custom properties:** kebab-case as required by CSS (`--coffee-bg`, for example); this language requirement does not conflict with the camelCase rule.
+- **Encoding:** all source files and artifacts use **UTF-8** without a BOM; `index.html` contains `<meta charset="UTF-8">`.
 
-## HTML 精简
+## Minimal HTML
 
-- `index.html` 仅保留**最少且必要**的内联 JS/CSS。唯一许可的内联脚本为主题防闪烁引导（pre-paint、几行，读取本地主题偏好加 `.dark` 类），其余全部走外部 bundle。
-- 该内联脚本因须在 bundle 加载前执行、无法导入常量模块，其使用的本地存储键名作为**唯一受控例外**与 `config/constants.ts` 中的同名常量手工保持同步，并在代码注释中标注对应关系。主题键钉死为 **`ic_theme`**（取值 `light`/`dark`）。
+- `index.html` contains only the **minimum necessary** inline JavaScript and CSS. The sole permitted inline script is a short pre-paint bootstrap that reads the saved theme preference and applies `.dark` to prevent a flash; everything else belongs in external bundles.
+- Because that script must execute before the bundle loads and cannot import the constants module, its local-storage key is the **only controlled exception**. Keep it manually synchronized with the corresponding constant in `config/constants.ts` and document the relationship in a code comment. The theme key is fixed as **`ic_theme`**, with `light` and `dark` values.
 
-## i18n（英语优先，多语言支持）
+## i18n (English First, Multilingual Support)
 
-- 默认使用 `en-US`，并提供 `zh-CN` 与 `ja-JP`；通过 `react-i18next` 的 `t()` 取用文案，组件不硬编码面向用户的字符串（见 [04 主题与 UI](04-theme-and-ui.md)）。
-- 结构预留多语言扩展；切换语言不需改动组件代码。
+- Use `en-US` by default and provide `zh-CN` and `ja-JP`. Components retrieve copy with `t()` from `react-i18next` and do not hard-code user-facing strings (see [04 Theme and UI](04-theme-and-ui.md)).
+- Keep the structure extensible so that switching languages never requires component-code changes.
 
 ---
 
-← [06 测试](06-testing.md) · [索引](./README.md) · 下一板块：[08 编码规范](08-coding-standards.md)
+<- [06 Testing](06-testing.md) · [Index](./README.md) · Next: [08 Coding Standards](08-coding-standards.md)

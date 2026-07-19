@@ -1,45 +1,64 @@
 # Contributor Covenant Code of Conduct
 
-## 我们的承诺
+## Our Pledge
 
-为了营造一个开放友好的环境，作为贡献者和维护者，我们承诺让参与本项目和社区的每个人都不受骚扰，无论年龄、体型、可见或不可见的残疾、族裔、性别认同与表达、经验水平、教育、社会经济地位、国籍、个人外貌、种族、宗教或性取向身份。
+We as members, contributors, and leaders pledge to make participation in our
+community a harassment-free experience for everyone, regardless of age, body
+size, visible or invisible disability, ethnicity, sex characteristics, gender
+identity and expression, level of experience, education, socioeconomic status,
+nationality, personal appearance, race, religion, or sexual identity and
+orientation.
 
-我们承诺以促进开放、包容、多元化、健康社区的方式行动和互动。
+We pledge to act and interact in ways that contribute to an open, welcoming,
+diverse, inclusive, and healthy community.
 
-## 我们的准则
+## Our Standards
 
-营造正面环境的行为示例：
+Examples of behavior that contributes to a positive environment include:
 
-- 对他人展示同理与善意
-- 尊重不同意见、观点与经验
-- 给予建设性反馈，也优雅地接受反馈
-- 承担责任，向受我们错误影响的人道歉，并从中学习
-- 关注的不仅是个人，更是整个社区的福祉
+- Demonstrating empathy and kindness toward other people
+- Respecting differing opinions, viewpoints, and experiences
+- Giving and gracefully accepting constructive feedback
+- Accepting responsibility, apologizing to those affected by our mistakes, and
+  learning from the experience
+- Focusing on what is best not only for us as individuals, but for the overall
+  community
 
-不可接受的行为示例：
+Examples of unacceptable behavior include:
 
-- 性化语言或 imagery、性关注或挑逗
-- 钓鱼、侮辱或贬损的评论，以及人身或政治攻击
-- 公开或私下的骚扰
-- 未经明确许可发布他人的私人信息（如物理地址或电子邮箱）
-- 其他在专业环境下可被合理认定为不当的行为
+- The use of sexualized language or imagery, and sexual attention or advances
+- Trolling, insulting or derogatory comments, and personal or political attacks
+- Public or private harassment
+- Publishing another person's private information, such as a physical or email
+  address, without their explicit permission
+- Other conduct that could reasonably be considered inappropriate in a
+  professional setting
 
-## 执行职责
+## Enforcement Responsibilities
 
-社区领导者负责澄清和执行本行为准则的标准，并会对其认为不当、威胁、冒犯或有害的任何行为采取适当且公平的纠正措施。
+Community leaders are responsible for clarifying and enforcing our standards of
+acceptable behavior and will take appropriate and fair corrective action in
+response to any behavior that they deem inappropriate, threatening, offensive,
+or harmful.
 
-## 适用范围
+## Scope
 
-本行为准则在所有社区空间生效，并在个人在公共空间正式代表社区时同样适用。
+This Code of Conduct applies within all community spaces and also applies when
+an individual is officially representing the community in public spaces.
 
-## 执行
+## Enforcement
 
-辱骂、骚扰或其他不可接受的行为可通过私下联系仓库维护者举报。所有投诉都会被及时、公正地审查和调查。
+Instances of abusive, harassing, or otherwise unacceptable behavior may be
+reported privately by contacting the repository maintainers. All complaints
+will be reviewed and investigated promptly and fairly.
 
 ---
 
-本行为准则改编自 [Contributor Covenant][homepage] 2.1 版，<https://www.contributor-covenant.org/version/2/1/code_of_conduct.html>。
+This Code of Conduct is adapted from the [Contributor Covenant][homepage],
+version 2.1, available at
+<https://www.contributor-covenant.org/version/2/1/code_of_conduct.html>.
 
 [homepage]: https://www.contributor-covenant.org
 
-社区影响指南受 [Mozilla 的执行阶梯](https://github.com/mozilla/diversity) 启发。
+The community impact guidelines were inspired by
+[Mozilla's code of conduct enforcement ladder](https://github.com/mozilla/diversity).

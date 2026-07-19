@@ -293,6 +293,7 @@ summeRain/
 |   |-- src/store/                  user and theme state
 |   `-- src/i18n/                   English, Chinese, and Japanese resources
 |-- docs/                           API, operations, releases, and architecture
+|-- translations/                   Simplified Chinese and Japanese documentation mirrors
 |-- scripts/                        development and repository verification
 |-- .gitbook.yaml                   GitBook Git Sync configuration
 `-- SUMMARY.md                      GitBook navigation
@@ -319,6 +320,11 @@ in [`SUMMARY.md`](./SUMMARY.md). The primary references are:
 - [Schema Migrations](./backend/migrations/README.md)
 - [Contributing](./CONTRIBUTING.md)
 - [Security Policy](./SECURITY.md)
+
+English is the authoritative documentation language. Reviewable Simplified
+Chinese and Japanese translations mirror the same page paths under
+`translations/zh-CN` and `translations/ja-JP`. GitBook publishes them as
+language variants of the same documentation site.
 
 The repository is the source of truth for GitBook Git Sync. Manage README and
 navigation changes in Git rather than creating duplicate README pages in the

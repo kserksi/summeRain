@@ -1,33 +1,41 @@
-# 安全策略
+# Security Policy
 
-## 报告漏洞
+## Reporting a Vulnerability
 
-如果你发现了安全漏洞，**请勿公开提交 Issue**。
+If you discover a security vulnerability, **do not open a public issue**.
 
-请通过 [GitHub Security Advisory](https://github.com/kserksi/summerain/security/advisories/new) 私下报告。我们会在收到报告后尽快确认并评估影响。
+Report it privately through
+[GitHub Security Advisories](https://github.com/kserksi/summerain/security/advisories/new).
+We will acknowledge the report and assess its impact as soon as possible.
 
-报告时请尽量包含：
+Please include as much of the following information as possible:
 
-- 问题的清晰描述与影响范围
-- 复现步骤（最小可行示例）
-- 受影响的版本
-- 建议的修复方案（如有）
+- A clear description of the issue and its impact
+- Reproduction steps, preferably with a minimal reproducible example
+- Affected versions
+- A suggested remediation, if available
 
-## 响应流程
+## Response Process
 
-1. 收到报告后 72 小时内确认
-2. 评估严重程度并验证漏洞
-3. 开发修复，视严重程度决定是否走私有分支
-4. 发布修复版本，公开致谢（如报告者同意）
+1. We acknowledge the report within 72 hours.
+2. We assess the severity and verify the vulnerability.
+3. We develop a fix, using a private branch when warranted by the severity.
+4. We publish a corrected release and credit the reporter publicly with their
+   consent.
 
-## 支持的版本
+## Supported Versions
 
-仅最新发布版本（`main` 分支）接收安全修复。旧版本不单独维护补丁。
+Only the latest release on the `main` branch receives security fixes. Older
+versions do not receive separate security patches.
 
-## 部署安全要点
+## Deployment Security
 
-详见 [docs/USAGE.md](docs/USAGE.md)。关键项：
+See [docs/USAGE.md](docs/USAGE.md) for the complete guidance. Key requirements
+include:
 
-- 生产环境必须设置强随机的 `COOKIE_SECRET`、`IMGPROXY_KEY`、`IMGPROXY_SALT`
-- `__Host-` 前缀 Cookie 要求 HTTPS + 同源，本地开发需用自签证书
-- MySQL/Redis/imgproxy 容器应仅内网通信，不对外暴露端口
+- Set strong, random values for `COOKIE_SECRET`, `IMGPROXY_KEY`, and
+  `IMGPROXY_SALT` in production.
+- Cookies with the `__Host-` prefix require HTTPS and a same-origin deployment.
+  Local development must use a self-signed certificate.
+- Keep the MySQL, Redis, and imgproxy containers on the private network without
+  exposing their ports publicly.

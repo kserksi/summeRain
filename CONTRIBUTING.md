@@ -1,51 +1,56 @@
-# 贡献指南
+# Contributing Guide
 
-感谢你对 summeRain 的兴趣！本文档说明如何参与开发。
+Thank you for your interest in summeRain. This guide explains how to contribute
+to the project.
 
-## 开发环境
+## Development Environment
 
-### 前置要求
+### Requirements
 
-- Go 1.24+
-- Node.js `^20.19.0 || >=22.12.0`（前端构建；CI 使用 24.18.0 LTS）
-- Docker & Docker Compose（仅运行 MySQL、Redis 与 imgproxy 开发依赖）
-- OpenSSL（生成本地 HTTPS 证书）
+- Go 1.24 or newer
+- Node.js `^20.19.0 || >=22.12.0` for frontend builds; CI uses 24.18.0 LTS
+- Docker and Docker Compose, used only for the MySQL, Redis, and imgproxy
+  development dependencies
+- OpenSSL for generating the local HTTPS certificate
 
-### 启动后端（WSL 开发环境）
+### Start the Backend in WSL
 
 ```bash
-./scripts/dev-wsl.sh deps-up   # mysql + redis + imgproxy，不构建应用镜像
-./scripts/dev-wsl.sh backend   # 直接运行 Go 服务
+./scripts/dev-wsl.sh deps-up   # Start MySQL, Redis, and imgproxy; do not build the application image
+./scripts/dev-wsl.sh backend   # Run the Go service directly
 ```
 
-应用默认监听 `127.0.0.1:18080`，健康检查 `GET http://127.0.0.1:18080/health`。
+The application listens on `127.0.0.1:18080` by default. Its health endpoint is
+`GET http://127.0.0.1:18080/health`.
 
-### 启动前端开发服务器
+### Start the Frontend Development Server
 
 ```bash
 cd frontend
 npm ci
 cd ..
-./scripts/dev-wsl.sh frontend  # https://127.0.0.1:5173，同源代理 /api 和 /i
+./scripts/dev-wsl.sh frontend  # https://127.0.0.1:5173 with same-origin proxies for /api and /i
 ```
 
-### 构建前端到后端
+### Build the Frontend into the Backend
 
 ```bash
 cd frontend
-npm run build                  # 输出到 ../backend/web/
+npm run build                  # Output: ../backend/web/
 ```
 
-## 代码规范
+## Coding Standards
 
-### Go（后端）
+### Go Backend
 
-- 遵循 [Effective Go](https://go.dev/doc/effective_go) 与 `gofmt` / `go vet`
-- 新增功能需附带测试（`_test.go`）
-- import 顺序：标准库 → 第三方 → 本项目（`github.com/kserksi/summerain/...`）
-- 每个源文件保留版权头：`// Copyright 2026 The summeRain Authors`
+- Follow [Effective Go](https://go.dev/doc/effective_go), `gofmt`, and `go vet`.
+- Include tests for new functionality in `_test.go` files.
+- Order imports as follows: standard library, third-party packages, then project
+  packages under `github.com/kserksi/summerain/...`.
+- Retain the copyright header in every source file:
+  `// Copyright 2026 The summeRain Authors`.
 
-提交前运行：
+Run these checks before committing:
 
 ```bash
 cd backend
@@ -54,13 +59,13 @@ go vet ./...
 go test ./...
 ```
 
-### TypeScript（前端）
+### TypeScript Frontend
 
-- 使用项目现有的 React 19 + TanStack Query + shadcn/ui 技术栈
-- 新增功能需附带测试（vitest）
-- 遵循现有 ESLint 配置
+- Use the existing React 19, TanStack Query, and shadcn/ui stack.
+- Include Vitest coverage for new functionality.
+- Follow the existing ESLint configuration.
 
-提交前运行：
+Run these checks before committing:
 
 ```bash
 cd frontend
@@ -69,44 +74,62 @@ npm run build
 npx vitest run
 ```
 
-## 提交规范
+## Commit Convention
 
-使用 [Conventional Commits](https://www.conventionalcommits.org/) 格式：
+Use the [Conventional Commits](https://www.conventionalcommits.org/) format:
 
-```
+```text
 <type>(<scope>): <description>
 
 [optional body]
 ```
 
-常用 type：`feat`、`fix`、`docs`、`refactor`、`test`、`chore`、`i18n`
+Common types are `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, and `i18n`.
 
-示例：
+Examples:
 
-```
+```text
 feat(upload): add drag-and-drop reordering
 fix(auth): handle expired session on token refresh
 i18n(extract): move navbar strings to locale files
 ```
 
-## 提交 Pull Request
+## Submit a Pull Request
 
-1. 从 `dev` 拉取最新代码创建分支，并将 PR 目标设为 `dev`
-2. 确保本地 `go build` / `npm run build` / 测试通过
-3. PR 描述说明改动目的与影响范围
-4. 如改动 UI，附截图
-5. 一个 PR 只做一件事，便于 review
+1. Update your local `dev` branch and create a feature branch from it. Set
+   `dev` as the pull request target.
+2. Confirm that `go build`, `npm run build`, and the relevant tests pass.
+3. Explain the purpose and impact of the change in the pull request description.
+4. Include screenshots for UI changes.
+5. Keep each pull request focused on one concern so it remains easy to review.
 
-## 项目结构
+## Project Structure
 
-```
+```text
 backend/    Go + Gin + GORM (MySQL) + Redis + imgproxy
 frontend/   React 19 + Vite + TypeScript + Tailwind + shadcn/ui
-docs/       API 契约 + 部署手册 + 架构设计
+docs/       API contract, deployment guide, and architecture records
 ```
 
-历史前端架构设计见 [docs/design/frontend-architecture/README.md](docs/design/frontend-architecture/README.md)；其中已标记为归档的内容仅供设计追溯。
+Historical frontend architecture records are indexed in
+[docs/design/frontend-architecture/README.md](docs/design/frontend-architecture/README.md).
+Content marked as archived is retained only for design traceability.
 
-## 行为准则
+## Documentation Translations
 
-参与本项目即代表你同意遵守 [Code of Conduct](CODE_OF_CONDUCT.md)。请保持友善与尊重。
+The English documentation at the repository root is authoritative. Complete
+Simplified Chinese and Japanese mirrors live under `translations/zh-CN/` and
+`translations/ja-JP/`, preserving the same relative paths as their canonical
+pages. When changing an English document, update both translations in the same
+change, then refresh the translation source hashes and run the GitBook
+documentation verifier.
+
+```bash
+bash scripts/update-translation-source-hashes.sh
+bash scripts/verify-gitbook-docs.sh
+```
+
+## Code of Conduct
+
+By participating in this project, you agree to follow the
+[Code of Conduct](CODE_OF_CONDUCT.md). Please be kind and respectful.

@@ -1,26 +1,35 @@
-# 发布与标签管理
+# Release and Tag Management
 
-`VERSION` 是项目正式版本的唯一来源。普通代码提交只更新开发镜像；只有 `main` 或 `master` 上包含 `VERSION` 变更的提交才会创建正式发布。
+`VERSION` is the single source of truth for formal project releases. Ordinary
+code commits update only the development image; a formal release is created only
+when a commit on `main` or `master` changes `VERSION`.
 
-## 标签规则
+## Tagging Rules
 
-| 场景 | 输入版本 | 容器标签 |
+| Scenario | Input version | Container tags |
 |---|---|---|
-| `main` / `master` 普通推送 | 无版本变更 | `edge`、`sha-<short-commit>` |
-| 稳定版 | `1.2.3` | `v1.2.3`、`1.2.3`、`1.2`、`1`、`latest`、`sha-<short-commit>` |
-| 预发布版 | `1.3.0-rc.1` | `v1.3.0-rc.1`、`1.3.0-rc.1`、`sha-<short-commit>` |
+| Ordinary push to `main` / `master` | No version change | `edge`, `sha-<short-commit>` |
+| Stable release | `1.2.3` | `v1.2.3`, `1.2.3`, `1.2`, `1`, `latest`, `sha-<short-commit>` |
+| Pre-release | `1.3.0-rc.1` | `v1.3.0-rc.1`, `1.3.0-rc.1`, `sha-<short-commit>` |
 
-精确版本标签 `vX.Y.Z`、`X.Y.Z` 及其预发布形式不可覆盖。`latest`、`X` 和 `X.Y` 是可移动别名，稳定版发布时指向该兼容范围内的最新版本。
+Exact version tags, including `vX.Y.Z`, `X.Y.Z`, and their pre-release forms,
+must never be overwritten. `latest`, `X`, and `X.Y` are moving aliases. Each
+stable release moves them to the newest version within the corresponding
+compatibility range.
 
-## 发布流程
+## Release Procedure
 
-1. 确认 `main` 的前后端检查通过。
-2. 按下述严格版本格式选择新版本，版本号不能与历史版本重复。
-3. 单独提交 `VERSION` 变更，提交信息使用 `chore: release vX.Y.Z`。
-4. 推送后等待 `CI and Docker` 完成。
-5. 检查 GitHub Release、Docker Hub 和 GHCR 中的版本标签与多架构清单，并确认 Docker Hub 仓库说明已同步根目录 `README.md`。
+1. Confirm that the frontend and backend checks pass on `main`.
+2. Select a new version using the strict format below. Never reuse a historical
+   version number.
+3. Commit the `VERSION` change separately with the message
+   `chore: release vX.Y.Z`.
+4. Push the commit and wait for `CI and Docker` to finish.
+5. Verify the version tags and multi-platform manifests on GitHub Releases,
+   Docker Hub, and GHCR. Also confirm that the Docker Hub repository description
+   has synchronized the root `README.md`.
 
-示例：
+Example:
 
 ```bash
 printf '1.2.3\n' > VERSION
@@ -29,27 +38,59 @@ git commit -m "chore: release v1.2.3"
 git push origin HEAD:main
 ```
 
-## 版本选择
+## Choosing a Version
 
-- Patch：兼容的缺陷修复，例如 `1.2.3` 到 `1.2.4`。
-- Minor：向后兼容的新功能，例如 `1.2.3` 到 `1.3.0`。
-- Major：不兼容变更，例如 `1.2.3` 到 `2.0.0`。
-- Pre-release：候选版本，例如 `2.0.0-rc.1`，不会更新稳定别名。
+- Patch: a backward-compatible defect fix, such as `1.2.3` to `1.2.4`.
+- Minor: a backward-compatible feature, such as `1.2.3` to `1.3.0`.
+- Major: an incompatible change, such as `1.2.3` to `2.0.0`.
+- Pre-release: a candidate build, such as `2.0.0-rc.1`; it does not update
+  stable aliases.
 
-`VERSION` 遵循 SemVer 2.0.0 的 core 与 pre-release 语法：主版本、次版本、修订版本以及纯数字预发布标识都不能有前导零。因此 `1.2.3`、`1.2.3-rc.1` 合法，`01.2.3`、`1.2.3-01` 非法。由于 Docker 标签无法无损表达 `+`，项目发布版本不接受 build metadata；版本最多 127 个 ASCII 字符，以便 `v<version>` 仍满足 Docker 的 128 字符标签上限。可在提交前运行 `bash scripts/validate-release-version.sh "$(< VERSION)"`。
+`VERSION` follows the SemVer 2.0.0 core and pre-release syntax. Major, minor,
+patch, and numeric pre-release identifiers must not contain leading zeroes.
+Therefore, `1.2.3` and `1.2.3-rc.1` are valid, while `01.2.3` and `1.2.3-01`
+are invalid. Because Docker tags cannot represent `+` losslessly, project
+release versions do not accept build metadata. A version may contain at most
+127 ASCII characters so that `v<version>` remains within Docker's 128-character
+tag limit. Before committing, run
+`bash scripts/validate-release-version.sh "$(< VERSION)"`.
 
-每次 `main` / `master` 镜像发布成功后，`dockerhub_metadata` job 都会把根目录 `README.md` 同步到 `jaykserks/summerain`；只有正式发布会在推送精确标签前及元数据阶段刷新不可变策略，并对 Docker Hub 管理 API 的临时 5xx 响应进行有限重试。`latest`、`X`、`X.Y`、`edge` 与提交标签不匹配不可变规则，因此仍可按上述策略移动。
+After every successful `main` / `master` image publication, the
+`dockerhub_metadata` job synchronizes the root `README.md` to
+`jaykserks/summerain`. Only a formal release refreshes the immutable-tag policy
+before exact tags are pushed and again during metadata publication. The policy
+helper performs bounded retries for transient 5xx responses from the Docker Hub
+management API. `latest`, `X`, `X.Y`, `edge`, and commit tags do not match the
+immutability rule, so they remain movable according to the policy above.
 
-正式发布重跑会读取 Docker Hub 与 GHCR 中精确版本标签的 registry descriptor digest。只要任一 registry 已有 `vX.Y.Z` 或 `X.Y.Z`，该摘要就是恢复源：工作流会补齐两端缺失的精确标签，并把 `latest`、`X`、`X.Y` 与本次 `sha-<commit>` 重新指向同一摘要，不再构建或覆盖已有不可变标签。registry 内或跨 registry 的精确标签摘要不一致时，工作流会失败并要求人工核查，绝不会猜测哪份镜像正确。
+When a formal release is rerun, the workflow reads the registry descriptor
+digest for exact version tags in Docker Hub and GHCR. If either registry already
+contains `vX.Y.Z` or `X.Y.Z`, that digest becomes the recovery source. The
+workflow fills in missing exact tags in both registries and repoints `latest`,
+`X`, `X.Y`, and the current `sha-<commit>` to the same digest without rebuilding
+or overwriting an existing immutable tag. If exact-tag digests disagree within
+or between registries, the workflow fails for manual investigation; it never
+guesses which image is correct.
 
-上述 Docker Hub 操作共用仓库 Secrets `DOCKERHUB_USERNAME` 与 `DOCKERHUB_TOKEN`；令牌需要 `read/write/delete` 权限，既用于推送镜像，也用于设置标签策略和更新仓库说明。
+These Docker Hub operations share the repository secrets
+`DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN`. The token requires
+`read/write/delete` permissions for pushing images, configuring tag policy, and
+updating the repository description.
 
-## 供应链固定
+## Supply-Chain Pinning
 
-工作流中的第三方 GitHub Actions 全部固定到完整 commit SHA，行尾注释保留对应主版本，升级时需要同时核对上游 release 与新 SHA。
+Every third-party GitHub Action in the workflow is pinned to a full commit SHA.
+The end-of-line comment records the corresponding major version. Review both
+the upstream release and the new SHA when upgrading an action.
 
-`requirements.lock` 用精确版本标签描述需要同时支持 `linux/amd64`、`linux/arm64` 的服务镜像。单个平台的 child manifest digest 不具备跨架构可移植性，因此不写入共享锁文件；对生产部署做 digest 固定时，应使用仓库发布的 OCI index / manifest-list digest。
+`requirements.lock` records exact version tags for service images that must
+support both `linux/amd64` and `linux/arm64`. A platform-specific child manifest
+digest is not portable across architectures and therefore does not belong in
+the shared lock file. When pinning a production deployment by digest, use the
+published OCI index / manifest-list digest.
 
-## 回滚
+## Rollback
 
-不要移动或复用精确版本标签。回滚时将 `DOCKER_IMAGE` 改回已知正常的精确版本或 OCI 多架构索引 digest，并用 `--no-build` 重新部署；修复后发布新的 Patch 版本。
+Never move or reuse an exact version tag. To roll back, set `DOCKER_IMAGE` to a
+known-good exact version or OCI multi-platform index digest and redeploy with
+`--no-build`. After correcting the problem, publish a new Patch release.

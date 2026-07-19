@@ -1,29 +1,29 @@
-# 06 · 测试策略
+# 06 · Testing Strategy
 
 > [!WARNING]
 > **Archived design record.** This page predates the completed V2 frontend and
 > may contain obsolete versions, paths, or implementation status.
 
-> 所属：[前端架构设计（索引）](./README.md)
+> Part of: [Frontend Architecture Design (Index)](./README.md)
 
-## 范围
+## Scope
 
-**Vitest + React Testing Library**：
+**Vitest + React Testing Library:**
 
-- 单测 `lib/api.ts`（信封拆解 / CSRF 注入 / **401 登出 / 4030 停用 / 429 限流 / 错误码 i18n 映射**）
-- 各 feature 的 `hooks.ts`（用 MSW mock 接口，验证 query/mutation 行为）
+- Unit-test `lib/api.ts` (envelope unwrapping, CSRF injection, **logout on 401, disabled account on 4030, rate limiting on 429, and i18n error-code mapping**).
+- Test each feature's `hooks.ts` with MSW-mocked endpoints to verify query and mutation behavior.
 
-关键交互（上传、无限滚动、表单校验、可见性切换、改密重登、注册跳转）写组件测试。
+Write component tests for critical interactions: upload, infinite scrolling, form validation, visibility changes, reauthentication after a password change, and post-registration navigation.
 
-## 取舍
+## Trade-offs
 
-不追求全量覆盖，优先 **api 层 + 鉴权/查询钩子**——这两处是系统正确性的核心，且最易回归。
+Do not pursue exhaustive coverage. Prioritize the **API layer and authentication/query hooks** because they are central to system correctness and especially prone to regressions.
 
-## 门禁分层
+## Layered Quality Gates
 
-- **pre-commit（本地，求快）**：`prettier --check` + `eslint` + `tsc --noEmit`（与 [08](08-coding-standards.md) 一致）
-- **CI（阻断合并/发布）**：上述三项 **+ `vitest run`**。测试不通过不得合并；发布构建同样跑测试。
+- **pre-commit (local and fast):** `prettier --check` + `eslint` + `tsc --noEmit` (aligned with [08](08-coding-standards.md)).
+- **CI (blocks merge and release):** all three checks above **plus `vitest run`**. Failing tests block merges, and release builds run the same test suite.
 
 ---
 
-← [05 构建与部署](05-build-and-deploy.md) · [索引](./README.md) · 下一板块：[07 生产产物规范](07-production-standards.md)
+<- [05 Build and Deployment](05-build-and-deploy.md) · [Index](./README.md) · Next: [07 Production Artifact Standards](07-production-standards.md)
