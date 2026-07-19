@@ -1,5 +1,11 @@
 # 前端架构设计 · summeRain（索引）
 
+> [!WARNING]
+> **Archived design record.** This June 18, 2026 design set predates the
+> completed V2 frontend. Some paths, versions, status statements, and scope
+> decisions no longer match the implementation. Use it as historical design
+> context, not as current operational guidance.
+
 - **日期**：2026-06-18
 - **状态**：已敲定，待实现
 - **范围**：用现代 React 栈重写图床前端，精准对齐 `backend/` 的 Go API（见 `docs/API.md`）

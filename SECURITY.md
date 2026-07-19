@@ -4,7 +4,7 @@
 
 如果你发现了安全漏洞，**请勿公开提交 Issue**。
 
-请通过 [GitHub Security Advisory](https://github.com/kserksi/summerain/security/advisories/new) 私下报告，或发邮件创建 advisory。我们会在收到报告后尽快确认并评估影响。
+请通过 [GitHub Security Advisory](https://github.com/kserksi/summerain/security/advisories/new) 私下报告。我们会在收到报告后尽快确认并评估影响。
 
 报告时请尽量包含：
 

@@ -1,5 +1,9 @@
 # 04 · 主题与 UI
 
+> [!WARNING]
+> **Archived design record.** This page predates the completed V2 frontend and
+> may contain obsolete versions, paths, or implementation status.
+
 > 所属：[前端架构设计（索引）](./README.md)
 
 ## shadcn 预设策略

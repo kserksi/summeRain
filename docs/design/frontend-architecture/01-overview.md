@@ -1,5 +1,9 @@
 # 01 · 概览与技术栈
 
+> [!WARNING]
+> **Archived design record.** This page predates the completed V2 frontend and
+> may contain obsolete versions, paths, or implementation status.
+
 > 所属：[前端架构设计（索引）](./README.md)
 
 ## 背景

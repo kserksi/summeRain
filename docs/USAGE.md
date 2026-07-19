@@ -97,7 +97,7 @@ docker compose --env-file backend/.env -f backend/docker-compose.deploy.yml up -
 |---|---|---|
 | `DB_HOST` | `mysql` | 主机 |
 | `DB_PORT` | `3306` | 端口 |
-| `DB_USER` | `root` | **生产建议改为受限账号**（仅 `image_gallery.*` 权限） |
+| `DB_USER` | `root` | **生产建议改为受限账号**（仅 `summerain.*` 权限） |
 | `DB_PASSWORD` | *(空)* | 必填 |
 | `DB_NAME` | `summerain` | 库名 |
 | `DB_MAX_OPEN_CONNS` | `8` | 数据库最大打开连接数 |
@@ -241,7 +241,7 @@ backend ──> MySQL / Redis / imgproxy（Docker 内网）
 | `heartbeat` | 5 分钟 | 心跳超时的设备会话置过期 |
 | `view_flusher` | 60 秒 | 将 Redis `views:*` 计数落库 |
 | `cleanup` | 1 小时 | 清过期会话/CSRF/访问令牌/失败上传记录/孤儿临时文件 |
-| `v2_publish` | 持续、默认并发 1 | 从 `publish_source` 生成最终发布图并应用水印 |
+| `v2_publish` | 持续、默认并发 2 | 从 `publish_source` 生成最终发布图并应用水印 |
 | `v2_cleanup` | 持续增量 | 回收过期会话、暂存目录和孤儿 V2 文件 |
 | `outbox` | 默认 2 秒 | 投递 CDN purge 与本地/R2 物理删除事件 |
 | `user_deletion` | 5 分钟 | 以可恢复的小批次执行到期账号删除 |
@@ -257,12 +257,12 @@ backend ──> MySQL / Redis / imgproxy（Docker 内网）
 
 ```bash
 # 升级到 GitHub Actions 已发布的新精确版本
-# 编辑 backend/.env，将 DOCKER_IMAGE 改为 jaykserks/summerain:1.2.4
+# 编辑 backend/.env，将 DOCKER_IMAGE 改为 jaykserks/summerain:v2.0.1
 docker compose --env-file backend/.env -f backend/docker-compose.deploy.yml pull backend
 docker compose --env-file backend/.env -f backend/docker-compose.deploy.yml up -d --no-build backend
 
 # 回滚到上一个已知正常的不可变版本
-# 编辑 backend/.env，将 DOCKER_IMAGE 改回 jaykserks/summerain:1.2.3
+# 编辑 backend/.env，将 DOCKER_IMAGE 改回 jaykserks/summerain:v2.0.0
 docker compose --env-file backend/.env -f backend/docker-compose.deploy.yml pull backend
 docker compose --env-file backend/.env -f backend/docker-compose.deploy.yml up -d --no-build backend
 ```
@@ -279,7 +279,7 @@ docker compose --env-file backend/.env -f backend/docker-compose.deploy.yml up -
 CREATE USER 'image_gallery'@'%' IDENTIFIED BY '<强随机>';
 GRANT SELECT,INSERT,UPDATE,DELETE,CREATE,DROP,ALTER,INDEX,REFERENCES,
       CREATE TEMPORARY TABLES,LOCK TABLES,EXECUTE,CREATE VIEW,SHOW VIEW,TRIGGER
-  ON image_gallery.* TO 'image_gallery'@'%';
+  ON summerain.* TO 'image_gallery'@'%';
 FLUSH PRIVILEGES;
 ```
 
@@ -299,7 +299,7 @@ FLUSH PRIVILEGES;
 
 ### 6.2 上传与外链
 
-1. Web 端接受不超过 15 MB、50 MP 的静态 JPG/JPEG、PNG、BMP、WebP、AVIF；动图在 V2 首发版中拒绝。
+1. Web 端接受不超过 15 MiB、50 MP 的静态 JPG/JPEG、PNG、BMP、WebP、AVIF；动图在 V2 首发版中拒绝。
 2. 浏览器为每张图片生成 `master`（原分辨率、Q80）、`gallery`（400x400、Q60）、`admin`（120x160、Q60）与 `publish_source`（最长边 2048、Q80），再通过 `/api/v1/uploads/*` 分部件上传。
 3. 后端固化 `master`、`gallery`、`admin`，后台从 `publish_source` 生成可带水印的 `publish`，随后删除 `publish_source` 与会话中间文件。Image Management 将 120x160 的 `admin` 文件以 CSS 60x80 显示，保留 2x 像素密度。
 4. V2 发布直链为 `/i/<asset_link>.webp`，固定变体为 `/i/<asset_link>/{master|gallery|admin|publish}.webp`；查询参数不会生成额外 V2 尺寸。
@@ -332,13 +332,13 @@ FLUSH PRIVILEGES;
 
 | 项目 | 值 | 来源 |
 |---|---|---|
-| V2 源文件上限 | 15 MB | `frontend/src/features/images/client-processing/sniff.ts` |
+| V2 源文件上限 | 15 MiB | `frontend/src/features/images/pages/Upload.tsx` |
 | V2 单图像素上限 | 50 MP | `config.go` / `v2_upload_types.go` |
 | V2 固定访问变体 | `master`、400x400 `gallery`、120x160 `admin`、最长边 2048 `publish` | `v2_upload_types.go` |
-| V1 multipart 上限 | 单文件 10 MB、单请求 ≤20 个文件 | `image_service.go` |
-| 默认存储配额 | 500 MB（524288000） | `model.User` |
+| V1 multipart 上限 | 单文件 10 MiB、单请求 ≤20 个文件 | `image_service.go` |
+| 默认存储配额 | 500 MiB（524288000 bytes） | `model.User` |
 | 配额预警阈值 | 90% | `image_service.go` |
-| 图片短链 | 12 位 hex（48 bit 熵） | `generateUniqueLink` |
+| 图片短链 | V2 为 12 位 hex；V1 默认 12 位，连续冲突后回退为 16 位 | `generateUniqueLink` |
 | Web 会话 | 30 天 | `auth_service.go` |
 | CSRF 有效期 | 24 小时（滑动续期） | `auth_service.go` |
 | 设备 identity | 90 天 | `auth_service.go` |

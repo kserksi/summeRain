@@ -1,5 +1,9 @@
 # 08 · 编码规范
 
+> [!WARNING]
+> **Archived design record.** This page predates the completed V2 frontend and
+> may contain obsolete versions, paths, or implementation status.
+
 > 所属：[前端架构设计（索引）](./README.md)
 
 > 结合用户生产要求（[07 生产规范](07-production-standards.md)）与 React / TypeScript / Tailwind 官方指南，作为实现期统一准则。官方依据：[React 文档](https://react.dev/learn/thinking-in-react) 与 [Hook 规则](https://react.dev/reference/rules)、[TypeScript Handbook](https://www.typescriptlang.org/docs/handbook/intro.html)、[typescript-eslint](https://typescript-eslint.io)、[Tailwind CSS](https://tailwindcss.com/docs)。

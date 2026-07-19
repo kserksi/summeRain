@@ -1,5 +1,9 @@
 # 07 · 生产产物规范（硬性要求）
 
+> [!WARNING]
+> **Archived design record.** This page predates the completed V2 frontend and
+> may contain obsolete versions, paths, or implementation status.
+
 > 所属：[前端架构设计（索引）](./README.md)
 
 > 以下为最终生产产物（`backend/web/`）的强制规范。**开发/测试阶段可豁免**（dev 走 Vite 未签名产物，不计 SRI/版本）。

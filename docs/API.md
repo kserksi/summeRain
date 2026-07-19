@@ -5,6 +5,7 @@
 > - **Base URL**：`/api/v1`
 > - **默认端口**：`8080`（`SERVER_PORT`）
 > - **图片直链**：`GET /i/:link`（不在 `/api/v1` 下）
+> - **校对基线**：`v2.0.0`；早期 V2 版本可能频繁调整，以对应版本源码和发布说明为最终依据
 
 ---
 
@@ -54,7 +55,7 @@
 
 ### 运行依赖
 
-服务启动需 MySQL + Redis 可连通（`main.go` 启动时 `Ping` 失败会 `Fatal`）。图片缩略/格式转换依赖 imgproxy。基础设施可用 `docker-compose.yml` 一键启动。
+服务启动需 MySQL + Redis 可连通（`main.go` 启动时 `Ping` 失败会 `Fatal`）。imgproxy 用于有界的 V1 动态转换，以及启用水印时的 V2 发布阶段；已有持久化变体可直接读取。基础设施可用 `docker-compose.yml` 一键启动。
 
 健康检查：
 - `GET /health` → `{"status":"ok"}`
@@ -74,10 +75,11 @@
 | Cookie | 用途 | HttpOnly | 有效期 |
 |---|---|---|---|
 | `__Host-session_token` | 会话凭证 | ✅ 是 | 30 天（2592000 秒） |
-| `__Host-csrf_token` | CSRF 防护 | ❌ 否（前端可读） | 30 天 |
+| `__Host-csrf_token` | CSRF 防护 | ❌ 否（前端可读） | Cookie Max-Age 30 天；服务端记录 24 小时 |
 
 - Cookie 为 `__Host-` 前缀，要求 **HTTPS + 同站**，`SameSite=Strict`、`Secure`。
 - 前端只需 `credentials: 'include'` 发请求即可，浏览器自动带 cookie。
+- CSRF 服务端记录在有效写操作后续期；过期时可通过 `POST /api/v1/auth/csrf/refresh` 恢复，前端仅对显式幂等请求自动刷新并重放。
 
 ### 2.2 CSRF 保护（关键）
 
@@ -528,7 +530,7 @@ V2 默认启用。浏览器接受静态 JPG/JPEG、PNG、BMP、WebP、AVIF，拒
 
 - V2 发布图：`GET /i/<asset_link>.webp`。
 - V2 固定变体：`GET /i/<asset_link>/master.webp`、`gallery.webp`、`admin.webp`、`publish.webp`；查询参数不会触发新的尺寸生成。`master` 与 `admin` 只允许 owner/admin 访问。
-- V1 `link` 仍可写成 `<unique_link>` 或 `<unique_link>.<ext>`（ext ∈ webp/avif/jpg/jpeg/png/gif）。无扩展名返回原图，带扩展名走有界的 imgproxy 兼容路径，并支持 `w`/`h`（≤4096）/`q`。无尺寸 WebP 与后台生成的 AVIF 可持久化；任意尺寸等动态结果只在请求期间使用临时文件，同参数并发请求会合并，最后一个响应释放后删除。
+- V1 `link` 仍可写成 `<unique_link>` 或 `<unique_link>.<ext>`（ext ∈ webp/avif/jpg/jpeg/png/gif）。无扩展名返回原图；已有的无尺寸 WebP 与后台 AVIF 可直接读取，其余格式或 `w`/`h`（≤4096）/`q` 请求使用有界的 imgproxy 兼容路径。任意尺寸等动态结果只在请求期间使用临时文件，同参数并发请求会合并，最后一个响应释放后删除。
 - **私密图片**：
   - owner/admin（同源会话，`__Host-session_token` / `Bearer`）→ **直接放行**，无需令牌。
   - 第三方：query `?token=xxx`、头 `X-Image-Token` 或 `Authorization: Bearer xxx`。

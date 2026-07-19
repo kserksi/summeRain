@@ -1,157 +1,176 @@
 # summeRain
 
-> 自托管图片托管与相册服务，提供图片转码、水印、自适应尺寸、多存储后端以及 Web/设备端鉴权。
+> A self-hosted image hosting and photo album service with a resource-aware
+> upload pipeline, fixed image variants, watermarking, private sharing, and
+> compatibility for existing V1 images.
 
+[![CI and Docker](https://github.com/kserksi/summeRain/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/kserksi/summeRain/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/kserksi/summeRain)](https://github.com/kserksi/summeRain/releases)
+[![Docker Hub](https://img.shields.io/docker/v/jaykserks/summerain?label=docker)](https://hub.docker.com/r/jaykserks/summerain)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
-[![Go](https://img.shields.io/badge/Go-1.26-00ADD8.svg)](https://go.dev)
-[![React](https://img.shields.io/badge/React-19-61DAFB.svg)](https://react.dev)
-[![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6.svg)](https://www.typescriptlang.org/)
 
-## 项目概览
+> **Early-release notice:** V2 is still an early release. The upload protocol,
+> browser processing pipeline, schema, compatibility behavior, and operational
+> defaults may change frequently. Review every changelog, back up MySQL and the image
+> volume, and pin an exact release tag or OCI index digest in production.
 
-summeRain 采用“Go 模块化单体 + React 静态 SPA”的同源部署架构：Go 服务统一提供 `/api/v1/*` API、`/i/:link` 图片直链以及前端静态资源；MySQL 保存业务与任务真相，Redis 承担限流、浏览量缓冲和设备端防重放，imgproxy 只保留给 V1 兼容路径及服务端发布水印。
+[Documentation](./SUMMARY.md) | [V2.0.0 release notes](./docs/releases/v2.0.0.md) | [Docker Hub](https://hub.docker.com/r/jaykserks/summerain) | [GHCR](https://github.com/kserksi/summeRain/pkgs/container/summerain)
+
+## Overview
+
+summeRain uses a modular Go monolith and a React single-page application. The
+Go service exposes the `/api/v1/*` API, serves images under `/i/*`, and hosts
+the compiled frontend from the same origin. MySQL is the authoritative store
+for application and job state. Redis provides bounded caching, rate limiting,
+view buffering, and device replay protection. imgproxy provides bounded V1
+dynamic transformations and the optional V2 watermark stage.
 
 ```text
 Browser / Android / Windows
-          │
-          ▼
-   Go + Gin (:8080)
-     ├─ /api/v1/* ─→ middleware → handler → service → repository
-     ├─ /i/:link  ─→ 权限校验 → 本地/R2 → imgproxy
-     └─ /*        ─→ backend/web/（React SPA）
-                              │
-             ┌────────────────┼────────────────┐
-             ▼                ▼                ▼
-        MySQL 8.4         Redis 8       本地存储 / R2
+            |
+            v
+      Go + Gin (:8080)
+        |-- /api/v1/* --> middleware --> handler --> service --> repository
+        |-- /i/*
+        |     |-- V2 --> authorization --> fixed local assets
+        |     `-- V1 --> stored asset or bounded imgproxy transform
+        |-- publish worker --> optional imgproxy watermark --> local publish asset
+        `-- /*        --> backend/web (React SPA)
+                                      |
+                         +------------+------------+
+                         |            |            |
+                         v            v            v
+                     MySQL 8.4     Redis 8    local image volume
 ```
 
-## 核心能力
+## V2 Image Pipeline
 
-### 图片与存储
+V2 moves the expensive decode, resize, format conversion, and compression work
+to the browser. The backend accepts fixed-recipe, manifest-declared WebP parts, validates them
+while streaming to staging storage, and promotes fixed variants without
+re-reading the upload solely for validation.
 
-- **浏览器端预处理**：V2 启用时，静态 JPG、JPEG、PNG、BMP、WebP、AVIF 在上传前生成 `master`、`gallery`、`admin` 和 `publish_source` 四份固定 WebP 上传部件；服务端关闭 V2 时，Web 根据配方能力位自动回退到 V1 multipart。
-- **固定访问变体**：发布完成后持久化 `master`、`gallery`、`admin` 和 `publish`；My Images 使用 400×400，Image Management 使用 120×160 文件并以 CSS 60×80 显示（2x 像素密度），发布源最长边 2048。中间 `publish_source` 在发布后删除。
-- **文字水印**：服务端仅对发布产物应用水印，管理员可配置文案、位置、透明度、字号和颜色。
-- **V1 兼容**：历史图片继续支持动态格式、尺寸和质量参数；无尺寸 WebP 与后台 AVIF 可持久化，任意尺寸等动态结果只写入有界临时文件，并在最后一个请求完成后删除。
-- **内容去重**：按 SHA-256 识别相同源文件，通过 `ImageFile.reference_count` 管理物理文件生命周期。
-- **多存储后端**：支持本地磁盘、Cloudflare R2 和 S3 兼容存储；公开原图可重定向到 R2/CDN。
-- **历史存储安全**：主服务不执行历史图片批量迁移；未分类的 V1 记录仅走本地优先兼容读取，正式迁移由后续独立工具完成。
-- **配额管理**：按用户统计存储用量，达到 90% 时发送通知；管理员可调整用户配额。
-- **批量操作**：客户端处理串行、上传流水线并发 2、上传部件自适应并发 2～3，并支持流式批量下载。
+| Asset | Geometry | Quality | Lifecycle and use |
+|---|---|---:|---|
+| `master` | Original oriented dimensions | 80 | Persisted full-resolution WebP; owner/admin access |
+| `gallery` | 400x400 cover crop | 60 | Persisted My Images and dashboard preview |
+| `admin` | 120x160 cover crop | 60 | Persisted Image Management preview, displayed at 60x80 |
+| `publish_source` | Longest edge at most 2048 px | 80 | Temporary input for server-side publishing |
+| `publish` | Derived from `publish_source` | 80 | Persisted sharing asset with the optional watermark |
 
-### 账号、权限与分享
+`publish_source` and session staging data are removed after publishing. The
+server applies watermarks only to the final `publish` asset. V2 does not create
+arbitrary sizes on first access, which avoids the unbounded thumbnail work that
+made V1 vulnerable to hot-resource bursts.
 
-- **Web 鉴权**：使用 `__Host-` Secure/HttpOnly Cookie，并对写请求校验双提交 CSRF Token。
-- **设备端鉴权**：Android / Windows 使用 `identity → bootstrap → session` 的 Bearer Token 流程，每个平台最多保留 3 个身份令牌。
-- **私密图分享**：每张私密图片最多一个有效分享令牌，TTL 为 10 分钟～3 天；重新签发会撤销旧令牌。
-- **可插拔 Captcha**：支持 `none`、reCAPTCHA v3、Cloudflare Turnstile；显式关闭默认跨源隔离后也可选择极验 v4。
-- **角色与状态**：提供 `user/admin` 角色；管理员只在 `active/suspended` 间切换状态，注销状态机独立维护 `pending_deletion/deleting`。
-- **会话管理**：用户可查看并吊销 Web 或设备会话；设备会话支持心跳、版本下限和平台一致性校验。
-- **账号生命周期**：管理员可发起 24 小时延迟注销并在执行前撤销，后台 Worker 负责最终清理。
-- **审计与安全**：bcrypt 密码哈希、审计日志、请求 ID、安全响应头、路径穿越防护和 SVG 下载保护。
+### Upload Behavior
 
-### Web 界面与运维
+- Static JPEG, PNG, BMP, WebP, and AVIF input is supported.
+- Animated images and GIF uploads are not supported in V2.0.0.
+- Source files are limited to 15 MiB and 50 megapixels.
+- Browser processing concurrency is 1 and upload-pipeline concurrency is 2.
+- Part uploads start at concurrency 2 and may adapt to 3 on capable clients.
+- Upload sessions are resumable and idempotent, with durable status polling and
+  a ten-minute client polling deadline after which status can be resumed.
+- The high-capacity browser path uses `wasm-vips`; a bounded Canvas/Pica path is
+  used when the required browser isolation and memory capabilities are absent.
+- Existing V1 images remain readable through their original links and retain
+  bounded dynamic transformation support.
 
-- **功能域**：登录注册、控制台、图片列表/上传/详情、个人资料、通知和管理后台。
-- **管理后台**：用户状态与配额、延迟注销、全站图片、系统统计、Captcha、水印、语言及 R2 配置。
-- **头像**：支持浏览器端裁剪并更新个人头像。
-- **主题**：咖啡色板浅色/深色主题，并支持圆形扩散切换动画和 reduced-motion 降级。
-- **国际化**：以英语为默认语言，内置简体中文和日语，站点语言由管理员统一配置。
-- **可观测性**：提供 `/health`、`/ready`、`/metrics`，并导出 Prometheus 指标。
-- **后台任务**：设备心跳监控、浏览量批量落库、临时数据清理和用户延迟注销。
+## Features
 
-## 仓库结构
+### Images and Storage
 
-```text
-summeRain/
-├─ backend/
-│  ├─ cmd/server/          服务入口、依赖装配、路由和优雅关闭
-│  ├─ internal/
-│  │  ├─ config/           环境变量配置
-│  │  ├─ handler/          HTTP 参数与响应适配
-│  │  ├─ middleware/       鉴权、CSRF、限流和安全头
-│  │  ├─ model/            GORM 数据模型
-│  │  ├─ repository/       MySQL/Redis 数据访问
-│  │  ├─ service/          认证、图片、管理、通知、Captcha、R2
-│  │  ├─ worker/           后台周期任务
-│  │  └─ pkg/              token、响应、错误码、imgproxy 签名
-│  └─ web/                 前端构建产物（由 Vite 生成，不提交）
-├─ frontend/
-│  ├─ src/features/        auth、captcha、images、user、notifications、admin
-│  ├─ src/components/      共享组件、布局和 shadcn/ui
-│  ├─ src/lib/             API、CSRF、Query Client、错误和工具
-│  ├─ src/store/           用户与主题状态
-│  ├─ src/i18n/            英语、中文和日语资源
-│  └─ src/App.tsx          路由、懒加载和权限守卫
-├─ docs/                   API、部署手册和架构设计
-└─ LICENSE                 Apache-2.0
-```
+- Immutable, content-addressed `master`, `gallery`, and `admin` assets, plus a
+  revision-scoped `publish` asset.
+- Server-side text watermarks with configurable text, position, opacity, size,
+  and color.
+- SHA-256 content identity and reference-counted physical file lifecycles.
+- Local storage for V2 assets and storage-lineage-aware local/R2 reads for the
+  V1 compatibility path.
+- Durable outbox delivery for CDN purges and physical local/R2 deletion.
+- A streamed account archive during the pending-deletion lock period, without
+  assembling the ZIP in application memory.
+- Storage quotas, notifications, disk-pressure admission, and bounded cleanup.
 
-### 后端分层
+### Accounts, Privacy, and Sharing
 
-```text
-request → middleware → handler → service → repository → MySQL/Redis
-                                      └─→ imgproxy / filesystem / R2
-```
+- A Secure, HttpOnly `__Host-session_token` plus a browser-readable,
+  server-backed `__Host-csrf_token` submitted through the CSRF request header.
+- Bearer-token bootstrap and sessions for Android and Windows clients.
+- One active share token per private image, with a configurable lifetime from
+  ten minutes to three days.
+- User and administrator roles, session management, audit logs, and a durable
+  delayed account-deletion workflow.
+- Optional reCAPTCHA v3 and Cloudflare Turnstile integration. GeeTest v4 is
+  available only when cross-origin isolation is explicitly disabled.
+- Immediate public/private origin-alias transitions with durable CDN purge work.
 
-`cmd/server/main.go` 是组合根：负责连接 MySQL/Redis、执行迁移与默认配置初始化、构造各层依赖、注册路由、启动 Worker，并在收到退出信号后完成优雅关闭。
+### Web and Operations
 
-### 前端数据流
+- Authentication, dashboard, upload queue, image management, profile,
+  notifications, and administration views.
+- English, Simplified Chinese, and Japanese interface resources.
+- Light and dark themes with reduced-motion support.
+- `/health`, `/ready`, and `/metrics` operational endpoints.
+- Versioned MySQL migrations with advisory locking and immutable checksums.
+- Multi-platform `linux/amd64` and `linux/arm64` images built only by GitHub
+  Actions and published to Docker Hub and GHCR.
 
-前端按业务域组织，每个 `features/<domain>/` 通常包含 `api.ts`、`hooks.ts`、`pages/` 和 `components/`：
+## Technology
 
-- `lib/api.ts` 是统一请求出口，负责 Cookie、CSRF、响应信封和全局鉴权错误。
-- TanStack Query 管理图片、通知、个人资料和后台数据等服务端状态。
-- Zustand 只保存当前用户快照和主题；用户身份不持久化，刷新后重新请求 `/auth/me`。
-- React Router 使用 `BrowserRouter`，页面按路由懒加载；`AuthGuard` 和 `AdminGuard` 负责前端导航保护，后端中间件仍是最终权限边界。
-
-## 技术栈
-
-| 层 | 技术 |
+| Layer | Stack |
 |---|---|
-| 前端 | React 19 · React Router 8 · Vite 8 · TypeScript 6 · Tailwind CSS 4 · shadcn/ui |
-| 前端数据 | TanStack Query 5 · Zustand 5 · React Hook Form 7 · Zod 4 |
-| 前端体验 | i18next · Sonner · Tabler Icons · View Transitions · SRI |
-| 后端 | Go 1.26 · Gin · GORM · MySQL 8.4 · Redis 8 |
-| 图片与对象存储 | 浏览器 WebP 预处理 · imgproxy v4.0.11 · AWS SDK for Go v2 · Cloudflare R2/S3 |
-| 运维 | Docker Compose · Prometheus · 非 root 容器（UID 10001） |
-| 测试 | Go testing · Vitest · Testing Library · MSW |
+| Frontend | React 19, React Router 8, Vite 8, TypeScript 6, Tailwind CSS 4, shadcn/ui |
+| Frontend data | TanStack Query 5, Zustand 5, React Hook Form 7, Zod 4 |
+| Backend | Go, Gin, GORM, MySQL 8.4, Redis 8 |
+| Image processing | wasm-vips, Pica, Web APIs, imgproxy 4 |
+| Storage | Local V2 filesystem; Cloudflare R2 and compatible path-style S3 endpoints for V1 lineage |
+| Testing | Go testing, Vitest, Testing Library, MSW |
 
-## 快速开始
+Exact CI, service, and browser-processing versions are recorded in
+[`requirements.lock`](./requirements.lock). Go and npm dependency graphs are
+locked by `backend/go.sum` and `frontend/package-lock.json`.
 
-### 前置要求
+## Quick Start for WSL
 
-- Go 1.24+（CI / 容器锁定 1.26.5）
-- Node.js 20+（CI / 容器锁定 24.18.0 LTS）
-- Docker 与 Docker Compose
+### Requirements
 
-### 1. 在 WSL 启动开发依赖
+- Go 1.24 or newer. CI and container builds currently use Go 1.26.5.
+- Node.js `^20.19.0 || >=22.12.0`. CI and container builds currently use
+  Node.js 24.18.0 LTS.
+- Docker Engine with Docker Compose.
+- OpenSSL for the generated local HTTPS certificate.
+
+### 1. Start Development Dependencies
 
 ```bash
 ./scripts/dev-wsl.sh deps-up
 ```
 
-该命令只启动固定版本的 MySQL、Redis 和 imgproxy，不构建应用镜像。
+This starts pinned MySQL, Redis, and imgproxy containers. It does not build the
+summeRain application image locally.
 
-- MySQL：`127.0.0.1:13306`
-- Redis：`127.0.0.1:16379`
-- imgproxy：`127.0.0.1:18081`
+| Service | Default address |
+|---|---|
+| MySQL | `127.0.0.1:13306` |
+| Redis | `127.0.0.1:16379` |
+| imgproxy | `127.0.0.1:18081` |
 
-可分别通过 `SUMMERAIN_DEV_MYSQL_PORT`、`SUMMERAIN_DEV_REDIS_PORT` 和 `SUMMERAIN_DEV_IMGPROXY_PORT` 覆盖这些端口。
+The ports can be changed with `SUMMERAIN_DEV_MYSQL_PORT`,
+`SUMMERAIN_DEV_REDIS_PORT`, and `SUMMERAIN_DEV_IMGPROXY_PORT`.
 
-### 2. 启动后端开发进程
+### 2. Start the Backend
 
 ```bash
 ./scripts/dev-wsl.sh backend
 ```
 
-- API 默认监听 `http://127.0.0.1:18080`，可通过 `SUMMERAIN_DEV_BACKEND_PORT` 覆盖
-- 存活检查：`GET /health`
-- 就绪检查：`GET /ready`（同时检查 MySQL 与 Redis）
-- Prometheus：`GET /metrics`
-- 首次启动自动执行数据库迁移
+The API listens on `http://127.0.0.1:18080` by default. The first start applies
+pending database migrations. Use `SUMMERAIN_DEV_BACKEND_PORT` to change the
+port.
 
-### 3. 启动前端开发服务器
+### 3. Start the Frontend
 
 ```bash
 cd frontend
@@ -160,64 +179,16 @@ cd ..
 ./scripts/dev-wsl.sh frontend
 ```
 
-脚本会在首次运行时生成本地开发证书，并默认启动 `https://127.0.0.1:5173`；若 5173 已被占用，Vite 会自动选择下一个可用端口。开发服务器会把 `/api/` 和 `/i/` 同源代理到 `127.0.0.1:18080`，也可通过 `VITE_DEV_BACKEND_URL` 覆盖目标地址。
+The development server uses `https://127.0.0.1:5173` by default and proxies
+`/api/` and `/i/` to the local backend. Accept the generated development
+certificate on first use. HTTPS and same-origin proxying are required by the
+`__Host-` session cookie.
 
-> 首次访问需要在浏览器中接受自签名开发证书。Web 鉴权 Cookie 使用 `__Host-` 前缀，必须保持 HTTPS 与同源代理。开发与生产默认启用 COOP/COEP 跨源隔离以支持 wasm-vips 处理 50MP 大图；引入第三方脚本、字体或图片时，资源服务器必须提供兼容的 CORS 或 CORP 响应头。GeeTest v4 不满足默认隔离策略，隔离开启时请使用 `none`、reCAPTCHA 或 Turnstile。
+Development enables COOP/COEP by default for the 50 MP wasm-vips path. Every
+third-party script, font, and image must therefore provide compatible CORS or
+Cross-Origin-Resource-Policy headers.
 
-### 4. 构建前端
-
-```bash
-cd frontend
-npm run build
-```
-
-构建产物输出到 `backend/web/`。从 `backend/` 目录启动 Go 服务后，未知的非 API 路由会回退到 `web/index.html`，因此 SPA 深链刷新可用。
-
-### 5. 通过 GitHub Actions 发布容器镜像
-
-推送到 `main` 或 `master` 后，GitHub Actions 会先运行前后端检查，再使用根目录的多阶段 Dockerfile 在 GitHub Runner 上构建 `linux/amd64` 和 `linux/arm64` 镜像，并同时推送到 GHCR 和 Docker Hub。整个发布过程不需要在本地构建镜像。
-
-- Docker Hub：`jaykserks/summerain`
-- GHCR：`ghcr.io/kserksi/summerain`
-
-工作流还会把仓库根目录的 `README.md` 同步到 Docker Hub 仓库说明。GitHub 仓库需要配置 Actions Secrets：`DOCKERHUB_USERNAME`（值为 `Jaykserks`）以及具有 `read/write/delete` 权限的 `DOCKERHUB_TOKEN`。
-
-`main` / `master` 的普通推送会发布 `edge` 和 `sha-<short-commit>`，不会覆盖稳定版 `latest`。修改根目录 `VERSION` 才会触发正式发布，并自动创建同名 Git Tag 和 GitHub Release。
-
-稳定版 `1.2.3` 会发布 `v1.2.3`、`1.2.3`、`1.2`、`1`、`latest` 和提交标签；`1.3.0-rc.1` 等预发布版只发布精确版本与提交标签，不更新稳定别名。精确 SemVer 标签在 Docker Hub 中自动设为不可变，`latest`、主版本和次版本别名保持可移动。
-
-正式发布任务可安全重跑：已有 Git tag 必须仍指向当前发布提交；工作流会校验 Docker Hub 与 GHCR 中 `vX.Y.Z`、`X.Y.Z` 的多架构清单摘要。任一 registry 留有完整或局部发布结果时，会从已有摘要跨 registry 补齐精确标签，并重新指向缺失或过期的稳定别名与提交标签，不会重推已有不可变标签；发现摘要冲突则停止发布。Docker Hub 的不可变标签策略仅在正式发布链路中强制刷新，并对临时 5xx 响应进行有限重试，因此普通 `edge` 发布不依赖该管理 API。
-
-版本号严格禁止 core 数字和纯数字预发布标识的前导零；由于容器标签无法无损表达 `+`，正式版本不使用 build metadata。工作流引用的第三方 Actions 均固定到完整 commit SHA。
-
-正式发布只需更新 `VERSION` 并推送：
-
-```bash
-printf '1.2.3\n' > VERSION
-git add VERSION
-git commit -m "chore: release v1.2.3"
-git push origin HEAD:main
-```
-
-完整版本规则、发布检查和回滚约定见 [发布与标签管理](docs/RELEASING.md)。
-
-Compose 通过受忽略的 `backend/.env` 同时向服务和 Compose 插值提供配置。先从示例创建并编辑它，将 `DOCKER_IMAGE` 改为已发布的精确版本，再拉取镜像；`--no-build` 会阻止部署机本地构建：
-
-```bash
-cp backend/.env.example backend/.env
-chmod 0600 backend/.env
-# 编辑 backend/.env 中的镜像版本、数据库密码、Cookie 与 imgproxy 密钥
-docker compose --env-file backend/.env -f backend/docker-compose.deploy.yml pull
-docker compose --env-file backend/.env -f backend/docker-compose.deploy.yml up -d --no-build
-```
-
-跨架构部署如需 digest 级固定，应使用 OCI 多架构索引 digest；平台专属的 child manifest digest 不应在 `amd64` 与 `arm64` 之间复用。依赖镜像锁定策略见 [`requirements.lock`](requirements.lock)。
-
-生产环境的 nginx/Cloudflare 前置和回滚流程见 [部署与使用文档](docs/USAGE.md)。
-
-## 开发验证
-
-提交前建议运行：
+### 4. Run Validation
 
 ```bash
 cd backend
@@ -233,52 +204,148 @@ npm run build
 npx vitest run
 ```
 
-代码贡献规范和 Conventional Commits 约定见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+## Production Deployment
 
-## 限制与阈值
+Application images are built by GitHub Actions. Production hosts should pull an
+exact published tag or OCI index digest and must use `--no-build`.
 
-| 项目 | 当前值 |
-|---|---|
-| 单个源文件上限 | 15 MB |
-| 单图像素上限 | 50 MP |
-| 客户端处理 / 上传流水线 | 1 / 2 |
-| 浏览器活跃上传会话 | 4（后端每用户上限 8） |
-| 上传部件并发 | 初始 2，成功后自适应到 3 |
-| 上传输入格式 | 静态 JPG / JPEG / PNG / BMP / WebP / AVIF |
-| V2 持久化格式 | WebP |
-| 默认/最小用户配额 | 500 MB |
-| 配额预警阈值 | 90% |
-| 图片短链 | 12 位 hex（48 bit 熵，冲突时重试） |
-| Web 会话有效期 | 30 天 |
-| CSRF Token 有效期 | 24 小时，成功写操作后续期 |
-| 设备身份令牌 | 90 天，每个平台最多 3 个 |
-| 设备 API 会话 | 15 分钟，活动时续期 |
-| 私密图片令牌 | 10 分钟～3 天 |
-| V2 固定访问变体 | `master`、400×400 `gallery`、120×160 `admin`（CSS 60×80，2x）、最长边 2048 `publish` |
+```bash
+cp backend/.env.example backend/.env
+chmod 0600 backend/.env
+# Edit backend/.env and set an exact DOCKER_IMAGE, database password,
+# cookie secret, and imgproxy key/salt.
 
-完整配置和接口约定分别见 [docs/USAGE.md](docs/USAGE.md) 与 [docs/API.md](docs/API.md)。
+docker compose --env-file backend/.env \
+  -f backend/docker-compose.deploy.yml pull
 
-## 文档
+docker compose --env-file backend/.env \
+  -f backend/docker-compose.deploy.yml up -d --no-build
+```
 
-- [API 契约](docs/API.md)：接口字段、鉴权、CSRF、错误码与图片直链规则。
-- [部署与使用](docs/USAGE.md)：环境变量、Docker、nginx、运维和安全要点。
-- [前端架构设计](docs/design/frontend-architecture/)：技术选型、功能域、设计系统、构建与测试规范。
-- [后端调整方案](docs/backend-changes-plan.md)：私密图统一令牌与多 Captcha Provider 的设计背景。
-- [贡献指南](CONTRIBUTING.md)：开发门禁、提交格式和 PR 约定。
-- [安全策略](SECURITY.md)：漏洞报告方式与支持范围。
+Example stable image:
+
+```text
+jaykserks/summerain:2.0.0
+```
+
+Published registries:
+
+- Docker Hub: `jaykserks/summerain`
+- GHCR: `ghcr.io/kserksi/summerain`
+
+Use the OCI multi-platform index digest when pinning by digest across
+architectures. Do not reuse an architecture-specific child-manifest digest on
+both `amd64` and `arm64` hosts.
+
+See [Deployment and Usage](./docs/USAGE.md) for the complete environment,
+nginx/CDN, health-check, upgrade, and rollback reference.
+
+## Release Channels
+
+- Regular pushes to `main` publish `edge` and `sha-<12-character-commit>`.
+- A stable `VERSION` such as `2.0.0` publishes `v2.0.0`, `2.0.0`, `2.0`, `2`,
+  `latest`, and the commit tag.
+- A prerelease such as `2.1.0-rc.1` publishes exact version tags and the commit
+  tag without updating stable aliases.
+- Exact semantic-version tags are immutable. Moving aliases remain movable.
+- Release reruns reconcile Docker Hub and GHCR by verified manifest digest and
+  stop if exact tags conflict.
+- The root README is synchronized to Docker Hub after a successful publication.
+
+The full release contract is documented in
+[Release and Tag Management](./docs/RELEASING.md).
+
+## Resource Profile
+
+The default Compose profile is designed for a 3-core, 4 GiB host shared with
+other services.
+
+| Service | CPU limit | Memory limit |
+|---|---:|---:|
+| Backend | 0.75 CPU | 640 MiB |
+| MySQL | 0.75 CPU | 1024 MiB |
+| Redis | 0.15 CPU | 192 MiB |
+| imgproxy | 0.70 CPU | 512 MiB |
+
+The backend defaults to eight global and four per-user concurrent part uploads.
+MySQL and Redis pools are bounded. New V2 sessions are rejected at the default
+80% disk soft limit, and new parts/publish outputs are rejected at the 90% hard
+limit. Reduce imgproxy and watermark workers from two to one when the host is
+under sustained contention.
+
+These limits are a conservative starting point, not a universal capacity
+guarantee. Disk latency, database latency, watermark complexity, and colocated
+workloads affect throughput.
+
+## Repository Layout
+
+```text
+summeRain/
+|-- backend/
+|   |-- cmd/server/                 application entry point
+|   |-- internal/                   handlers, services, repositories, workers
+|   |-- migrations/                 versioned SQL migrations
+|   `-- web/                        generated frontend build output
+|-- frontend/
+|   |-- src/features/               domain-oriented application features
+|   |-- src/components/             shared UI and layout
+|   |-- src/lib/                    API, CSRF, errors, and utilities
+|   |-- src/store/                  user and theme state
+|   `-- src/i18n/                   English, Chinese, and Japanese resources
+|-- docs/                           API, operations, releases, and architecture
+|-- scripts/                        development and repository verification
+|-- .gitbook.yaml                   GitBook Git Sync configuration
+`-- SUMMARY.md                      GitBook navigation
+```
+
+Backend requests follow this boundary:
+
+```text
+request -> middleware -> handler -> service -> repository -> MySQL / Redis
+                                      `-> filesystem / R2 / imgproxy
+```
+
+## Documentation
+
+All tracked project documentation is included in the GitBook navigation in
+[`SUMMARY.md`](./SUMMARY.md). The primary references are:
+
+- [Deployment and Usage](./docs/USAGE.md)
+- [API Reference](./docs/API.md)
+- [Release and Tag Management](./docs/RELEASING.md)
+- [Frontend Architecture](./docs/design/frontend-architecture/README.md)
+- [Schema Migrations](./backend/migrations/README.md)
+- [Contributing](./CONTRIBUTING.md)
+- [Security Policy](./SECURITY.md)
+
+The repository is the source of truth for GitBook Git Sync. Manage README and
+navigation changes in Git rather than creating duplicate README pages in the
+GitBook editor.
+
+## Known Limitations
+
+- V2.0.0 accepts static images only; animated-image support is planned.
+- V2 persists fixed WebP variants and does not expose arbitrary dynamic resize
+  combinations.
+- V2 does not retain the original encoded source bytes; `master` is a
+  full-resolution quality-80 WebP.
+- Existing V1 images are not automatically converted or assigned V2 variants.
+- Historical R2 migration is intentionally delegated to a separate migration
+  tool and is not performed by the main server.
+- Disabling cross-origin isolation enables GeeTest v4 but removes the
+  high-capacity wasm-vips browser path.
+
+## Contributing and Security
+
+Read [CONTRIBUTING.md](./CONTRIBUTING.md) before opening a pull request and
+follow [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md) in project spaces. Report
+security issues through the private process in [SECURITY.md](./SECURITY.md), not
+through a public issue. GitHub provides a private
+[security advisory form](https://github.com/kserksi/summeRain/security/advisories/new)
+for this repository.
 
 ## License
 
 Copyright 2026 The summeRain Authors
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+Licensed under the [Apache License 2.0](./LICENSE).

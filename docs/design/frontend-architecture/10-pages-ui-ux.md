@@ -1,5 +1,9 @@
 # 10 · 逐页 UI/UX 规范
 
+> [!WARNING]
+> **Archived design record.** This page predates the completed V2 frontend and
+> may contain obsolete versions, paths, or implementation status.
+
 > 所属：[前端架构设计（索引）](./README.md) · 设计令牌与组件规则见 [design-system/MASTER.md](./design-system/MASTER.md)。以下每页布局已在 `mockup/index.html` 验证。所有组件用 shadcn/ui 组合实现。
 
 ## 公开页

@@ -1,5 +1,11 @@
 # 后端调整方案（仅方案，不含实现）
 
+> [!WARNING]
+> **Archived design record.** This document captures a pre-V2 implementation
+> plan from June 18, 2026. The described token and CAPTCHA work has since been
+> implemented or superseded. Use the current source, API reference, and release
+> notes as the authoritative behavior.
+
 - **日期**：2026-06-18
 - **状态**：方案，待实现
 - **范围**：为支持前端设计（见 `docs/design/frontend-architecture/`）的两项既定规则，列出 Go 后端（`backend/`）需配套调整的 delta。

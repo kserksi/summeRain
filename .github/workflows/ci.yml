@@ -2,9 +2,9 @@ name: CI and Docker
 
 on:
   push:
-    branches: [main, master]
+    branches: [main, master, dev]
   pull_request:
-    branches: [main, master]
+    branches: [main, master, dev]
 
 permissions:
   contents: read
@@ -94,6 +94,15 @@ jobs:
       - name: Verify requirements.lock
         run: bash scripts/verify-requirements-lock.sh
 
+  documentation:
+    name: Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+
+      - name: Verify GitBook documentation
+        run: bash scripts/verify-gitbook-docs.sh
+
   backend:
     name: Backend (Go)
     runs-on: ubuntu-latest
@@ -152,8 +161,10 @@ jobs:
 
   docker:
     name: Publish container images
-    if: github.event_name == 'push'
-    needs: [release_info, dependency_lock, backend, frontend]
+    if: >-
+      ${{ github.event_name == 'push' &&
+          (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') }}
+    needs: [release_info, dependency_lock, documentation, backend, frontend]
     runs-on: ubuntu-latest
     permissions:
       contents: read
