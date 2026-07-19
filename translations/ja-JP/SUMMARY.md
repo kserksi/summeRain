@@ -15,6 +15,7 @@
 
 ## リリースノート
 
+* [V2.0.1](docs/releases/v2.0.1.md)
 * [V2.0.0](docs/releases/v2.0.0.md)
 
 ## アーカイブ済み設計記録
