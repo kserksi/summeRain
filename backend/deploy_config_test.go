@@ -122,8 +122,8 @@ func TestDefaultComposePullsApplicationImage(t *testing.T) {
 	if strings.Contains(compose, "\n    build:") {
 		t.Fatal("default compose must pull the application image instead of building locally")
 	}
-	if !strings.Contains(compose, "image: ${DOCKER_IMAGE:-jaykserks/summerain:edge}") {
-		t.Fatal("default compose must use the remote edge image unless DOCKER_IMAGE is explicit")
+	if !strings.Contains(compose, "image: ${DOCKER_IMAGE:-jaykserks/summerain:latest}") {
+		t.Fatal("default compose must follow the stable latest image unless DOCKER_IMAGE is explicit")
 	}
 	if !strings.Contains(compose, "MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}") {
 		t.Fatal("default compose must use the same DB_PASSWORD as the backend env file")
