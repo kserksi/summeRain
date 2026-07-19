@@ -197,9 +197,10 @@ jaykserks/summerain:2.0.0
 
 ## リリースチャンネル
 
-- `main` への通常の push は `edge` と `sha-<12-character-commit>` を公開します。
-- `2.0.0` のような安定版 `VERSION` は `v2.0.0`、`2.0.0`、`2.0`、`2`、`latest`、commit タグを公開します。
-- `2.1.0-rc.1` のようなプレリリースは正確なバージョンタグと commit タグを公開し、安定版エイリアスは更新しません。
+- `dev` への通常の push は `dev` と `dev-sha-<12-character-commit>` を公開します。
+- `2.0.1` のような開発版は `dev-v2.0.1`、`dev-2.0.1`、`dev`、開発 commit タグを公開します。`docker pull jaykserks/summerain:dev` で明示的に取得します。
+- `main` への通常の push は `main` と `main-sha-<12-character-commit>` を公開します。
+- `2.1.0` のような安定版は `v2.1.0`、`2.1.0`、`2.1`、`2`、`latest`、`main`、安定版 commit タグを公開します。既定の Compose イメージは、安定ブランチだけが更新する `latest` に従います。
 - 正確なセマンティックバージョンタグは不変です。移動可能なエイリアスは引き続き移動できます。
 - リリースの再実行では検証済み manifest ダイジェストを使って Docker Hub と GHCR を調整し、正確なタグが競合する場合は停止します。
 - 公開成功後、ルート README を Docker Hub に同期します。

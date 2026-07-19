@@ -22,6 +22,7 @@ jobs:
       version: ${{ steps.release.outputs.version }}
       tag: ${{ steps.release.outputs.tag }}
       prerelease: ${{ steps.release.outputs.prerelease }}
+      channel: ${{ steps.release.outputs.channel }}
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
@@ -38,6 +39,11 @@ jobs:
           echo "version=" >> "$GITHUB_OUTPUT"
           echo "tag=" >> "$GITHUB_OUTPUT"
           echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          if [ "$GITHUB_REF_NAME" = "dev" ]; then
+            echo "channel=dev" >> "$GITHUB_OUTPUT"
+          else
+            echo "channel=main" >> "$GITHUB_OUTPUT"
+          fi
 
           if [ "$EVENT_NAME" != "push" ]; then
             exit 0
@@ -76,7 +82,7 @@ jobs:
           fi
 
           prerelease=false
-          if [[ "$version" == *-* ]]; then
+          if [ "$GITHUB_REF_NAME" = "dev" ] || [[ "$version" == *-* ]]; then
             prerelease=true
           fi
 
@@ -163,7 +169,8 @@ jobs:
     name: Publish container images
     if: >-
       ${{ github.event_name == 'push' &&
-          (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') }}
+          (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' ||
+           github.ref == 'refs/heads/dev') }}
     needs: [release_info, dependency_lock, documentation, backend, frontend]
     runs-on: ubuntu-latest
     permissions:
@@ -176,6 +183,7 @@ jobs:
         run: |
           echo "GHCR_IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
           echo "DOCKERHUB_IMAGE=jaykserks/summerain" >> "$GITHUB_ENV"
+          echo "IMAGE_CHANNEL=${{ needs.release_info.outputs.channel }}" >> "$GITHUB_ENV"
 
       - name: Validate Docker Hub credentials
         env:
@@ -215,6 +223,7 @@ jobs:
           IS_RELEASE: ${{ needs.release_info.outputs.is_release }}
           RELEASE_VERSION: ${{ needs.release_info.outputs.version }}
           PRERELEASE: ${{ needs.release_info.outputs.prerelease }}
+          IMAGE_CHANNEL: ${{ needs.release_info.outputs.channel }}
           RUN_ATTEMPT: ${{ github.run_attempt }}
         run: |
           echo "skip_push=false" >> "$GITHUB_OUTPUT"
@@ -229,7 +238,7 @@ jobs:
           fi
           result="$(bash .github/scripts/reconcile-release-images.sh \
             "$mode" "$DOCKERHUB_IMAGE" "$GHCR_IMAGE" \
-            "$RELEASE_VERSION" "$PRERELEASE" "$GITHUB_SHA")"
+            "$RELEASE_VERSION" "$PRERELEASE" "$IMAGE_CHANNEL" "$GITHUB_SHA")"
 
           if [ "$result" = recovered ]; then
             echo "skip_push=true" >> "$GITHUB_OUTPUT"
@@ -252,13 +261,17 @@ jobs:
           flavor: |
             latest=false
           tags: |
-            type=raw,value=edge,enable=${{ needs.release_info.outputs.is_release != 'true' }}
-            type=raw,value=latest,enable=${{ needs.release_info.outputs.is_release == 'true' && needs.release_info.outputs.prerelease != 'true' }}
-            type=raw,value=${{ needs.release_info.outputs.tag || 'v0.0.0' }},enable=${{ needs.release_info.outputs.is_release == 'true' }}
-            type=semver,pattern={{version}},value=${{ needs.release_info.outputs.tag || 'v0.0.0' }},enable=${{ needs.release_info.outputs.is_release == 'true' }}
-            type=semver,pattern={{major}}.{{minor}},value=${{ needs.release_info.outputs.tag || 'v0.0.0' }},enable=${{ needs.release_info.outputs.is_release == 'true' && needs.release_info.outputs.prerelease != 'true' }}
-            type=semver,pattern={{major}},value=${{ needs.release_info.outputs.tag || 'v0.0.0' }},enable=${{ needs.release_info.outputs.is_release == 'true' && needs.release_info.outputs.prerelease != 'true' }}
-            type=sha,prefix=sha-
+            type=raw,value=dev,enable=${{ needs.release_info.outputs.channel == 'dev' }}
+            type=raw,value=main,enable=${{ needs.release_info.outputs.channel == 'main' }}
+            type=raw,value=latest,enable=${{ needs.release_info.outputs.channel == 'main' && needs.release_info.outputs.is_release == 'true' && needs.release_info.outputs.prerelease != 'true' }}
+            type=raw,value=dev-${{ needs.release_info.outputs.tag || 'v0.0.0' }},enable=${{ needs.release_info.outputs.channel == 'dev' && needs.release_info.outputs.is_release == 'true' }}
+            type=raw,value=dev-${{ needs.release_info.outputs.version || '0.0.0' }},enable=${{ needs.release_info.outputs.channel == 'dev' && needs.release_info.outputs.is_release == 'true' }}
+            type=raw,value=${{ needs.release_info.outputs.tag || 'v0.0.0' }},enable=${{ needs.release_info.outputs.channel == 'main' && needs.release_info.outputs.is_release == 'true' }}
+            type=semver,pattern={{version}},value=${{ needs.release_info.outputs.tag || 'v0.0.0' }},enable=${{ needs.release_info.outputs.channel == 'main' && needs.release_info.outputs.is_release == 'true' }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.release_info.outputs.tag || 'v0.0.0' }},enable=${{ needs.release_info.outputs.channel == 'main' && needs.release_info.outputs.is_release == 'true' && needs.release_info.outputs.prerelease != 'true' }}
+            type=semver,pattern={{major}},value=${{ needs.release_info.outputs.tag || 'v0.0.0' }},enable=${{ needs.release_info.outputs.channel == 'main' && needs.release_info.outputs.is_release == 'true' && needs.release_info.outputs.prerelease != 'true' }}
+            type=sha,prefix=dev-sha-,enable=${{ needs.release_info.outputs.channel == 'dev' }}
+            type=sha,prefix=main-sha-,enable=${{ needs.release_info.outputs.channel == 'main' }}
 
       - name: Build and push image
         if: steps.release_images.outputs.skip_push != 'true'
@@ -281,10 +294,11 @@ jobs:
         env:
           RELEASE_VERSION: ${{ needs.release_info.outputs.version }}
           PRERELEASE: ${{ needs.release_info.outputs.prerelease }}
+          IMAGE_CHANNEL: ${{ needs.release_info.outputs.channel }}
         run: |
           bash .github/scripts/reconcile-release-images.sh \
             verify "$DOCKERHUB_IMAGE" "$GHCR_IMAGE" \
-            "$RELEASE_VERSION" "$PRERELEASE" "$GITHUB_SHA"
+            "$RELEASE_VERSION" "$PRERELEASE" "$IMAGE_CHANNEL" "$GITHUB_SHA"
 
   github_release:
     name: Publish GitHub Release
@@ -322,7 +336,9 @@ jobs:
   dockerhub_metadata:
     name: Docker Hub tag policy and README
     if: >-
-      ${{ always() && github.event_name == 'push' && needs.docker.result == 'success' &&
+      ${{ always() && github.event_name == 'push' &&
+          (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') &&
+          needs.docker.result == 'success' &&
           (needs.release_info.outputs.is_release != 'true' || needs.github_release.result == 'success') }}
     needs: [release_info, docker, github_release]
     runs-on: ubuntu-latest

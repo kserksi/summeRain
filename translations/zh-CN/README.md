@@ -197,9 +197,10 @@ jaykserks/summerain:2.0.0
 
 ## 发布通道
 
-- 普通推送到 `main` 会发布 `edge` 与 `sha-<12-character-commit>`。
-- `2.0.0` 这样的稳定 `VERSION` 会发布 `v2.0.0`、`2.0.0`、`2.0`、`2`、`latest` 与 commit 标签。
-- `2.1.0-rc.1` 这样的预发布版本会发布精确版本标签与 commit 标签，但不更新稳定别名。
+- 普通推送到 `dev` 会发布 `dev` 与 `dev-sha-<12-character-commit>`。
+- `2.0.1` 这样的开发版会发布 `dev-v2.0.1`、`dev-2.0.1`、`dev` 与开发 commit 标签；需使用 `docker pull jaykserks/summerain:dev` 显式拉取。
+- 普通推送到 `main` 会发布 `main` 与 `main-sha-<12-character-commit>`。
+- `2.1.0` 这样的稳定版会发布 `v2.1.0`、`2.1.0`、`2.1`、`2`、`latest`、`main` 与稳定 commit 标签。默认 Compose 镜像跟随只由稳定分支写入的 `latest`。
 - 精确语义版本标签不可变；移动别名仍可移动。
 - 重新运行发布流程时，会根据已验证的 manifest 摘要协调 Docker Hub 与 GHCR；精确标签发生冲突时停止。
 - 发布成功后，根目录 README 会同步到 Docker Hub。

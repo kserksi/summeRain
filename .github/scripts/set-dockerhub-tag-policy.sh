@@ -4,7 +4,7 @@ set -euo pipefail
 # Keep the registry rule deliberately simple: Docker Hub returned HTTP 500 for
 # the nested strict-SemVer expression. validate-release-version.sh enforces
 # strict SemVer; this compatible superset covers every generated exact tag.
-tag_rule='^v?[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'
+tag_rule='^(dev-)?v?[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'
 
 if [ "${1:-}" = "print-rule" ]; then
   printf '%s\n' "$tag_rule"

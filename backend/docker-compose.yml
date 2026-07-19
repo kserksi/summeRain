@@ -15,7 +15,7 @@ services:
       - image_storage:/data/images
 
   backend:
-    image: ${DOCKER_IMAGE:-jaykserks/summerain:edge}
+    image: ${DOCKER_IMAGE:-jaykserks/summerain:latest}
     container_name: summerain-backend
     restart: unless-stopped
     stop_grace_period: 35s

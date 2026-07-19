@@ -2,18 +2,19 @@
 set -euo pipefail
 
 usage() {
-  echo "usage: $0 fresh|recover|verify <dockerhub-image> <ghcr-image> <version> <prerelease> <commit-sha>" >&2
+  echo "usage: $0 fresh|recover|verify <dockerhub-image> <ghcr-image> <version> <prerelease> <channel> <commit-sha>" >&2
   exit 2
 }
 
-[[ $# -eq 6 ]] || usage
+[[ $# -eq 7 ]] || usage
 
 mode="$1"
 dockerhub_image="$2"
 ghcr_image="$3"
 version="$4"
 prerelease="$5"
-commit_sha="$6"
+channel="$6"
+commit_sha="$7"
 
 case "$mode" in
   fresh | recover | verify) ;;
@@ -24,14 +25,23 @@ if [[ "$prerelease" != "true" && "$prerelease" != "false" ]]; then
   echo "prerelease must be true or false" >&2
   exit 2
 fi
+if [[ "$channel" != "dev" && "$channel" != "main" ]]; then
+  echo "channel must be dev or main" >&2
+  exit 2
+fi
 if ! [[ "$commit_sha" =~ ^[0-9a-fA-F]{12,64}$ ]]; then
   echo "commit SHA must contain at least 12 hexadecimal characters" >&2
   exit 2
 fi
 
-exact_tags=("v${version}" "${version}")
-alias_tags=("sha-${commit_sha:0:12}")
-if [[ "$prerelease" == "false" ]]; then
+if [[ "$channel" == "dev" ]]; then
+  exact_tags=("dev-v${version}" "dev-${version}")
+  alias_tags=("dev-sha-${commit_sha:0:12}" dev)
+else
+  exact_tags=("v${version}" "${version}")
+  alias_tags=("main-sha-${commit_sha:0:12}" main)
+fi
+if [[ "$channel" == "main" && "$prerelease" == "false" ]]; then
   core_version="${version%%-*}"
   IFS=. read -r major minor patch <<< "$core_version"
   if [[ -z "${major:-}" || -z "${minor:-}" || -z "${patch:-}" ]]; then

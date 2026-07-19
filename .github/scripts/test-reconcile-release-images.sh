@@ -86,7 +86,7 @@ sha='abcdef1234567890abcdef1234567890abcdef12'
 
 # Both registries absent: recovery requests one normal multi-registry build.
 new_state absent
-result="$(bash "$subject" recover "$dh" "$gh" 1.2.3 false "$sha")"
+result="$(bash "$subject" recover "$dh" "$gh" 1.2.3 false main "$sha")"
 [[ "$result" == build ]]
 [[ ! -s "${MOCK_DOCKER_STATE}/commands" ]]
 
@@ -95,10 +95,10 @@ result="$(bash "$subject" recover "$dh" "$gh" 1.2.3 false "$sha")"
 new_state partial
 add_manifest "${dh}:v1.2.3" '{"release":"one"}'
 release_digest="$(digest_for "${dh}:v1.2.3")"
-result="$(bash "$subject" recover "$dh" "$gh" 1.2.3 false "$sha")"
+result="$(bash "$subject" recover "$dh" "$gh" 1.2.3 false main "$sha")"
 [[ "$result" == recovered ]]
 for image in "$dh" "$gh"; do
-  for tag in v1.2.3 1.2.3 1.2 1 latest sha-abcdef123456; do
+  for tag in v1.2.3 1.2.3 1.2 1 latest main main-sha-abcdef123456; do
     assert_digest "${image}:${tag}" "$release_digest"
   done
 done
@@ -111,7 +111,7 @@ fi
 new_state mismatch
 add_manifest "${dh}:v1.2.3" '{"release":"one"}'
 add_manifest "${gh}:1.2.3" '{"release":"two"}'
-if bash "$subject" recover "$dh" "$gh" 1.2.3 false "$sha" >/dev/null 2>&1; then
+if bash "$subject" recover "$dh" "$gh" 1.2.3 false main "$sha" >/dev/null 2>&1; then
   echo "mismatched exact digests were accepted" >&2
   exit 1
 fi
@@ -124,10 +124,10 @@ for ref in "${dh}:v1.2.3" "${dh}:1.2.3" "${gh}:v1.2.3" "${gh}:1.2.3"; do
 done
 add_manifest "${dh}:latest" '{"release":"old"}'
 release_digest="$(digest_for "${dh}:v1.2.3")"
-result="$(bash "$subject" recover "$dh" "$gh" 1.2.3 false "$sha")"
+result="$(bash "$subject" recover "$dh" "$gh" 1.2.3 false main "$sha")"
 [[ "$result" == recovered ]]
 for image in "$dh" "$gh"; do
-  for tag in 1.2 1 latest sha-abcdef123456; do
+  for tag in 1.2 1 latest main main-sha-abcdef123456; do
     assert_digest "${image}:${tag}" "$release_digest"
   done
 done
@@ -135,5 +135,24 @@ if grep -Eq 'create .+:(v1\.2\.3|1\.2\.3) ' "${MOCK_DOCKER_STATE}/commands"; the
   echo "complete immutable tags were pushed again" >&2
   exit 1
 fi
+
+# Development releases use an isolated namespace and never move stable aliases.
+new_state dev-release
+add_manifest "${dh}:dev-v1.2.4" '{"release":"dev"}'
+release_digest="$(digest_for "${dh}:dev-v1.2.4")"
+result="$(bash "$subject" recover "$dh" "$gh" 1.2.4 true dev "$sha")"
+[[ "$result" == recovered ]]
+for image in "$dh" "$gh"; do
+  for tag in dev-v1.2.4 dev-1.2.4 dev dev-sha-abcdef123456; do
+    assert_digest "${image}:${tag}" "$release_digest"
+  done
+  for tag in v1.2.4 1.2.4 latest main; do
+    key="$(ref_key "${image}:${tag}")"
+    [[ ! -f "${MOCK_DOCKER_STATE}/refs/${key}" ]] || {
+      echo "development release unexpectedly published ${image}:${tag}" >&2
+      exit 1
+    }
+  done
+done
 
 echo "release image reconciliation tests passed"

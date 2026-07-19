@@ -1,30 +1,35 @@
 # Release and Tag Management
 
-`VERSION` is the single source of truth for formal project releases. Ordinary
-code commits update only the development image; a formal release is created only
-when a commit on `main` or `master` changes `VERSION`.
+`VERSION` is the single source of truth for project releases. Development
+releases are cut from `dev`; stable releases are cut from `main` or `master`.
+Images from the two channels use separate tag namespaces.
 
 ## Tagging Rules
 
 | Scenario | Input version | Container tags |
 |---|---|---|
-| Ordinary push to `main` / `master` | No version change | `edge`, `sha-<short-commit>` |
-| Stable release | `1.2.3` | `v1.2.3`, `1.2.3`, `1.2`, `1`, `latest`, `sha-<short-commit>` |
-| Pre-release | `1.3.0-rc.1` | `v1.3.0-rc.1`, `1.3.0-rc.1`, `sha-<short-commit>` |
+| Ordinary push to `dev` | No version change | `dev`, `dev-sha-<short-commit>` |
+| Development release from `dev` | `2.0.1` | `dev-v2.0.1`, `dev-2.0.1`, `dev`, `dev-sha-<short-commit>` |
+| Ordinary push to `main` / `master` | No version change | `main`, `main-sha-<short-commit>` |
+| Stable release from `main` / `master` | `2.1.0` | `v2.1.0`, `2.1.0`, `2.1`, `2`, `latest`, `main`, `main-sha-<short-commit>` |
+| Stable-channel prerelease | `2.2.0-rc.1` | `v2.2.0-rc.1`, `2.2.0-rc.1`, `main`, `main-sha-<short-commit>` |
 
-Exact version tags, including `vX.Y.Z`, `X.Y.Z`, and their pre-release forms,
-must never be overwritten. `latest`, `X`, and `X.Y` are moving aliases. Each
-stable release moves them to the newest version within the corresponding
-compatibility range.
+Exact stable tags and `dev-vX.Y.Z` / `dev-X.Y.Z` tags must never be
+overwritten. `dev`, `main`, `latest`, `X`, and `X.Y` are moving aliases.
+`latest` is written only by a stable release from `main` or `master`.
+Development GitHub Releases are marked as prereleases. A development version
+is never promoted under the same version number; the stable branch must publish
+a new version after the completed development series.
 
 ## Release Procedure
 
-1. Confirm that the frontend and backend checks pass on `main`.
+1. Confirm that the frontend and backend checks pass on the release branch.
 2. Select a new version using the strict format below. Never reuse a historical
    version number.
 3. Commit the `VERSION` change separately with the message
    `chore: release vX.Y.Z`.
-4. Push the commit and wait for `CI and Docker` to finish.
+4. Push the commit to `dev` for a development release or to `main` for a stable
+   release, then wait for `CI and Docker` to finish.
 5. Verify the version tags and multi-platform manifests on GitHub Releases,
    Docker Hub, and GHCR. Also confirm that the Docker Hub repository description
    has synchronized the root `README.md`.
@@ -35,7 +40,7 @@ Example:
 printf '1.2.3\n' > VERSION
 git add VERSION
 git commit -m "chore: release v1.2.3"
-git push origin HEAD:main
+git push origin HEAD:dev
 ```
 
 ## Choosing a Version
@@ -57,17 +62,19 @@ tag limit. Before committing, run
 
 After every successful `main` / `master` image publication, the
 `dockerhub_metadata` job synchronizes the root `README.md` to
-`jaykserks/summerain`. Only a formal release refreshes the immutable-tag policy
-before exact tags are pushed and again during metadata publication. The policy
-helper performs bounded retries for transient 5xx responses from the Docker Hub
-management API. `latest`, `X`, `X.Y`, `edge`, and commit tags do not match the
-immutability rule, so they remain movable according to the policy above.
+`jaykserks/summerain`. Development builds never replace the stable Docker Hub
+description or the `latest` tag. Only a formal release refreshes the
+immutable-tag policy before exact tags are pushed and again during metadata
+publication. The policy helper performs bounded retries for transient 5xx
+responses from the Docker Hub management API. `latest`, `main`, `dev`, `X`,
+`X.Y`, and channel-prefixed commit tags do not match the immutability rule, so
+they remain movable according to the policy above.
 
 When a formal release is rerun, the workflow reads the registry descriptor
-digest for exact version tags in Docker Hub and GHCR. If either registry already
-contains `vX.Y.Z` or `X.Y.Z`, that digest becomes the recovery source. The
-workflow fills in missing exact tags in both registries and repoints `latest`,
-`X`, `X.Y`, and the current `sha-<commit>` to the same digest without rebuilding
+digest for the channel's exact version tags in Docker Hub and GHCR. If either
+registry already contains an exact tag, that digest becomes the recovery
+source. The workflow fills in missing exact tags in both registries and
+repoints only the aliases belonging to that channel without rebuilding
 or overwriting an existing immutable tag. If exact-tag digests disagree within
 or between registries, the workflow fails for manual investigation; it never
 guesses which image is correct.

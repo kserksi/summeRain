@@ -52,10 +52,10 @@ test "$(jq -er '.immutable_tags' "$MOCK_POLICY_PAYLOAD")" = true
 test "$(jq -er '.immutable_tags_rules | length' "$MOCK_POLICY_PAYLOAD")" = 1
 test "$(jq -er '.immutable_tags_rules[0]' "$MOCK_POLICY_PAYLOAD")" = "$tag_rule"
 
-for tag in 0.0.0 v1.2.3 1.2.3-0 v1.2.3-alpha- 1.2.3--; do
+for tag in 0.0.0 v1.2.3 dev-v1.2.3 dev-1.2.3 1.2.3-0 v1.2.3-alpha- 1.2.3--; do
   [[ "$tag" =~ $tag_rule ]] || { echo "release tag not protected: ${tag}" >&2; exit 1; }
 done
-for tag in latest edge sha-abcdef123456 1.2 1; do
+for tag in latest main dev main-sha-abcdef123456 dev-sha-abcdef123456 1.2 1; do
   if [[ "$tag" =~ $tag_rule ]]; then
     echo "moving tag unexpectedly protected: ${tag}" >&2
     exit 1

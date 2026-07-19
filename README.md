@@ -242,11 +242,14 @@ nginx/CDN, health-check, upgrade, and rollback reference.
 
 ## Release Channels
 
-- Regular pushes to `main` publish `edge` and `sha-<12-character-commit>`.
-- A stable `VERSION` such as `2.0.0` publishes `v2.0.0`, `2.0.0`, `2.0`, `2`,
-  `latest`, and the commit tag.
-- A prerelease such as `2.1.0-rc.1` publishes exact version tags and the commit
-  tag without updating stable aliases.
+- Regular pushes to `dev` publish `dev` and `dev-sha-<12-character-commit>`.
+- A development release such as `2.0.1` publishes `dev-v2.0.1`, `dev-2.0.1`,
+  `dev`, and the development commit tag. Pull it explicitly with
+  `docker pull jaykserks/summerain:dev`.
+- Regular pushes to `main` publish `main` and `main-sha-<12-character-commit>`.
+- A stable release such as `2.1.0` publishes `v2.1.0`, `2.1.0`, `2.1`, `2`,
+  `latest`, `main`, and the stable commit tag. The default Compose image follows
+  `latest`, which is written only from the stable branch.
 - Exact semantic-version tags are immutable. Moving aliases remain movable.
 - Release reruns reconcile Docker Hub and GHCR by verified manifest digest and
   stop if exact tags conflict.

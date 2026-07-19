@@ -133,7 +133,7 @@ for compose in \
 done
 
 default_compose="${repo_root}/backend/docker-compose.yml"
-require_text "$default_compose" 'image: ${DOCKER_IMAGE:-jaykserks/summerain:edge}'
+require_text "$default_compose" 'image: ${DOCKER_IMAGE:-jaykserks/summerain:latest}'
 require_text "$default_compose" 'MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}'
 require_text "$default_compose" 'IMGPROXY_KEY: ${IMGPROXY_KEY:?Set IMGPROXY_KEY}'
 require_text "$default_compose" 'IMGPROXY_SALT: ${IMGPROXY_SALT:?Set IMGPROXY_SALT}'
@@ -158,7 +158,8 @@ require_text "$ci" "run: npm run lint"
 require_text "$ci" "run: bash scripts/verify-gitbook-docs.sh"
 require_text "$ci" "needs: [release_info, dependency_lock, documentation, backend, frontend]"
 require_text "$ci" "branches: [main, master, dev]"
-require_text "$ci" "github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'"
+require_text "$ci" "github.ref == 'refs/heads/dev'"
+require_text "$ci" "needs.release_info.outputs.channel"
 require_text "$ci" "concurrency:"
 require_text "$ci" "set-dockerhub-tag-policy.sh release"
 require_text "$ci" "reconcile-release-images.sh"
@@ -213,10 +214,10 @@ if bash "$version_validator" "$too_long_version"; then
 fi
 
 tag_rule="$(bash "$tag_policy" print-rule)"
-for tag in 0.0.0 v1.2.3 1.2.3-0 v1.2.3-rc.1 1.2.3-alpha- 1.2.3--; do
+for tag in 0.0.0 v1.2.3 dev-v1.2.3 dev-1.2.3 1.2.3-0 v1.2.3-rc.1 1.2.3-alpha- 1.2.3--; do
   [[ "$tag" =~ $tag_rule ]] || fail "valid immutable image tag rejected: ${tag}"
 done
-for tag in latest edge sha-abcdef123456 1.2 1; do
+for tag in latest main dev main-sha-abcdef123456 dev-sha-abcdef123456 1.2 1; do
   if [[ "$tag" =~ $tag_rule ]]; then
     fail "moving image tag unexpectedly made immutable: ${tag}"
   fi
