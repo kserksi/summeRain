@@ -7,7 +7,7 @@ import Vips from "wasm-vips";
 import vipsHeifURL from "wasm-vips/vips-heif.wasm?url";
 import vipsWasmURL from "wasm-vips/vips.wasm?url";
 
-import type { ProcessedPart, WorkerResponse } from "./types";
+import type { ProcessedPart, WorkerRequest, WorkerResponse } from "./types";
 
 const assetURLs: Record<string, string> = {
   "vips.wasm": vipsWasmURL,
@@ -18,12 +18,20 @@ let vipsPromise: ReturnType<typeof Vips> | undefined;
 type VipsInstance = Awaited<ReturnType<typeof Vips>>;
 type VipsImage = InstanceType<VipsInstance["Image"]>;
 
-self.onmessage = async (event: MessageEvent<{ id: string; file: File; mimeType: string }>) => {
-  const { id, file, mimeType } = event.data;
+self.onmessage = async (event: MessageEvent<WorkerRequest>) => {
+  const request = event.data;
+  const { id } = request;
   let initialized = false;
   try {
     const vips = await getVips();
     initialized = true;
+    if (request.type === "probe") {
+      probeWebPEncoder(vips);
+      post({ type: "ready", id });
+      return;
+    }
+
+    const { file, mimeType } = request;
     progress(id, 5);
     const source = vips.Image.newFromBuffer(new Uint8Array(await file.arrayBuffer()), "", {
       fail_on: "error",
@@ -86,6 +94,28 @@ self.onmessage = async (event: MessageEvent<{ id: string; file: File; mimeType: 
     });
   }
 };
+
+function probeWebPEncoder(vips: VipsInstance): void {
+  const image = vips.Image.newFromMemory(
+    new Uint8Array([0, 0, 0]),
+    1,
+    1,
+    3,
+    vips.BandFormat.uchar,
+  );
+  try {
+    const encoded = Uint8Array.from(image.webpsaveBuffer({ Q: 80 }));
+    if (
+      encoded.length < 12 ||
+      String.fromCharCode(...encoded.slice(0, 4)) !== "RIFF" ||
+      String.fromCharCode(...encoded.slice(8, 12)) !== "WEBP"
+    ) {
+      throw new Error("WASM WebP encoder is unavailable");
+    }
+  } finally {
+    image.delete();
+  }
+}
 
 async function getVips(): Promise<VipsInstance> {
   if (!vipsPromise) {

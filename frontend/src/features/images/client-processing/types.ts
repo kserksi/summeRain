@@ -3,6 +3,8 @@
 
 export type V2VariantKind = "master" | "gallery" | "admin" | "publish_source";
 
+export type ClientProcessorKind = "wasm-vips" | "native-pica";
+
 export interface ProcessedPart {
   kind: V2VariantKind;
   blob: Blob;
@@ -28,6 +30,25 @@ export interface ProcessedImage {
 
 export type ProcessingProgress = (percent: number) => void;
 
+export interface WorkerProbeRequest {
+  type: "probe";
+  id: string;
+}
+
+export interface WorkerProcessRequest {
+  type: "process";
+  id: string;
+  file: File;
+  mimeType: string;
+}
+
+export type WorkerRequest = WorkerProbeRequest | WorkerProcessRequest;
+
+export interface WorkerReadyMessage {
+  type: "ready";
+  id: string;
+}
+
 export interface WorkerSuccessMessage {
   type: "result";
   id: string;
@@ -47,4 +68,8 @@ export interface WorkerProgressMessage {
   percent: number;
 }
 
-export type WorkerResponse = WorkerSuccessMessage | WorkerErrorMessage | WorkerProgressMessage;
+export type WorkerResponse =
+  | WorkerReadyMessage
+  | WorkerSuccessMessage
+  | WorkerErrorMessage
+  | WorkerProgressMessage;

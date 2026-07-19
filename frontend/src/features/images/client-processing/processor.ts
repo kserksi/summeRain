@@ -1,49 +1,75 @@
 // Copyright 2026 The summeRain Authors
 // SPDX-License-Identifier: Apache-2.0
 
-import { getNativeCanvasCapability } from "./native-capability";
+import { ClientImageError, isClientImageError } from "./errors";
 import { processWithNative } from "./native-processor";
-import { sniffInput } from "./sniff";
+import type { ClientProcessingPlan } from "./preflight";
 import type { ProcessedImage, ProcessingProgress, WorkerResponse } from "./types";
+import {
+  canAttemptWasmVips,
+  createVipsWorker,
+  takeWarmedVipsWorker,
+} from "./wasm-capability";
+
+export { canAttemptWasmVips as canUseWasmVips } from "./wasm-capability";
 
 export async function processClientImage(
   file: File,
+  plan: ClientProcessingPlan,
   onProgress: ProcessingProgress,
   signal?: AbortSignal,
 ): Promise<ProcessedImage> {
   throwIfAborted(signal);
-  const input = await waitWithSignal(sniffInput(file), signal);
-  if (input.animated) throw new Error("Animated images are not supported in V2");
-  const nativeCapability = getNativeCanvasCapability(input.width, input.height);
-
-  if (canUseWasmVips()) {
+  if (plan.processor === "wasm-vips" && canAttemptWasmVips()) {
     try {
-      return await processWithVipsWorker(file, input.mimeType, onProgress, signal);
+      return await processWithVipsWorker(file, plan.input.mimeType, onProgress, signal);
     } catch (error) {
       if (!(error instanceof VipsUnavailableError)) throw error;
-      if (!nativeCapability.safe) throw new Error(nativeCapability.message);
+      if (!plan.nativeFallbackSafe) {
+        throw new ClientImageError(
+          "IMAGE_PROCESSOR_UNAVAILABLE",
+          "WASM image processing is required for this image",
+          { cause: error },
+        );
+      }
     }
   }
-  if (!nativeCapability.safe) throw new Error(nativeCapability.message);
+  if (!plan.nativeFallbackSafe) {
+    throw new ClientImageError(
+      "IMAGE_PROCESSOR_UNAVAILABLE",
+      "WASM image processing is required for this image",
+    );
+  }
   // Native Canvas encoding cannot be interrupted in every browser. Keep the
   // serial processing slot until its finally blocks release decoded pixels and
   // canvases, then surface the cancellation before the next image starts.
-  const processed = await processWithNative(file, input.mimeType, onProgress, signal);
-  throwIfAborted(signal);
-  return processed;
+  try {
+    const processed = await processWithNative(file, plan.input.mimeType, onProgress, signal);
+    throwIfAborted(signal);
+    return processed;
+  } catch (error) {
+    if (isAbortError(error) || isClientImageError(error)) throw error;
+    const message = error instanceof Error ? error.message : "Native image processing failed";
+    if (/webp|encode/i.test(message)) {
+      throw new ClientImageError(
+        "IMAGE_WEBP_ENCODE_UNAVAILABLE",
+        "This browser cannot encode WebP images",
+        { cause: error },
+      );
+    }
+    if (/decode/i.test(message)) {
+      throw new ClientImageError("IMAGE_DECODE_FAILED", "This browser cannot decode the image", {
+        cause: error,
+      });
+    }
+    throw new ClientImageError("IMAGE_PROCESSING_FAILED", "Native image processing failed", {
+      cause: error,
+      retryable: true,
+    });
+  }
 }
 
 class VipsUnavailableError extends Error {}
-
-export function canUseWasmVips(): boolean {
-  const memory = (navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? 4;
-  return (
-    window.crossOriginIsolated &&
-    typeof SharedArrayBuffer !== "undefined" &&
-    typeof Worker !== "undefined" &&
-    memory >= 4
-  );
-}
 
 function processWithVipsWorker(
   file: File,
@@ -56,9 +82,7 @@ function processWithVipsWorker(
     const id = createRequestID();
     let worker: Worker;
     try {
-      worker = new Worker(new URL("./vips-processor.worker.ts", import.meta.url), {
-        type: "module",
-      });
+      worker = takeWarmedVipsWorker() ?? createVipsWorker();
     } catch (error) {
       reject(
         new VipsUnavailableError(
@@ -71,7 +95,15 @@ function processWithVipsWorker(
     let settled = false;
     const timeout = window.setTimeout(
       () => {
-        finish(() => reject(new Error("Client image processing timed out")));
+        finish(() =>
+          reject(
+            new ClientImageError(
+              "IMAGE_PROCESSING_TIMEOUT",
+              "Client image processing timed out",
+              { retryable: true },
+            ),
+          ),
+        );
       },
       8 * 60 * 1000,
     );
@@ -94,6 +126,7 @@ function processWithVipsWorker(
       if (settled) return;
       const message = event.data;
       if (message.id !== id) return;
+      if (message.type === "ready") return;
       if (message.type === "progress") {
         initialized = true;
         onProgress(message.percent);
@@ -104,7 +137,7 @@ function processWithVipsWorker(
           reject(
             message.recoverable
               ? new VipsUnavailableError(message.message)
-              : new Error(message.message),
+              : new ClientImageError("IMAGE_PROCESSING_FAILED", message.message),
           ),
         );
         return;
@@ -117,14 +150,18 @@ function processWithVipsWorker(
       finish(() =>
         reject(
           initialized
-            ? new Error("WASM image processing worker failed")
+            ? new ClientImageError(
+                "IMAGE_PROCESSING_FAILED",
+                "WASM image processing worker failed",
+                { retryable: true },
+              )
             : new VipsUnavailableError("WASM image processing worker is unavailable"),
         ),
       );
     };
     try {
       throwIfAborted(signal);
-      worker.postMessage({ id, file, mimeType });
+      worker.postMessage({ type: "process", id, file, mimeType });
     } catch (error) {
       finish(() =>
         reject(
@@ -141,6 +178,10 @@ function processWithVipsWorker(
   });
 }
 
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === "AbortError";
+}
+
 function createRequestID(): string {
   if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
   const bytes = crypto.getRandomValues(new Uint8Array(16));
@@ -153,23 +194,4 @@ function throwIfAborted(signal?: AbortSignal): void {
 
 function abortError(): DOMException {
   return new DOMException("Image processing aborted", "AbortError");
-}
-
-function waitWithSignal<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
-  if (!signal) return promise;
-  throwIfAborted(signal);
-  return new Promise<T>((resolve, reject) => {
-    const abort = () => reject(signal.reason ?? abortError());
-    signal.addEventListener("abort", abort, { once: true });
-    promise.then(
-      (value) => {
-        signal.removeEventListener("abort", abort);
-        resolve(value);
-      },
-      (error: unknown) => {
-        signal.removeEventListener("abort", abort);
-        reject(error);
-      },
-    );
-  });
 }

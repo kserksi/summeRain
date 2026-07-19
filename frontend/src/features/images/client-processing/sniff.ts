@@ -1,6 +1,11 @@
 // Copyright 2026 The summeRain Authors
 // SPDX-License-Identifier: Apache-2.0
 
+import { ClientImageError } from "./errors";
+
+const MAX_SOURCE_BYTES = 15 * 1024 * 1024;
+const MAX_SOURCE_PIXELS = 50_000_000;
+
 const MIME_BY_EXTENSION: Record<string, string> = {
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
@@ -31,20 +36,30 @@ interface InspectedImage {
 }
 
 export async function sniffInput(file: File): Promise<SniffedInput> {
-  if (file.size <= 0 || file.size > 15 * 1024 * 1024) {
-    throw new Error("Image must be between 1 byte and 15 MB");
+  if (file.size <= 0) {
+    throw new ClientImageError("IMAGE_FILE_INVALID", "The image file is empty");
+  }
+  if (file.size > MAX_SOURCE_BYTES) {
+    throw new ClientImageError("IMAGE_FILE_SIZE_EXCEEDED", "Image exceeds the 15 MB limit", {
+      details: { maxMB: 15 },
+    });
   }
   const dot = file.name.lastIndexOf(".");
   const extension = dot >= 0 ? file.name.slice(dot).toLowerCase() : "";
   const extensionMime = MIME_BY_EXTENSION[extension];
-  if (!extensionMime) throw new Error("Unsupported image format");
+  if (!extensionMime) {
+    throw new ClientImageError("IMAGE_FORMAT_UNSUPPORTED", "Unsupported image format");
+  }
 
   // The source is capped at 15 MB, so a single bounded read lets us parse real
   // container boundaries and reject animation before allocating decoded pixels.
   const bytes = new Uint8Array(await file.arrayBuffer());
   const inspected = inspectImage(bytes);
   if (!inspected || inspected.mimeType !== extensionMime) {
-    throw new Error("Image content does not match its extension");
+    throw new ClientImageError(
+      "IMAGE_CONTENT_MISMATCH",
+      "Image content does not match its extension",
+    );
   }
   const declaredType = file.type.toLowerCase();
   if (
@@ -52,12 +67,18 @@ export async function sniffInput(file: File): Promise<SniffedInput> {
     ALLOWED_MIME.has(declaredType) &&
     normalizeMime(declaredType) !== inspected.mimeType
   ) {
-    throw new Error("Image MIME type does not match its content");
+    throw new ClientImageError(
+      "IMAGE_CONTENT_MISMATCH",
+      "Image MIME type does not match its content",
+    );
   }
-  if (inspected.width <= 0 || inspected.height <= 0)
-    throw new Error("Image dimensions are invalid");
-  if (inspected.width * inspected.height > 50_000_000) {
-    throw new Error("Image exceeds the 50 MP limit");
+  if (inspected.width <= 0 || inspected.height <= 0) {
+    throw new ClientImageError("IMAGE_FILE_INVALID", "Image dimensions are invalid");
+  }
+  if (inspected.width > Math.floor(MAX_SOURCE_PIXELS / inspected.height)) {
+    throw new ClientImageError("IMAGE_DIMENSION_EXCEEDED", "Image exceeds the 50 MP limit", {
+      details: { maxMP: 50 },
+    });
   }
   return inspected;
 }

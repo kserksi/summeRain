@@ -71,11 +71,26 @@
     "empty": "No images have been added",
     "status": {
       "queued": "Queued",
+      "checking": "Checking compatibility",
       "processing": "Processing locally",
       "uploading": "Uploading",
       "serverProcessing": "Preparing publish image",
       "done": "Done",
       "failed": "Failed"
+    },
+    "errors": {
+      "IMAGE_FILE_INVALID": "The selected file is not a valid image.",
+      "IMAGE_FILE_SIZE_EXCEEDED": "The image exceeds the {{maxMB}} MB limit.",
+      "IMAGE_FORMAT_UNSUPPORTED": "This image format is not supported.",
+      "IMAGE_CONTENT_MISMATCH": "The image content does not match its file type.",
+      "IMAGE_ANIMATION_UNSUPPORTED": "Animated images are not supported in this version.",
+      "IMAGE_DIMENSION_EXCEEDED": "The image exceeds the allowed {{maxMP}} MP limit.",
+      "IMAGE_RECIPE_UNSUPPORTED": "This client does not support the server image recipe.",
+      "IMAGE_PROCESSOR_UNAVAILABLE": "This browser cannot safely process this image. Use another compatible device or reduce it below {{maxMP}} MP.",
+      "IMAGE_DECODE_FAILED": "This browser could not decode the image.",
+      "IMAGE_WEBP_ENCODE_UNAVAILABLE": "This browser cannot encode WebP images.",
+      "IMAGE_PROCESSING_TIMEOUT": "Local image processing timed out. Try again.",
+      "IMAGE_PROCESSING_FAILED": "Local image processing failed."
     },
     "toast": {
       "uploadSuccess": "Uploaded {{count}} images",

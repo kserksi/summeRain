@@ -82,7 +82,10 @@ async function renderMaster(
 ): Promise<ProcessedPart> {
   const canvas = createCanvas(width, height);
   try {
-    const context = canvas.getContext("2d");
+    const context = canvas.getContext("2d") as
+      | CanvasRenderingContext2D
+      | OffscreenCanvasRenderingContext2D
+      | null;
     if (!context) throw new Error("Canvas 2D is unavailable");
     context.drawImage(source, 0, 0);
     const blob = await resizer.toBlob(canvas, "image/webp", 0.8);
@@ -119,7 +122,10 @@ async function renderCover(
       throwIfAborted(signal);
       await resizeWithSignal(cropped, canvas, signal);
     } else {
-      const context = canvas.getContext("2d");
+      const context = canvas.getContext("2d") as
+        | CanvasRenderingContext2D
+        | OffscreenCanvasRenderingContext2D
+        | null;
       if (!context) throw new Error("Canvas 2D is unavailable");
       context.drawImage(source, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, width, height);
     }

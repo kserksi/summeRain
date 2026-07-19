@@ -6,6 +6,7 @@ package imagegallery_test
 import (
 	"encoding/json"
 	"os"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -97,9 +98,11 @@ func TestComposeMatchesRequirementsLock(t *testing.T) {
 
 func TestEnvExampleDocumentsResourceGuardrails(t *testing.T) {
 	env := readTestFile(t, ".env.example")
-	version := strings.TrimSpace(readTestFile(t, "../VERSION"))
+	stableImage := regexp.MustCompile(`(?m)^DOCKER_IMAGE=jaykserks/summerain:v[0-9]+\.[0-9]+\.[0-9]+$`)
+	if !stableImage.MatchString(env) {
+		t.Fatal(".env.example must pin an exact stable application image")
+	}
 	for _, want := range []string{
-		"DOCKER_IMAGE=jaykserks/summerain:v" + version,
 		"DB_PASSWORD=your_password_here",
 		"IMGPROXY_KEY=replace_with_hex_key",
 		"IMGPROXY_SALT=replace_with_hex_salt",

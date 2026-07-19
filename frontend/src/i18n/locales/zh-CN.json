@@ -71,11 +71,26 @@
     "empty": "还没有添加任何图片",
     "status": {
       "queued": "等待中",
+      "checking": "正在检查兼容性",
       "processing": "本地处理中",
       "uploading": "上传中",
       "serverProcessing": "发布处理中",
       "done": "完成",
       "failed": "失败"
+    },
+    "errors": {
+      "IMAGE_FILE_INVALID": "所选文件不是有效图片。",
+      "IMAGE_FILE_SIZE_EXCEEDED": "图片超过 {{maxMB}} MB 限制。",
+      "IMAGE_FORMAT_UNSUPPORTED": "不支持此图片格式。",
+      "IMAGE_CONTENT_MISMATCH": "图片内容与文件类型不匹配。",
+      "IMAGE_ANIMATION_UNSUPPORTED": "当前版本不支持动图。",
+      "IMAGE_DIMENSION_EXCEEDED": "图片超过允许的 {{maxMP}} MP 限制。",
+      "IMAGE_RECIPE_UNSUPPORTED": "当前客户端不支持服务器图片配方。",
+      "IMAGE_PROCESSOR_UNAVAILABLE": "当前浏览器无法安全处理此图片，请更换兼容设备，或将图片缩小到 {{maxMP}} MP 以下。",
+      "IMAGE_DECODE_FAILED": "当前浏览器无法解码此图片。",
+      "IMAGE_WEBP_ENCODE_UNAVAILABLE": "当前浏览器无法编码 WebP 图片。",
+      "IMAGE_PROCESSING_TIMEOUT": "本地图片处理超时，请重试。",
+      "IMAGE_PROCESSING_FAILED": "本地图片处理失败。"
     },
     "toast": {
       "uploadSuccess": "已上传 {{count}} 张图片",

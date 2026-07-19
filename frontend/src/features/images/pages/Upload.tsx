@@ -11,6 +11,7 @@ import {
   IconX,
 } from "@tabler/icons-react";
 import { useQueryClient } from "@tanstack/react-query";
+import type { TFunction } from "i18next";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { useTranslation } from "react-i18next";
@@ -33,6 +34,12 @@ import { useCopy } from "@/lib/use-copy";
 import { useAuthStore } from "@/store/auth-store";
 
 import { buildCopyText } from "../copy-format";
+import {
+  isClientImageError,
+  type ClientImageErrorCode,
+  type ClientImageErrorDetails,
+} from "../client-processing/errors";
+import { preflightClientImage } from "../client-processing/preflight";
 import { processClientImage } from "../client-processing/processor";
 import { createProcessedPreviewURL } from "../processed-preview";
 import { ConcurrencyGate, runWithConcurrency } from "../upload-concurrency";
@@ -48,9 +55,23 @@ import {
   type V2UploadResult,
 } from "../v2-upload";
 
-type Status = "queued" | "processing" | "uploading" | "serverProcessing" | "done" | "failed";
+type Status =
+  | "queued"
+  | "checking"
+  | "processing"
+  | "uploading"
+  | "serverProcessing"
+  | "done"
+  | "failed";
 type RetryMode = "resume" | "reuse" | "new";
 type CompletedUploadResult = V1UploadResult | V2UploadResult;
+
+interface QueueFailure {
+  code?: ClientImageErrorCode;
+  details?: ClientImageErrorDetails;
+  fallback?: string;
+  retryable: boolean;
+}
 
 interface QueueItem {
   id: string;
@@ -65,6 +86,7 @@ interface QueueItem {
   uniqueLink?: string;
   assetLink?: string;
   pipelineVersion?: number;
+  failure?: QueueFailure;
 }
 
 function formatBytes(bytes: number): string {
@@ -76,6 +98,7 @@ function formatBytes(bytes: number): string {
 
 const STATUS_VARIANT: Record<Status, "default" | "secondary" | "destructive" | "outline"> = {
   queued: "outline",
+  checking: "secondary",
   processing: "secondary",
   uploading: "secondary",
   serverProcessing: "secondary",
@@ -151,18 +174,30 @@ export default function Upload() {
 
   const addFiles = useCallback((files: FileList | File[]) => {
     const next = Array.from(files)
-      .filter((f) => {
+      .map((f) => {
         const dot = f.name.lastIndexOf(".");
         const ext = dot >= 0 ? f.name.slice(dot).toLowerCase() : "";
-        return ALLOWED_EXTS.includes(ext) && f.size > 0 && f.size <= MAX_SOURCE_BYTES;
-      })
-      .map((f) => ({
-        id: createQueueID(),
-        attempt: 0,
-        file: f,
-        progress: 0,
-        status: "queued" as Status,
-      }));
+        let failure: QueueFailure | undefined;
+        if (f.size <= 0) {
+          failure = { code: "IMAGE_FILE_INVALID", retryable: false };
+        } else if (f.size > MAX_SOURCE_BYTES) {
+          failure = {
+            code: "IMAGE_FILE_SIZE_EXCEEDED",
+            details: { maxMB: 15 },
+            retryable: false,
+          };
+        } else if (!ALLOWED_EXTS.includes(ext)) {
+          failure = { code: "IMAGE_FORMAT_UNSUPPORTED", retryable: false };
+        }
+        return {
+          id: createQueueID(),
+          attempt: 0,
+          file: f,
+          progress: 0,
+          status: (failure ? "failed" : "queued") as Status,
+          failure,
+        };
+      });
     if (next.length) setItems((prev) => [...prev, ...next]);
   }, []);
 
@@ -194,6 +229,7 @@ export default function Upload() {
       uniqueLink: result.uniqueLink,
       assetLink: "assetLink" in result ? result.assetLink : undefined,
       pipelineVersion: result.pipelineVersion,
+      failure: undefined,
     });
     return "done";
   };
@@ -205,8 +241,22 @@ export default function Upload() {
     uploadId?: string,
   ): "failed" => {
     if (isAbortError(error)) return "failed";
-    const message = error instanceof Error ? error.message : t("upload.toast.uploadAllFailed");
-    toast.error(t("upload.toast.itemFailed", { name: item.file.name, msg: message }));
+    const clientError = isClientImageError(error) ? error : undefined;
+    const message = clientError
+      ? formatQueueFailure(
+          {
+            code: clientError.code,
+            details: clientError.details,
+            retryable: clientError.retryable,
+          },
+          t,
+        )
+      : error instanceof Error
+        ? error.message
+        : t("upload.toast.uploadAllFailed");
+    if (!clientError) {
+      toast.error(t("upload.toast.itemFailed", { name: item.file.name, msg: message }));
+    }
     const disposition = v2UploadRetryDisposition(error);
     patchItem(item.id, {
       status: "failed",
@@ -219,6 +269,13 @@ export default function Upload() {
           : disposition === "new-attempt"
             ? "new"
             : "reuse",
+      failure: clientError
+        ? {
+            code: clientError.code,
+            details: clientError.details,
+            retryable: clientError.retryable,
+          }
+        : { fallback: message, retryable: true },
     });
     return "failed";
   };
@@ -265,11 +322,18 @@ export default function Upload() {
         const result = await beginV1Upload(item.file, attemptVisibility, controller.signal);
         return finishItem(item, result);
       }
+      patch({ status: "checking", progress: 0, failure: undefined });
+      const plan = await preflightClientImage(item.file, recipe, controller.signal);
       const processed = await processSerially(async () => {
         patch({ status: "processing", progress: 0 });
-        return processClientImage(item.file, (percent) => {
-          patch({ status: "processing", progress: Math.min(40, Math.round(percent * 0.4)) });
-        }, controller.signal);
+        return processClientImage(
+          item.file,
+          plan,
+          (percent) => {
+            patch({ status: "processing", progress: Math.min(40, Math.round(percent * 0.4)) });
+          },
+          controller.signal,
+        );
       });
       attachProcessedPreview(item, processed);
       patch({ status: "uploading", progress: 40 });
@@ -420,7 +484,10 @@ export default function Upload() {
   const startUpload = () => runUploads(items.filter((i) => i.status === "queued"));
   const retryFailed = (id?: string) => {
     const retried = items
-      .filter((item) => item.status === "failed" && (!id || item.id === id))
+      .filter(
+        (item) =>
+          item.status === "failed" && item.failure?.retryable !== false && (!id || item.id === id),
+      )
       .map((item) => {
         const startsNewAttempt = item.retryMode === "new";
         return {
@@ -434,6 +501,7 @@ export default function Upload() {
           uniqueLink: undefined,
           assetLink: undefined,
           pipelineVersion: undefined,
+          failure: undefined,
         };
       });
     const replacements = new Map(retried.map((item) => [item.id, item]));
@@ -457,7 +525,9 @@ export default function Upload() {
 
   const hasQueued = items.some((i) => i.status === "queued");
   const completedLinks = items.filter((i) => i.status === "done" && i.uniqueLink);
-  const failedCount = items.filter((i) => i.status === "failed").length;
+  const retryableFailedCount = items.filter(
+    (item) => item.status === "failed" && item.failure?.retryable !== false,
+  ).length;
 
   const copyAllLinks = async () => {
     if (!completedLinks.length) return;
@@ -555,10 +625,10 @@ export default function Upload() {
                 >
                   {t("upload.done")}
                 </Button>
-                {failedCount > 0 && (
+                {retryableFailedCount > 0 && (
                   <Button size="sm" variant="outline" disabled={uploading} onClick={retryAllFailed}>
                     <IconRefresh />
-                    {t("upload.retryAll", { count: failedCount })}
+                    {t("upload.retryAll", { count: retryableFailedCount })}
                   </Button>
                 )}
                 {completedLinks.length > 0 && (
@@ -596,17 +666,28 @@ export default function Upload() {
                         </span>
                       </div>
                       <Progress value={item.progress} className="h-2" />
+                      {item.failure && (
+                        <p className="text-xs text-destructive" role="alert">
+                          {formatQueueFailure(item.failure, t)}
+                          {item.failure.code && (
+                            <span className="ml-1 font-mono">
+                              {t("upload.toast.errorCode", { code: item.failure.code })}
+                            </span>
+                          )}
+                        </p>
+                      )}
                     </div>
                     <Badge variant={variant} className="shrink-0">
                       {item.status === "done" && <IconCheck />}
-                      {(item.status === "processing" ||
+                      {(item.status === "checking" ||
+                        item.status === "processing" ||
                         item.status === "uploading" ||
                         item.status === "serverProcessing") && (
                         <IconLoader2 className="animate-spin" />
                       )}
                       {t(`upload.status.${item.status}`)}
                     </Badge>
-                    {item.status === "failed" && (
+                    {item.status === "failed" && item.failure?.retryable !== false && (
                       <Button
                         type="button"
                         size="icon-sm"
@@ -652,4 +733,9 @@ function isAbortError(error: unknown): boolean {
 
 function abortError(message: string): DOMException {
   return new DOMException(message, "AbortError");
+}
+
+function formatQueueFailure(failure: QueueFailure, t: TFunction): string {
+  if (failure.code) return t(`upload.errors.${failure.code}`, failure.details);
+  return failure.fallback ?? t("upload.toast.uploadAllFailed");
 }

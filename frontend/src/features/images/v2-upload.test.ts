@@ -10,8 +10,10 @@ import {
   buildManifest,
   beginV2Upload,
   createV2IdempotencyKey,
+  invalidateV2RecipeCache,
   isV2UploadEnabled,
   nextV2UploadAttempt,
+  parseV2Recipe,
   V2UploadPendingError,
   v2StatusPollDelay,
   v2UploadRetryDisposition,
@@ -28,6 +30,7 @@ describe("v2StatusPollDelay", () => {
 });
 
 afterEach(() => {
+  invalidateV2RecipeCache();
   vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
@@ -101,6 +104,7 @@ describe("upload pipeline capability", () => {
     max_part_bytes: 64 * 1024 * 1024,
     max_pixels: 50_000_000,
     session_ttl_ms: 30 * 60 * 1000,
+    variants: recipeVariants(),
   };
 
   it("uses V1 when the server explicitly disables new V2 sessions", () => {
@@ -109,6 +113,30 @@ describe("upload pipeline capability", () => {
 
   it("keeps compatibility with recipes from older V2-only servers", () => {
     expect(isV2UploadEnabled(recipe)).toBe(true);
+  });
+
+  it("validates the complete fixed recipe contract", () => {
+    expect(parseV2Recipe(recipe)).toEqual(recipe);
+  });
+
+  it("rejects missing or changed fixed variants with a stable client error", () => {
+    expect(() => parseV2Recipe({ ...recipe, variants: undefined })).toThrowError(
+      expect.objectContaining({ code: "IMAGE_RECIPE_UNSUPPORTED" }),
+    );
+    expect(() =>
+      parseV2Recipe({
+        ...recipe,
+        variants: recipeVariants().map((variant) =>
+          variant.kind === "gallery" ? { ...variant, width: 401 } : variant,
+        ),
+      }),
+    ).toThrowError(expect.objectContaining({ code: "IMAGE_RECIPE_UNSUPPORTED" }));
+  });
+
+  it("rejects unsafe numeric recipe limits", () => {
+    expect(() => parseV2Recipe({ ...recipe, max_pixels: Number.MAX_SAFE_INTEGER + 1 })).toThrowError(
+      expect.objectContaining({ code: "IMAGE_RECIPE_UNSUPPORTED" }),
+    );
   });
 });
 
@@ -144,6 +172,7 @@ describe("beginV2Upload cancellation", () => {
           max_part_bytes: 15 * 1024 * 1024,
           max_pixels: 50_000_000,
           session_ttl_ms: 60_000,
+          variants: recipeVariants(),
         },
       }),
     );
@@ -619,6 +648,33 @@ function recipeEnvelope() {
       max_part_bytes: 15 * 1024 * 1024,
       max_pixels: 50_000_000,
       session_ttl_ms: 60_000,
+      variants: recipeVariants(),
     },
   };
+}
+
+function recipeVariants() {
+  return [
+    { kind: "master" as const, quality: 80 as const, fit: "original" as const },
+    {
+      kind: "gallery" as const,
+      width: 400,
+      height: 400,
+      quality: 60 as const,
+      fit: "cover" as const,
+    },
+    {
+      kind: "admin" as const,
+      width: 120,
+      height: 160,
+      quality: 60 as const,
+      fit: "cover" as const,
+    },
+    {
+      kind: "publish_source" as const,
+      long_edge: 2048,
+      quality: 80 as const,
+      fit: "contain" as const,
+    },
+  ];
 }

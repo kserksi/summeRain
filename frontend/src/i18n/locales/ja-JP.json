@@ -71,11 +71,26 @@
     "empty": "まだ画像が追加されていません",
     "status": {
       "queued": "待機中",
+      "checking": "互換性を確認中",
       "processing": "端末で処理中",
       "uploading": "アップロード中",
       "serverProcessing": "公開画像を処理中",
       "done": "完了",
       "failed": "失敗"
+    },
+    "errors": {
+      "IMAGE_FILE_INVALID": "選択したファイルは有効な画像ではありません。",
+      "IMAGE_FILE_SIZE_EXCEEDED": "画像が {{maxMB}} MB の上限を超えています。",
+      "IMAGE_FORMAT_UNSUPPORTED": "この画像形式はサポートされていません。",
+      "IMAGE_CONTENT_MISMATCH": "画像の内容とファイル形式が一致しません。",
+      "IMAGE_ANIMATION_UNSUPPORTED": "このバージョンではアニメーション画像をサポートしていません。",
+      "IMAGE_DIMENSION_EXCEEDED": "画像が許可されている {{maxMP}} MP の上限を超えています。",
+      "IMAGE_RECIPE_UNSUPPORTED": "このクライアントはサーバーの画像レシピをサポートしていません。",
+      "IMAGE_PROCESSOR_UNAVAILABLE": "このブラウザーでは画像を安全に処理できません。対応する別の端末を使用するか、{{maxMP}} MP 未満に縮小してください。",
+      "IMAGE_DECODE_FAILED": "このブラウザーでは画像をデコードできませんでした。",
+      "IMAGE_WEBP_ENCODE_UNAVAILABLE": "このブラウザーでは WebP 画像をエンコードできません。",
+      "IMAGE_PROCESSING_TIMEOUT": "端末での画像処理がタイムアウトしました。もう一度お試しください。",
+      "IMAGE_PROCESSING_FAILED": "端末での画像処理に失敗しました。"
     },
     "toast": {
       "uploadSuccess": "{{count}} 枚の画像をアップロードしました",

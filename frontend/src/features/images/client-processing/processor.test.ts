@@ -3,7 +3,9 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { ClientProcessingPlan } from "./preflight";
 import type { ProcessedImage } from "./types";
+import { resetWasmVipsProbe } from "./wasm-capability";
 
 const nativeResult: ProcessedImage = {
   source: { mime_type: "image/jpeg", width: 1, height: 1, animated: false },
@@ -12,42 +14,33 @@ const nativeResult: ProcessedImage = {
   parts: [],
 };
 
-const { processWithNative, sniffInput } = vi.hoisted(() => ({
+const { processWithNative } = vi.hoisted(() => ({
   processWithNative: vi.fn(),
-  sniffInput: vi.fn(),
 }));
 
 vi.mock("./native-processor", () => ({ processWithNative }));
-vi.mock("./sniff", () => ({ sniffInput }));
 
 import { processClientImage } from "./processor";
 
 describe("processClientImage", () => {
   beforeEach(() => {
     processWithNative.mockResolvedValue(nativeResult);
-    sniffInput.mockResolvedValue({
-      mimeType: "image/jpeg",
-      animated: false,
-      width: 1,
-      height: 1,
-    });
   });
 
   afterEach(() => {
+    resetWasmVipsProbe();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
-    processWithNative.mockClear();
-    sniffInput.mockReset();
+    processWithNative.mockReset();
   });
 
-  it("does not read the source when processing is already aborted", async () => {
+  it("does not process the source when already aborted", async () => {
     const controller = new AbortController();
     controller.abort(new DOMException("page left", "AbortError"));
 
     await expect(
-      processClientImage(testFile(), vi.fn(), controller.signal),
+      processClientImage(testFile(), nativePlan(), vi.fn(), controller.signal),
     ).rejects.toMatchObject({ name: "AbortError", message: "page left" });
-    expect(sniffInput).not.toHaveBeenCalled();
     expect(processWithNative).not.toHaveBeenCalled();
   });
 
@@ -62,11 +55,13 @@ describe("processClientImage", () => {
       },
     );
 
-    await expect(processClientImage(testFile(), vi.fn())).resolves.toBe(nativeResult);
+    await expect(processClientImage(testFile(), wasmPlan(true), vi.fn())).resolves.toBe(
+      nativeResult,
+    );
     expect(processWithNative).toHaveBeenCalledOnce();
   });
 
-  it("falls back to pica when the worker fails before wasm-vips initializes", async () => {
+  it("falls back to pica when the worker fails before processing initializes", async () => {
     enableWasmPath();
     vi.stubGlobal(
       "Worker",
@@ -82,11 +77,13 @@ describe("processClientImage", () => {
       },
     );
 
-    await expect(processClientImage(testFile(), vi.fn())).resolves.toBe(nativeResult);
+    await expect(processClientImage(testFile(), wasmPlan(true), vi.fn())).resolves.toBe(
+      nativeResult,
+    );
     expect(processWithNative).toHaveBeenCalledOnce();
   });
 
-  it("cleans up and falls back when worker.postMessage throws synchronously", async () => {
+  it("cleans up and falls back when worker.postMessage throws", async () => {
     enableWasmPath();
     const terminate = vi.fn();
     vi.stubGlobal(
@@ -103,7 +100,9 @@ describe("processClientImage", () => {
       },
     );
 
-    await expect(processClientImage(testFile(), vi.fn())).resolves.toBe(nativeResult);
+    await expect(processClientImage(testFile(), wasmPlan(true), vi.fn())).resolves.toBe(
+      nativeResult,
+    );
     expect(processWithNative).toHaveBeenCalledOnce();
     expect(terminate).toHaveBeenCalledOnce();
   });
@@ -143,7 +142,7 @@ describe("processClientImage", () => {
       },
     );
 
-    await expect(processClientImage(testFile(), vi.fn())).resolves.toMatchObject({
+    await expect(processClientImage(testFile(), wasmPlan(true), vi.fn())).resolves.toMatchObject({
       processor_version: "wasm-vips-0.0.18",
     });
     expect(processWithNative).not.toHaveBeenCalled();
@@ -170,35 +169,23 @@ describe("processClientImage", () => {
       },
     );
 
-    await expect(processClientImage(testFile(), vi.fn())).rejects.toThrow(
-      "WASM image processing worker failed",
-    );
+    await expect(processClientImage(testFile(), wasmPlan(true), vi.fn())).rejects.toMatchObject({
+      code: "IMAGE_PROCESSING_FAILED",
+    });
     expect(processWithNative).not.toHaveBeenCalled();
   });
 
-  it("requires wasm-vips instead of allocating an unsafe native canvas", async () => {
+  it("rejects an unsafe native fallback when wasm-vips is unavailable", async () => {
     vi.stubGlobal("crossOriginIsolated", false);
-    sniffInput.mockResolvedValue({
-      mimeType: "image/jpeg",
-      animated: false,
-      width: 5_000,
-      height: 5_000,
-    });
 
-    await expect(processClientImage(testFile(), vi.fn())).rejects.toThrow(
-      "too large for safe Canvas processing on this device; WASM image processing is required",
-    );
+    await expect(processClientImage(testFile(), wasmPlan(false), vi.fn())).rejects.toMatchObject({
+      code: "IMAGE_PROCESSOR_UNAVAILABLE",
+    });
     expect(processWithNative).not.toHaveBeenCalled();
   });
 
-  it("does not fall back to Canvas for an unsafe image when wasm-vips is unavailable", async () => {
+  it("does not fall back to Canvas for an unsafe image after worker startup fails", async () => {
     enableWasmPath();
-    sniffInput.mockResolvedValue({
-      mimeType: "image/jpeg",
-      animated: false,
-      width: 5_000,
-      height: 5_000,
-    });
     vi.stubGlobal(
       "Worker",
       class {
@@ -208,20 +195,14 @@ describe("processClientImage", () => {
       },
     );
 
-    await expect(processClientImage(testFile(), vi.fn())).rejects.toThrow(
-      "WASM image processing is required",
-    );
+    await expect(processClientImage(testFile(), wasmPlan(false), vi.fn())).rejects.toMatchObject({
+      code: "IMAGE_PROCESSOR_UNAVAILABLE",
+    });
     expect(processWithNative).not.toHaveBeenCalled();
   });
 
-  it("routes a 50 MP image through wasm-vips without allocating a native canvas", async () => {
+  it("routes a 50 MP plan through wasm-vips without allocating a native canvas", async () => {
     enableWasmPath();
-    sniffInput.mockResolvedValue({
-      mimeType: "image/jpeg",
-      animated: false,
-      width: 8_000,
-      height: 6_250,
-    });
     vi.stubGlobal(
       "Worker",
       class {
@@ -253,7 +234,9 @@ describe("processClientImage", () => {
       },
     );
 
-    await expect(processClientImage(testFile(), vi.fn())).resolves.toMatchObject({
+    await expect(
+      processClientImage(testFile(), wasmPlan(false, 8_000, 6_250), vi.fn()),
+    ).resolves.toMatchObject({
       processor_version: "wasm-vips-0.0.18",
       source: { width: 8_000, height: 6_250 },
     });
@@ -281,7 +264,7 @@ describe("processClientImage", () => {
       },
     );
     const controller = new AbortController();
-    const result = processClientImage(testFile(), vi.fn(), controller.signal);
+    const result = processClientImage(testFile(), wasmPlan(false), vi.fn(), controller.signal);
     await posted;
 
     controller.abort(new DOMException("page left", "AbortError"));
@@ -291,7 +274,7 @@ describe("processClientImage", () => {
     expect(processWithNative).not.toHaveBeenCalled();
   });
 
-  it("does not release native processing before its cleanup finishes on abort", async () => {
+  it("does not release native processing before cleanup finishes on abort", async () => {
     let resolveNative: (value: ProcessedImage) => void = () => {};
     processWithNative.mockReturnValue(
       new Promise<ProcessedImage>((resolve) => {
@@ -300,7 +283,7 @@ describe("processClientImage", () => {
     );
     const controller = new AbortController();
     const reason = new DOMException("page left", "AbortError");
-    const result = processClientImage(testFile(), vi.fn(), controller.signal);
+    const result = processClientImage(testFile(), nativePlan(), vi.fn(), controller.signal);
     await vi.waitFor(() => expect(processWithNative).toHaveBeenCalledOnce());
     let settled = false;
     void result.then(
@@ -324,6 +307,26 @@ describe("processClientImage", () => {
 function enableWasmPath(): void {
   vi.stubGlobal("crossOriginIsolated", true);
   vi.stubGlobal("SharedArrayBuffer", class {});
+}
+
+function nativePlan(): ClientProcessingPlan {
+  return {
+    input: { mimeType: "image/jpeg", animated: false, width: 1, height: 1 },
+    processor: "native-pica",
+    nativeFallbackSafe: true,
+  };
+}
+
+function wasmPlan(
+  nativeFallbackSafe: boolean,
+  width = 1,
+  height = 1,
+): ClientProcessingPlan {
+  return {
+    input: { mimeType: "image/jpeg", animated: false, width, height },
+    processor: "wasm-vips",
+    nativeFallbackSafe,
+  };
 }
 
 function testFile(): File {

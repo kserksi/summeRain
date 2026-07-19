@@ -5,7 +5,9 @@ import { API_BASE_URL } from "@/config/constants";
 import { api, refreshCsrfToken } from "@/lib/api";
 import { getCsrfToken } from "@/lib/csrf";
 import { ApiError } from "@/lib/errors";
+import { z } from "zod";
 
+import { ClientImageError } from "./client-processing/errors";
 import type { ProcessedImage, ProcessedPart, V2VariantKind } from "./client-processing/types";
 
 type UploadSessionStatus =
@@ -45,6 +47,16 @@ export interface V2RecipeResponse {
   max_part_bytes: number;
   max_pixels: number;
   session_ttl_ms: number;
+  variants: V2RecipeVariant[];
+}
+
+export interface V2RecipeVariant {
+  kind: V2VariantKind;
+  width?: number;
+  height?: number;
+  long_edge?: number;
+  quality: 60 | 80;
+  fit: "original" | "cover" | "contain";
 }
 
 interface V2BatchStatusResponse {
@@ -122,24 +134,84 @@ const TRANSIENT_CODES = new Set([0, 1000, 1001, 1002, 1003, 4291, 5030]);
 const STATUS_BATCH_SIZE = 100;
 let recipePromise: Promise<V2RecipeResponse> | undefined;
 
+const recipeVariantSchema = z.object({
+  kind: z.enum(["master", "gallery", "admin", "publish_source"]),
+  width: z.number().int().positive().optional(),
+  height: z.number().int().positive().optional(),
+  long_edge: z.number().int().positive().optional(),
+  quality: z.union([z.literal(60), z.literal(80)]),
+  fit: z.enum(["original", "cover", "contain"]),
+});
+
+const recipeSchema = z.object({
+  v2_enabled: z.boolean().optional(),
+  pipeline_version: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  recipe_version: z.string().min(1),
+  max_part_bytes: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  max_pixels: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  session_ttl_ms: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  variants: z.array(recipeVariantSchema).length(4),
+});
+
+const expectedVariants: V2RecipeVariant[] = [
+  { kind: "master", quality: 80, fit: "original" },
+  { kind: "gallery", width: 400, height: 400, quality: 60, fit: "cover" },
+  { kind: "admin", width: 120, height: 160, quality: 60, fit: "cover" },
+  { kind: "publish_source", long_edge: 2048, quality: 80, fit: "contain" },
+];
+
 export function isV2UploadEnabled(recipe: V2RecipeResponse): boolean {
   return recipe.v2_enabled !== false;
+}
+
+export function parseV2Recipe(value: unknown): V2RecipeResponse {
+  const parsed = recipeSchema.safeParse(value);
+  if (!parsed.success) throw unsupportedRecipeError(parsed.error);
+  const recipe = parsed.data;
+  if (
+    isV2UploadEnabled(recipe) &&
+    (recipe.pipeline_version !== 2 ||
+      recipe.recipe_version !== "2.0.0" ||
+      !variantsMatch(recipe.variants))
+  ) {
+    throw unsupportedRecipeError();
+  }
+  return recipe;
+}
+
+export function invalidateV2RecipeCache(): void {
+  recipePromise = undefined;
+}
+
+function variantsMatch(variants: V2RecipeVariant[]): boolean {
+  const byKind = new Map(variants.map((variant) => [variant.kind, variant]));
+  if (byKind.size !== expectedVariants.length) return false;
+  return expectedVariants.every((expected) => {
+    const actual = byKind.get(expected.kind);
+    return (
+      actual?.quality === expected.quality &&
+      actual.fit === expected.fit &&
+      actual.width === expected.width &&
+      actual.height === expected.height &&
+      actual.long_edge === expected.long_edge
+    );
+  });
+}
+
+function unsupportedRecipeError(cause?: unknown): ClientImageError {
+  return new ClientImageError(
+    "IMAGE_RECIPE_UNSUPPORTED",
+    "This client does not support the server image recipe",
+    { cause },
+  );
 }
 
 export function getV2Recipe(signal?: AbortSignal): Promise<V2RecipeResponse> {
   throwIfAborted(signal);
   if (!recipePromise) {
-    recipePromise = api.get<V2RecipeResponse>("/uploads/recipe").then((recipe) => {
-      if (
-        isV2UploadEnabled(recipe) &&
-        (recipe.pipeline_version !== 2 || recipe.recipe_version !== "2.0.0")
-      ) {
-        throw new Error("This client does not support the server image recipe");
-      }
-      return recipe;
-    });
+    recipePromise = api.get<unknown>("/uploads/recipe").then(parseV2Recipe);
     recipePromise.catch(() => {
-      recipePromise = undefined;
+      invalidateV2RecipeCache();
     });
   }
   return waitWithSignal(recipePromise, signal);
@@ -155,10 +227,18 @@ export async function beginV2Upload(options: V2UploadOptions): Promise<V2UploadS
   if (!isV2UploadEnabled(recipe)) {
     throw new Error("V2 image uploads are disabled by the server");
   }
-  const pixels = processed.source.width * processed.source.height;
-  if (pixels > recipe.max_pixels) throw new Error("Image exceeds the server pixel limit");
+  if (processed.source.width > Math.floor(recipe.max_pixels / processed.source.height)) {
+    throw new ClientImageError(
+      "IMAGE_DIMENSION_EXCEEDED",
+      "Image exceeds the server pixel limit",
+      { details: { maxMP: Number((recipe.max_pixels / 1_000_000).toFixed(1)) } },
+    );
+  }
   if (processed.parts.some((part) => part.size > recipe.max_part_bytes)) {
-    throw new Error("A processed image part exceeds the server size limit");
+    throw new ClientImageError(
+      "IMAGE_PROCESSING_FAILED",
+      "A processed image part exceeds the server size limit",
+    );
   }
 
   const manifest = buildManifest(fileName, visibility, processed);
