@@ -25,6 +25,9 @@ fi
 
 grep -Fq "[Documentation](${public_site})" "${repo_root}/README.md" ||
   fail "README.md must link its primary Documentation entry to ${public_site}"
+if grep -Fq '](./LICENSE)' "${repo_root}/README.md"; then
+  fail "README.md must use an explicit GitHub LICENSE URL because GitBook rewrites the relative path"
+fi
 grep -Fq "[summerain-1.gitbook.io/summerain](${public_site})" \
   "${repo_root}/docs/GITBOOK.md" ||
   fail "docs/GITBOOK.md must identify ${public_site} as the canonical public site"

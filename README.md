@@ -7,7 +7,7 @@
 [![CI and Docker](https://github.com/kserksi/summeRain/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/kserksi/summeRain/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/kserksi/summeRain)](https://github.com/kserksi/summeRain/releases)
 [![Docker Hub](https://img.shields.io/docker/v/jaykserks/summerain?label=docker)](https://hub.docker.com/r/jaykserks/summerain)
-[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](https://github.com/kserksi/summeRain/blob/main/LICENSE)
 
 > **Early-release notice:** V2 is still an early release. The upload protocol,
 > browser processing pipeline, schema, compatibility behavior, and operational
@@ -350,4 +350,4 @@ for this repository.
 
 Copyright 2026 The summeRain Authors
 
-Licensed under the [Apache License 2.0](./LICENSE).
+Licensed under the [Apache License 2.0](https://github.com/kserksi/summeRain/blob/main/LICENSE).
