@@ -15,6 +15,7 @@
 
 ## 发布说明
 
+* [V2.0.2](docs/releases/v2.0.2.md)
 * [V2.0.1](docs/releases/v2.0.1.md)
 * [V2.0.0](docs/releases/v2.0.0.md)
 
