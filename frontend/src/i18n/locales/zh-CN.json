@@ -70,13 +70,22 @@
     "remove": "移除",
     "empty": "还没有添加任何图片",
     "status": {
+      "saving": "正在保存恢复数据",
       "queued": "等待中",
       "checking": "正在检查兼容性",
       "processing": "本地处理中",
       "uploading": "上传中",
       "serverProcessing": "发布处理中",
+      "paused": "已暂停",
       "done": "完成",
       "failed": "失败"
+    },
+    "persistence": {
+      "durable": "可恢复",
+      "volatile": "仅当前标签页",
+      "volatileWarning": "有 {{count}} 张图片无法保存为可恢复队列，请在上传完成前保持此标签页打开。",
+      "storageUnavailable": "浏览器存储空间不足，无法保留此上传的恢复数据。请释放浏览器存储空间后重试。",
+      "v1OutcomeUnknown": "旧版上传被中断，结果无法确认。请先在“我的图片”中核对，再移除此项或重新上传源文件。"
     },
     "errors": {
       "IMAGE_FILE_INVALID": "所选文件不是有效图片。",

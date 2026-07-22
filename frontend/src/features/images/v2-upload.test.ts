@@ -14,6 +14,7 @@ import {
   isV2UploadEnabled,
   nextV2UploadAttempt,
   parseV2Recipe,
+  reconcileV2UploadStatuses,
   V2UploadPendingError,
   v2StatusPollDelay,
   v2UploadRetryDisposition,
@@ -180,7 +181,7 @@ describe("beginV2Upload cancellation", () => {
     expect(fetchMock).toHaveBeenCalledOnce();
   });
 
-  it("cancels the server session and detaches XHR abort handling when send throws", async () => {
+  it("preserves the server session and detaches XHR abort handling when send throws", async () => {
     const xhrAbort = vi.fn();
     vi.stubGlobal(
       "XMLHttpRequest",
@@ -243,7 +244,7 @@ describe("beginV2Upload cancellation", () => {
       }),
     ).rejects.toThrow("could not send");
 
-    expect(fetchMock.mock.calls.some(([, init]) => init?.method === "DELETE")).toBe(true);
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === "DELETE")).toBe(false);
     controller.abort();
     expect(xhrAbort).not.toHaveBeenCalled();
   });
@@ -335,11 +336,182 @@ describe("beginV2Upload cancellation", () => {
 
     expect(initAttempts).toBe(2);
     expect(seenKeys).toEqual(["stable-init-key", "stable-init-key"]);
-    expect(onSession).toHaveBeenCalledWith("init-retry-upload");
+    expect(onSession).toHaveBeenCalledWith("init-retry-upload", expect.any(String));
+  });
+
+  it("awaits durable session persistence before starting the first part PUT", async () => {
+    let releaseSession: () => void = () => {};
+    const sessionPersisted = new Promise<void>((resolve) => {
+      releaseSession = resolve;
+    });
+    const partSend = vi.fn();
+    vi.stubGlobal(
+      "XMLHttpRequest",
+      class {
+        upload: { onprogress: ((event: ProgressEvent) => void) | null } = { onprogress: null };
+        onload: (() => void) | null = null;
+        onerror: (() => void) | null = null;
+        ontimeout: (() => void) | null = null;
+        onabort: (() => void) | null = null;
+        responseText = JSON.stringify({ code: 0, message: "success" });
+        status = 200;
+        timeout = 0;
+        withCredentials = false;
+
+        open() {}
+        setRequestHeader() {}
+        abort() {}
+        send() {
+          partSend();
+          queueMicrotask(() => this.onload?.());
+        }
+      },
+    );
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/uploads/recipe")) return response(200, recipeEnvelope());
+      if (url.endsWith("/complete")) {
+        return response(200, {
+          code: 0,
+          message: "success",
+          data: activeSession("durable-session", "processing", []),
+        });
+      }
+      return response(200, {
+        code: 0,
+        message: "success",
+        data: activeSession("durable-session", "initiated", [
+          {
+            kind: "master",
+            status: "pending",
+            put_url: "/api/v1/uploads/durable-session/parts/master",
+            size: 4,
+            sha256: "a".repeat(64),
+            width: 1,
+            height: 1,
+          },
+        ]),
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const onSession = vi.fn(() => sessionPersisted);
+
+    const upload = beginV2Upload({
+      fileName: "photo.jpg",
+      visibility: "public",
+      idempotencyKey: "durable-session-attempt",
+      processed: processedImageWithMaster(),
+      onProgress: vi.fn(),
+      onSession,
+    });
+
+    await vi.waitFor(() => expect(onSession).toHaveBeenCalledOnce());
+    expect(partSend).not.toHaveBeenCalled();
+
+    releaseSession();
+
+    await expect(upload).resolves.toEqual({ uploadId: "durable-session" });
+    expect(partSend).toHaveBeenCalledOnce();
+  });
+
+  it("does not start a part PUT when aborted during durable session persistence", async () => {
+    let releaseSession: () => void = () => {};
+    const sessionPersisted = new Promise<void>((resolve) => {
+      releaseSession = resolve;
+    });
+    const partSend = vi.fn();
+    vi.stubGlobal(
+      "XMLHttpRequest",
+      class {
+        upload = { onprogress: null };
+        open() {}
+        setRequestHeader() {}
+        send() {
+          partSend();
+        }
+      },
+    );
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        if (String(input).endsWith("/uploads/recipe")) {
+          return response(200, recipeEnvelope());
+        }
+        return response(200, {
+          code: 0,
+          message: "success",
+          data: activeSession("aborted-durable-session", "initiated", [
+            {
+              kind: "master",
+              status: "pending",
+              put_url: "/api/v1/uploads/aborted-durable-session/parts/master",
+              size: 4,
+              sha256: "a".repeat(64),
+              width: 1,
+              height: 1,
+            },
+          ]),
+        });
+      }),
+    );
+    const controller = new AbortController();
+    const onSession = vi.fn(() => sessionPersisted);
+    const upload = beginV2Upload({
+      fileName: "photo.jpg",
+      visibility: "public",
+      idempotencyKey: "aborted-durable-attempt",
+      processed: processedImageWithMaster(),
+      onProgress: vi.fn(),
+      onSession,
+      signal: controller.signal,
+    }).catch((error: unknown) => error);
+
+    await vi.waitFor(() => expect(onSession).toHaveBeenCalledOnce());
+    controller.abort(new DOMException("page left", "AbortError"));
+    releaseSession();
+
+    await expect(upload).resolves.toMatchObject({ name: "AbortError", message: "page left" });
+    expect(partSend).not.toHaveBeenCalled();
   });
 });
 
 describe("V2 status coordination", () => {
+  it("recursively isolates 4043 sessions during cold reconciliation", async () => {
+    const missing = "cold-missing-upload";
+    const requestedBatches: string[][] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        const { upload_ids: uploadIds } = JSON.parse(String(init?.body)) as {
+          upload_ids: string[];
+        };
+        requestedBatches.push(uploadIds);
+        if (uploadIds.includes(missing)) {
+          return response(404, { code: 4043, message: "Upload session is missing" });
+        }
+        return response(200, {
+          code: 0,
+          message: "success",
+          data: { uploads: uploadIds.map(completedSession) },
+        });
+      }),
+    );
+
+    const result = await reconcileV2UploadStatuses(["cold-first", missing, "cold-second"]);
+    expect(result.uploads.map((session) => session.upload_id)).toEqual([
+      "cold-first",
+      "cold-second",
+    ]);
+    expect(result.missingUploadIds).toEqual([missing]);
+    expect(requestedBatches).toEqual([
+      ["cold-first", missing, "cold-second"],
+      ["cold-first"],
+      [missing, "cold-second"],
+      [missing],
+      ["cold-second"],
+    ]);
+  });
+
   it("bisects a 4043 response and only rejects the missing upload waiter", async () => {
     vi.useFakeTimers();
     const missing = "missing-upload";

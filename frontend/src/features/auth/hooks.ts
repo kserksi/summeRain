@@ -11,6 +11,11 @@ import { queryClient } from '@/lib/query-client'
 import { ApiError } from '@/lib/errors'
 import { ROUTES } from '@/config/constants'
 import { useAuthStore } from '@/store/auth-store'
+import { stopActiveUploadWork } from '@/features/images/upload-queue-recovery'
+import {
+  clearPersistedUploadsExceptUser,
+  clearPersistedUploadsForUser,
+} from '@/features/images/upload-queue-store'
 import { login, logout, register } from './api'
 import type { LoginData, RegisterData } from './api'
 
@@ -37,7 +42,9 @@ export function useLogin() {
 
   return useMutation({
     mutationFn: (data: LoginData) => login(data),
-    onSuccess: (result) => {
+    onSuccess: async (result) => {
+      stopActiveUploadWork()
+      await clearPersistedUploadsExceptUser(result.user.id).catch(() => undefined)
       queryClient.clear()
       setUser(result.user)
       navigate(ROUTES.DASHBOARD, { replace: true })
@@ -69,7 +76,12 @@ export function useLogout() {
 
   return useMutation({
     mutationFn: () => logout(),
-    onSettled: () => {
+    onSettled: async () => {
+      const ownerUserId = useAuthStore.getState().user?.id
+      stopActiveUploadWork()
+      if (ownerUserId) {
+        await clearPersistedUploadsForUser(ownerUserId).catch(() => undefined)
+      }
       clear()
       window.location.assign(ROUTES.HOME)
     },

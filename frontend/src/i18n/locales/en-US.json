@@ -70,13 +70,22 @@
     "remove": "Remove",
     "empty": "No images have been added",
     "status": {
+      "saving": "Saving for recovery",
       "queued": "Queued",
       "checking": "Checking compatibility",
       "processing": "Processing locally",
       "uploading": "Uploading",
       "serverProcessing": "Preparing publish image",
+      "paused": "Paused",
       "done": "Done",
       "failed": "Failed"
+    },
+    "persistence": {
+      "durable": "Recovery ready",
+      "volatile": "This tab only",
+      "volatileWarning": "{{count}} image(s) could not be saved for recovery. Keep this tab open until upload finishes.",
+      "storageUnavailable": "Browser storage could not preserve this upload for recovery. Free browser storage and retry.",
+      "v1OutcomeUnknown": "A legacy upload was interrupted with an unknown result. Check My Images before removing it or uploading the source again."
     },
     "errors": {
       "IMAGE_FILE_INVALID": "The selected file is not a valid image.",

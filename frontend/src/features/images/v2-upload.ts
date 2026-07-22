@@ -10,7 +10,7 @@ import { z } from "zod";
 import { ClientImageError } from "./client-processing/errors";
 import type { ProcessedImage, ProcessedPart, V2VariantKind } from "./client-processing/types";
 
-type UploadSessionStatus =
+export type UploadSessionStatus =
   | "initiated"
   | "uploading"
   | "processing"
@@ -19,7 +19,7 @@ type UploadSessionStatus =
   | "cancelled"
   | "cleanup_pending";
 
-interface UploadPartResponse {
+export interface UploadPartResponse {
   kind: V2VariantKind;
   status: "pending" | "received" | "finalized" | "cleaned";
   put_url?: string;
@@ -29,7 +29,7 @@ interface UploadPartResponse {
   height: number;
 }
 
-interface UploadSessionResponse {
+export interface UploadSessionResponse {
   upload_id: string;
   status: UploadSessionStatus;
   image_id?: number;
@@ -122,7 +122,7 @@ export interface V2UploadOptions {
   idempotencyKey: string;
   processed: ProcessedImage;
   onProgress: V2UploadProgress;
-  onSession?: (uploadId: string) => void;
+  onSession?: (uploadId: string, expiresAt: string) => void | Promise<void>;
   signal?: AbortSignal;
 }
 
@@ -252,7 +252,8 @@ export async function beginV2Upload(options: V2UploadOptions): Promise<V2UploadS
     signal,
   );
   assertSessionMatches(session, processed);
-  onSession?.(session.upload_id);
+  await onSession?.(session.upload_id, session.expires_at);
+  throwIfAborted(signal);
 
   if (isPublishedSession(session)) {
     return { uploadId: session.upload_id, completed: completedResult(session) };
@@ -263,25 +264,14 @@ export async function beginV2Upload(options: V2UploadOptions): Promise<V2UploadS
     return { uploadId: session.upload_id };
   }
 
-  try {
-    await uploadPendingParts(session, processed.parts, onProgress, signal);
-    throwIfAborted(signal);
-  } catch (error) {
-    const cancelled = await bestEffortCancelSession(session.upload_id);
-    if (!signal?.aborted && cancelled?.status === "cancelled") {
-      throw new V2UploadTerminalError(errorMessage(error, "Upload session was cancelled"));
-    }
-    throw error;
-  }
+  await uploadPendingParts(session, processed.parts, onProgress, signal);
+  throwIfAborted(signal);
 
   let completed: UploadSessionResponse;
   try {
     completed = await requestCompletion(session.upload_id, signal);
   } catch (error) {
-    if (signal?.aborted) {
-      await bestEffortCancelSession(session.upload_id);
-      throw signal.reason ?? abortError();
-    }
+    if (signal?.aborted) throw signal.reason ?? abortError();
     const recovered = await recoverCompletion(session.upload_id, onProgress, signal);
     if (recovered) return recovered;
     throw error;
@@ -291,7 +281,6 @@ export async function beginV2Upload(options: V2UploadOptions): Promise<V2UploadS
   }
   assertActiveSession(completed);
   if (completed.status !== "processing") {
-    await bestEffortCancelSession(session.upload_id);
     throw new Error("Upload did not enter server processing");
   }
   onProgress("server-processing", 0);
@@ -304,6 +293,37 @@ export function waitForV2Upload(
   signal?: AbortSignal,
 ): Promise<V2UploadResult> {
   return statusCoordinator.wait(uploadId, onProgress, signal);
+}
+
+export interface V2UploadStatusSnapshot {
+  uploads: UploadSessionResponse[];
+  missingUploadIds: string[];
+}
+
+export async function reconcileV2UploadStatuses(
+  uploadIds: string[],
+  signal?: AbortSignal,
+): Promise<V2UploadStatusSnapshot> {
+  const uniqueUploadIds = Array.from(new Set(uploadIds));
+  const uploads = new Map<string, UploadSessionResponse>();
+  const missing = new Set<string>();
+  for (let offset = 0; offset < uniqueUploadIds.length; offset += STATUS_BATCH_SIZE) {
+    await visitStatusChunk(
+      uniqueUploadIds.slice(offset, offset + STATUS_BATCH_SIZE),
+      (response) => {
+        for (const session of response.uploads) uploads.set(session.upload_id, session);
+      },
+      (uploadId) => missing.add(uploadId),
+      signal,
+    );
+  }
+  return { uploads: Array.from(uploads.values()), missingUploadIds: Array.from(missing) };
+}
+
+export function resetV2UploadObservers(
+  reason: unknown = abortError("Authentication scope changed"),
+): void {
+  statusCoordinator.reset(reason);
 }
 
 export function buildManifest(
@@ -335,6 +355,7 @@ async function uploadPendingParts(
   onProgress: V2UploadProgress,
   signal?: AbortSignal,
 ): Promise<void> {
+  throwIfAborted(signal);
   const localByKind = new Map(localParts.map((part) => [part.kind, part]));
   const loaded = new Map<V2VariantKind, number>();
   const total = localParts.reduce((sum, part) => sum + part.size, 0);
@@ -530,6 +551,7 @@ class V2StatusCoordinator {
   private readonly waiters = new Map<string, Set<StatusWaiter>>();
   private timer: number | undefined;
   private running = false;
+  private activeRequest: AbortController | undefined;
 
   wait(
     uploadId: string,
@@ -554,6 +576,13 @@ class V2StatusCoordinator {
       this.waiters.set(uploadId, group);
       this.schedule(250);
     });
+  }
+
+  reset(reason: unknown): void {
+    this.activeRequest?.abort(reason);
+    for (const [uploadId, group] of this.waiters) {
+      for (const waiter of Array.from(group)) this.remove(uploadId, waiter, reason);
+    }
   }
 
   private schedule(delayMs: number): void {
@@ -581,11 +610,17 @@ class V2StatusCoordinator {
     }
 
     const uploadIds = Array.from(this.waiters.keys());
+    const controller = new AbortController();
+    this.activeRequest = controller;
     try {
       for (let offset = 0; offset < uploadIds.length; offset += STATUS_BATCH_SIZE) {
-        await this.processStatusChunk(uploadIds.slice(offset, offset + STATUS_BATCH_SIZE));
+        await this.processStatusChunk(
+          uploadIds.slice(offset, offset + STATUS_BATCH_SIZE),
+          controller.signal,
+        );
       }
     } finally {
+      if (this.activeRequest === controller) this.activeRequest = undefined;
       this.running = false;
       this.schedule(this.nextPollDelay(Date.now()));
     }
@@ -601,32 +636,23 @@ class V2StatusCoordinator {
     return delay;
   }
 
-  private async processStatusChunk(uploadIds: string[]): Promise<void> {
+  private async processStatusChunk(uploadIds: string[], signal?: AbortSignal): Promise<void> {
     if (uploadIds.length === 0) return;
-
-    let response: V2BatchStatusResponse;
     try {
-      response = await requestStatusBatch(uploadIds);
+      await visitStatusChunk(
+        uploadIds,
+        (response) => {
+          const sessions = new Map(response.uploads.map((session) => [session.upload_id, session]));
+          for (const uploadId of uploadIds) {
+            const session = sessions.get(uploadId);
+            if (session) this.handleSession(session);
+          }
+        },
+        (uploadId, error) => this.recordStatusFailure(uploadId, error),
+        signal,
+      );
     } catch (error) {
-      if (error instanceof ApiError && error.code === 4043 && uploadIds.length > 1) {
-        const middle = Math.floor(uploadIds.length / 2);
-        await this.processStatusChunk(uploadIds.slice(0, middle));
-        await this.processStatusChunk(uploadIds.slice(middle));
-        return;
-      }
       for (const uploadId of uploadIds) this.recordStatusFailure(uploadId, error);
-      return;
-    }
-
-    const sessions = new Map(response.uploads.map((session) => [session.upload_id, session]));
-    for (const uploadId of uploadIds) {
-      const session = sessions.get(uploadId);
-      if (!session) {
-        // Batch aggregation can briefly lag behind an accepted upload. Keep the
-        // waiter attached and let the next poll reconcile the session.
-        continue;
-      }
-      this.handleSession(session);
     }
   }
 
@@ -691,20 +717,57 @@ class V2StatusCoordinator {
   }
 }
 
-async function requestStatusBatch(uploadIds: string[]): Promise<V2BatchStatusResponse> {
+async function visitStatusChunk(
+  uploadIds: string[],
+  onResponse: (response: V2BatchStatusResponse) => void,
+  onMissing: (uploadId: string, error: unknown) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  if (uploadIds.length === 0) return;
+  try {
+    onResponse(await requestStatusBatch(uploadIds, signal));
+  } catch (error) {
+    if (signal?.aborted) throw signal.reason ?? abortError();
+    if (error instanceof ApiError && error.code === 4043) {
+      if (uploadIds.length === 1) {
+        onMissing(uploadIds[0], error);
+        return;
+      }
+      const middle = Math.floor(uploadIds.length / 2);
+      await visitStatusChunk(uploadIds.slice(0, middle), onResponse, onMissing, signal);
+      await visitStatusChunk(uploadIds.slice(middle), onResponse, onMissing, signal);
+      return;
+    }
+    throw error;
+  }
+}
+
+async function requestStatusBatch(
+  uploadIds: string[],
+  signal?: AbortSignal,
+): Promise<V2BatchStatusResponse> {
+  throwIfAborted(signal);
   const controller = new AbortController();
+  const abortFromParent = () => controller.abort(signal?.reason ?? abortError());
+  signal?.addEventListener("abort", abortFromParent, { once: true });
   const timeout = window.setTimeout(
     () => controller.abort(abortError("Status request timed out")),
     15_000,
   );
   try {
-    return await api.post<V2BatchStatusResponse>(
+    const response = await api.post<V2BatchStatusResponse>(
       "/uploads/status",
       { upload_ids: uploadIds },
       { signal: controller.signal, csrfRetry: "idempotent" },
     );
+    throwIfAborted(signal);
+    return response;
+  } catch (error) {
+    if (signal?.aborted) throw signal.reason ?? abortError();
+    throw error;
   } finally {
     window.clearTimeout(timeout);
+    signal?.removeEventListener("abort", abortFromParent);
   }
 }
 
@@ -785,16 +848,7 @@ async function recoverCompletion(
     signal?.removeEventListener("abort", abortFromParent);
   }
 
-  if (signal?.aborted) {
-    await bestEffortCancelSession(uploadId);
-    throw signal.reason ?? abortError();
-  }
-  if (!current || current.status === "initiated" || current.status === "uploading") {
-    const cancelled = await bestEffortCancelSession(uploadId);
-    if (cancelled?.status === "cancelled") {
-      throw new V2UploadTerminalError("Upload session was cancelled during recovery");
-    }
-  }
+  if (signal?.aborted) throw signal.reason ?? abortError();
   return undefined;
 }
 
@@ -840,7 +894,7 @@ function requestCompletion(
   );
 }
 
-async function bestEffortCancelSession(
+export async function cancelV2Upload(
   uploadId: string,
 ): Promise<UploadSessionResponse | undefined> {
   const controller = new AbortController();
@@ -855,8 +909,8 @@ async function bestEffortCancelSession(
       csrfRetry: "idempotent",
     });
   } catch {
-    // A processing/completed session deliberately rejects cancellation. Network
-    // failures are left for the server-side expiry cleanup to reconcile.
+    // Processing/completed sessions deliberately reject cancellation. Network
+    // failures are left for server-side expiry cleanup.
   } finally {
     window.clearTimeout(timeout);
   }
@@ -922,19 +976,6 @@ async function retryTransientRequest<T>(
 
 function isTransient(error: unknown): boolean {
   return error instanceof ApiError && TRANSIENT_CODES.has(error.code);
-}
-
-function errorMessage(error: unknown, fallback: string): string {
-  if (
-    error &&
-    typeof error === "object" &&
-    "message" in error &&
-    typeof error.message === "string" &&
-    error.message
-  ) {
-    return error.message;
-  }
-  return fallback;
 }
 
 function throwIfAborted(signal?: AbortSignal): void {

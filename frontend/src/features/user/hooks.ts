@@ -7,6 +7,8 @@ import { toast } from 'sonner'
 import i18n from '@/i18n'
 import { QUERY_KEYS } from '@/config/constants'
 import { useAuthStore } from '@/store/auth-store'
+import { stopActiveUploadWork } from '@/features/images/upload-queue-recovery'
+import { clearPersistedUploadsForUser } from '@/features/images/upload-queue-store'
 import { getProfile, changePassword } from './api'
 
 export function useProfile() {
@@ -22,7 +24,12 @@ export function useChangePassword() {
 
   return useMutation({
     mutationFn: changePassword,
-    onSuccess: () => {
+    onSuccess: async () => {
+      const ownerUserId = useAuthStore.getState().user?.id
+      stopActiveUploadWork()
+      if (ownerUserId) {
+        await clearPersistedUploadsForUser(ownerUserId).catch(() => undefined)
+      }
       queryClient.clear()
       useAuthStore.getState().clear()
       toast.success(i18n.t('profile.password.changed'))
