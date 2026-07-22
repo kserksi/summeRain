@@ -20,7 +20,6 @@ import (
 	"github.com/kserksi/summerain/internal/config"
 	"github.com/kserksi/summerain/internal/handler"
 	"github.com/kserksi/summerain/internal/middleware"
-	"github.com/kserksi/summerain/internal/model"
 	"github.com/kserksi/summerain/internal/pkg/errcode"
 	"github.com/kserksi/summerain/internal/pkg/imgproxy"
 	"github.com/kserksi/summerain/internal/pkg/response"
@@ -50,30 +49,9 @@ func main() {
 	sqlDB.SetMaxIdleConns(cfg.Database.MaxIdleConns)
 	sqlDB.SetConnMaxLifetime(cfg.Database.ConnMaxLifetime)
 
-	// 迁移老版本 token 数据,确保历史私密图访问令牌可用.
-	repository.MigrateLegacyTokens(db)
-
-	if err := db.AutoMigrate(
-		&model.User{},
-		&model.Session{},
-		&model.CSRFToken{},
-		&legacyImageFileSchema{},
-		&legacyImageSchema{},
-		&model.ImageAccessToken{},
-		&model.Notification{},
-		&model.SystemConfig{},
-		&model.UploadQueue{},
-		&model.AuditLog{},
-	); err != nil {
-		log.Fatalf("failed to bootstrap legacy database schema: %v", err)
+	if err := repository.BootstrapDatabase(context.Background(), db); err != nil {
+		log.Fatalf("failed to bootstrap database: %v", err)
 	}
-	// V1 used AutoMigrate and fresh installations still need that bootstrap.
-	// Every V2 schema change is recorded and checksum-verified from this point.
-	if err := repository.ApplySchemaMigrations(db); err != nil {
-		log.Fatalf("failed to apply versioned database migrations: %v", err)
-	}
-
-	repository.SeedDefaultConfigs(db)
 
 	rdb := redis.NewClient(&redis.Options{
 		Addr:     cfg.Redis.Addr,
@@ -353,45 +331,3 @@ func main() {
 	}
 	log.Println("server exited")
 }
-
-// legacyImageSchema bootstraps a fresh V1 database without letting GORM add V2
-// columns outside the checksummed migration runner.
-type legacyImageSchema struct {
-	ID          uint64    `gorm:"primaryKey;autoIncrement"`
-	UserID      uint64    `gorm:"index;not null"`
-	ImageFileID uint64    `gorm:"index;not null"`
-	UniqueLink  string    `gorm:"size:32;uniqueIndex;not null"`
-	Title       string    `gorm:"size:200"`
-	Filename    string    `gorm:"size:255"`
-	Description string    `gorm:"size:500"`
-	Visibility  string    `gorm:"size:10;default:public;not null"`
-	ViewCount   uint64    `gorm:"default:0;not null"`
-	Width       int       `gorm:"default:0"`
-	Height      int       `gorm:"default:0"`
-	FileSize    int64     `gorm:"not null"`
-	CreatedAt   time.Time `gorm:"autoCreateTime"`
-	UpdatedAt   time.Time `gorm:"autoUpdateTime"`
-
-	User      *model.User            `gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE"`
-	ImageFile *legacyImageFileSchema `gorm:"foreignKey:ImageFileID"`
-}
-
-func (legacyImageSchema) TableName() string { return "images" }
-
-// legacyImageFileSchema keeps object-storage lineage under the checksummed
-// migration runner instead of letting AutoMigrate add it implicitly.
-type legacyImageFileSchema struct {
-	ID             uint64    `gorm:"primaryKey;autoIncrement"`
-	FileHash       string    `gorm:"size:64;uniqueIndex;not null"`
-	FileSize       int64     `gorm:"not null"`
-	MimeType       string    `gorm:"size:50;not null"`
-	Width          int       `gorm:"default:0"`
-	Height         int       `gorm:"default:0"`
-	ReferenceCount int       `gorm:"default:1;not null"`
-	OriginalPath   string    `gorm:"size:500;not null"`
-	ThumbnailPath  string    `gorm:"size:500"`
-	ProcessedPath  string    `gorm:"size:500"`
-	CreatedAt      time.Time `gorm:"autoCreateTime"`
-}
-
-func (legacyImageFileSchema) TableName() string { return "image_files" }

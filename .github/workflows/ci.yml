@@ -112,6 +112,18 @@ jobs:
   backend:
     name: Backend (Go)
     runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4.10
+        env:
+          MYSQL_ROOT_PASSWORD: summerain-ci
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -psummerain-ci"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
     defaults:
       run:
         working-directory: backend
@@ -128,6 +140,12 @@ jobs:
 
       - name: Verify dependency checksums
         run: go mod verify
+
+      - name: Test database bootstrap against MySQL
+        env:
+          SUMMERAIN_BOOTSTRAP_TEST_MYSQL_DSN: root:summerain-ci@tcp(127.0.0.1:3306)/?charset=utf8mb4&parseTime=True&loc=Local
+          SUMMERAIN_REQUIRE_MYSQL_TESTS: "1"
+        run: go test ./internal/repository -run '^TestBootstrapDatabaseMySQL' -count=1 -v
 
       - name: Build
         run: go build ./...

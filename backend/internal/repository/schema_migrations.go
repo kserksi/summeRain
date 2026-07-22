@@ -393,7 +393,7 @@ const createSchemaMigrationsTableSQL = `CREATE TABLE IF NOT EXISTS ` + "`schema_
 // ApplySchemaMigrations applies all known, additive schema migrations. It uses
 // a dedicated SQL connection because MySQL advisory locks are connection-scoped.
 // Callers must treat a non-nil error as fatal and stop application startup.
-func ApplySchemaMigrations(db *gorm.DB) (retErr error) {
+func ApplySchemaMigrations(db *gorm.DB) error {
 	if db == nil {
 		return errors.New("schema migrations: nil database")
 	}
@@ -401,46 +401,125 @@ func ApplySchemaMigrations(db *gorm.DB) (retErr error) {
 		return fmt.Errorf("schema migrations: invalid plan: %w", err)
 	}
 
-	sqlDB, err := db.DB()
-	if err != nil {
-		return fmt.Errorf("schema migrations: get sql database: %w", err)
-	}
-
 	ctx := context.Background()
-	conn, err := sqlDB.Conn(ctx)
-	if err != nil {
-		return fmt.Errorf("schema migrations: reserve connection: %w", err)
-	}
-	defer conn.Close()
-
-	databaseName, err := currentDatabaseName(ctx, conn)
-	if err != nil {
-		return err
-	}
-	lockName := schemaMigrationLockName(databaseName)
-	if err := acquireSchemaMigrationLock(ctx, conn, lockName); err != nil {
-		return err
-	}
-	defer func() {
-		releaseCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if err := releaseSchemaMigrationLock(releaseCtx, conn, lockName); err != nil {
-			retErr = errors.Join(retErr, err)
+	return withSchemaMigrationLock(ctx, db, func(conn *sql.Conn, _ *gorm.DB) error {
+		applied, err := inspectSchemaMigrationLedger(ctx, conn)
+		if err != nil {
+			return err
 		}
-	}()
+		return applyPendingSchemaMigrations(ctx, conn, applied)
+	})
+}
 
+func withSchemaMigrationLock(
+	ctx context.Context,
+	db *gorm.DB,
+	operation func(*sql.Conn, *gorm.DB) error,
+) error {
+	if ctx == nil {
+		return errors.New("schema migrations: nil context")
+	}
+	if db == nil {
+		return errors.New("schema migrations: nil database")
+	}
+	if operation == nil {
+		return errors.New("schema migrations: nil locked operation")
+	}
+
+	return db.WithContext(ctx).Connection(func(lockedDB *gorm.DB) (retErr error) {
+		conn, ok := lockedDB.Statement.ConnPool.(*sql.Conn)
+		if !ok {
+			return fmt.Errorf("schema migrations: reserved connection has type %T", lockedDB.Statement.ConnPool)
+		}
+		databaseName, err := currentDatabaseName(ctx, conn)
+		if err != nil {
+			return err
+		}
+		lockName := schemaMigrationLockName(databaseName)
+		if err := acquireSchemaMigrationLock(ctx, conn, lockName); err != nil {
+			return err
+		}
+		defer func() {
+			releaseCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := releaseSchemaMigrationLock(releaseCtx, conn, lockName); err != nil {
+				retErr = errors.Join(retErr, err)
+			}
+		}()
+		return operation(conn, lockedDB)
+	})
+}
+
+func inspectSchemaMigrationLedger(
+	ctx context.Context,
+	conn *sql.Conn,
+) (map[uint64]appliedSchemaMigration, error) {
 	if _, err := conn.ExecContext(ctx, createSchemaMigrationsTableSQL); err != nil {
-		return fmt.Errorf("schema migrations: create ledger: %w", err)
+		return nil, fmt.Errorf("schema migrations: create ledger: %w", err)
 	}
 
 	applied, err := loadAppliedSchemaMigrations(ctx, conn)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if err := validateAppliedSchemaMigrations(schemaMigrations, applied); err != nil {
-		return fmt.Errorf("schema migrations: %w", err)
+		return nil, fmt.Errorf("schema migrations: %w", err)
+	}
+	if err := validateAppliedSchemaObjects(ctx, conn, applied); err != nil {
+		return nil, fmt.Errorf("schema migrations: %w", err)
+	}
+	return applied, nil
+}
+
+func validateAppliedSchemaObjects(
+	ctx context.Context,
+	conn *sql.Conn,
+	applied map[uint64]appliedSchemaMigration,
+) error {
+	for _, migration := range schemaMigrations {
+		if _, ok := applied[migration.Version]; !ok {
+			continue
+		}
+		for _, operation := range migration.Operations {
+			exists, err := appliedSchemaOperationExists(ctx, conn, operation)
+			if err != nil {
+				return fmt.Errorf("verify migration %d object %s: %w", migration.Version, operation.Name, err)
+			}
+			if !exists {
+				return fmt.Errorf("migration %d is recorded but object %q is missing", migration.Version, operation.Name)
+			}
+		}
+	}
+	return nil
+}
+
+func appliedSchemaOperationExists(
+	ctx context.Context,
+	conn *sql.Conn,
+	operation schemaMigrationOperation,
+) (bool, error) {
+	if operation.Kind != schemaMigrationSQL {
+		return schemaMigrationOperationExists(ctx, conn, operation)
 	}
 
+	var count int64
+	if operation.Name == "v2_capacity_lock_seed" {
+		err := conn.QueryRowContext(ctx,
+			"SELECT COUNT(*) FROM `v2_capacity_locks` WHERE `id` = 1",
+		).Scan(&count)
+		return count == 1, err
+	}
+	err := conn.QueryRowContext(ctx, `SELECT COUNT(*)
+FROM information_schema.tables
+WHERE table_schema = DATABASE() AND table_name = ?`, operation.Name).Scan(&count)
+	return count == 1, err
+}
+
+func applyPendingSchemaMigrations(
+	ctx context.Context,
+	conn *sql.Conn,
+	applied map[uint64]appliedSchemaMigration,
+) error {
 	for _, migration := range schemaMigrations {
 		if _, ok := applied[migration.Version]; ok {
 			continue

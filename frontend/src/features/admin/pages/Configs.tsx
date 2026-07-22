@@ -34,7 +34,7 @@ const CFG = {
   CAPTCHA_PROVIDER: 'captcha_provider',
   CAPTCHA_SITE_KEY: 'captcha_site_key',
   CAPTCHA_SECRET: 'captcha_secret',
-  IMAGE_TOKEN_TTL: 'image_token_default_ttl',
+  IMAGE_TOKEN_TTL: 'private_token_ttl_default_ms',
   WATERMARK_ENABLED: 'watermark_enabled',
   WATERMARK_TEXT: 'watermark_text',
   WATERMARK_OPACITY: 'watermark_opacity',
