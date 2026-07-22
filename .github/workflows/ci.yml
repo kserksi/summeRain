@@ -117,6 +117,7 @@ jobs:
         image: mysql:8.4.10
         env:
           MYSQL_ROOT_PASSWORD: summerain-ci
+          MYSQL_DATABASE: summerain_lifecycle_ci
         ports:
           - 3306:3306
         options: >-
@@ -144,8 +145,16 @@ jobs:
       - name: Test database bootstrap against MySQL
         env:
           SUMMERAIN_BOOTSTRAP_TEST_MYSQL_DSN: root:summerain-ci@tcp(127.0.0.1:3306)/?charset=utf8mb4&parseTime=True&loc=Local
+          SUMMERAIN_LIFECYCLE_TEST_MYSQL_DSN: root:summerain-ci@tcp(127.0.0.1:3306)/summerain_lifecycle_ci?charset=utf8mb4&parseTime=True&loc=Local
           SUMMERAIN_REQUIRE_MYSQL_TESTS: "1"
         run: go test ./internal/repository -run '^TestBootstrapDatabaseMySQL' -count=1 -v
+
+      - name: Test worker lease cleanup against MySQL
+        env:
+          SUMMERAIN_TEST_MYSQL_DSN: root:summerain-ci@tcp(127.0.0.1:3306)/summerain_lifecycle_ci?charset=utf8mb4&parseTime=True&loc=Local
+        run: |
+          go test ./internal/service -run '^(TestReleasePublishJobLeaseFencesOwnerAndToken|TestProcessNextPublishJobReleasesClaimAndRepanics)$' -count=1 -v
+          go test ./internal/worker -run '^TestOutboxReleaseClaimsFencesOwnerAndToken$' -count=1 -v
 
       - name: Build
         run: go build ./...

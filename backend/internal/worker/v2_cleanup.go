@@ -89,18 +89,13 @@ func (s *stagingOrphanScanner) Read(root string, limit int) ([]os.DirEntry, erro
 	return entries, nil
 }
 
-func (m *Manager) runV2Cleanup(ctx context.Context) {
+func (m *Manager) runV2Cleanup(ctx context.Context, drain <-chan struct{}) {
 	nextPersistentReconcile := time.Time{}
 	persistentReconciler := newPersistentV2Scanner(m.Config.Storage.BasePath)
 	defer persistentReconciler.Close()
 	stagingScanner := &stagingOrphanScanner{}
 	defer stagingScanner.Close()
 	run := func() {
-		defer func() {
-			if recovered := recover(); recovered != nil {
-				log.Printf("[v2_cleanup] panic recovered: %v", recovered)
-			}
-		}()
 		guard, err := newStagingGuard(m.Config.Storage.BasePath, m.Config.Storage.StagingPath)
 		if err != nil {
 			log.Printf("[v2_cleanup] unsafe staging configuration: %v", err)
@@ -138,12 +133,17 @@ func (m *Manager) runV2Cleanup(ctx context.Context) {
 		}
 	}
 
+	if workerStopping(ctx, drain) {
+		return
+	}
 	run()
 	ticker := time.NewTicker(v2CleanupInterval)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
+			return
+		case <-drain:
 			return
 		case <-ticker.C:
 			run()

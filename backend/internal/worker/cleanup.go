@@ -47,7 +47,7 @@ type controlPlaneCleanupRun struct {
 
 type controlPlaneDeleteExecutor func(context.Context, controlPlaneDelete, int) (int64, error)
 
-func (m *Manager) runCleanup(ctx context.Context) {
+func (m *Manager) runCleanup(ctx context.Context, drain <-chan struct{}) {
 	ticker := time.NewTicker(1 * time.Hour)
 	defer ticker.Stop()
 
@@ -55,16 +55,11 @@ func (m *Manager) runCleanup(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
+		case <-drain:
+			return
 		case <-ticker.C:
-			func() {
-				defer func() {
-					if r := recover(); r != nil {
-						log.Printf("[cleanup] panic recovered: %v", r)
-					}
-				}()
-				m.cleanControlPlane(ctx)
-				m.cleanOrphanTempFiles()
-			}()
+			m.cleanControlPlane(ctx)
+			m.cleanOrphanTempFiles()
 		}
 	}
 }

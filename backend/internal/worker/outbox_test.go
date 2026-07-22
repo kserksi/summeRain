@@ -271,6 +271,107 @@ func TestProcessOutboxBatchKeepsTransientStorageDeletionPending(t *testing.T) {
 	}
 }
 
+func TestProcessOutboxBatchReleasesFencedClaimsAfterCancellation(t *testing.T) {
+	owner := "cancelled-worker"
+	token := "cancelled-lease"
+	store := &fakeOutboxStore{events: []model.OutboxEvent{
+		{ID: 6, Status: model.OutboxEventStatusPublishing, Attempts: 1, LeaseOwner: &owner, LeaseToken: &token},
+		{ID: 7, Status: model.OutboxEventStatusPublishing, Attempts: 1, LeaseOwner: &owner, LeaseToken: &token},
+	}, trackLeaseState: true}
+	ctx, cancel := context.WithCancel(context.Background())
+	delivery := outboxDelivererFunc(func(context.Context, model.OutboxEvent) error {
+		cancel()
+		return context.Canceled
+	})
+
+	processed, err := processOutboxBatch(ctx, store, delivery, owner, time.Now(), 10, time.Minute)
+	if processed != len(store.events) || !errors.Is(err, context.Canceled) {
+		t.Fatalf("process result=(%d, %v), want (%d, context canceled)", processed, err, len(store.events))
+	}
+	if !reflect.DeepEqual(store.released, []uint64{6, 7}) {
+		t.Fatalf("released=%v, want [6 7]", store.released)
+	}
+	if store.releaseOwner != owner {
+		t.Fatalf("release owner=%q, want %q", store.releaseOwner, owner)
+	}
+	if store.releaseContextErr != nil {
+		t.Fatalf("release used canceled execution context: %v", store.releaseContextErr)
+	}
+	if !store.releaseRefundAttempt || store.events[0].Attempts != 0 || store.events[1].Attempts != 0 {
+		t.Fatalf("cancellation did not refund claims: refund=%t attempts=(%d, %d)", store.releaseRefundAttempt, store.events[0].Attempts, store.events[1].Attempts)
+	}
+}
+
+func TestProcessOutboxBatchReleasesClaimsAndRepanics(t *testing.T) {
+	owner := "panic-worker"
+	token := "panic-lease"
+	store := &fakeOutboxStore{events: []model.OutboxEvent{
+		{ID: 8, Status: model.OutboxEventStatusPublishing, Attempts: 1, MaxAttempts: 10, LeaseOwner: &owner, LeaseToken: &token},
+		{ID: 9, Status: model.OutboxEventStatusPublishing, Attempts: 1, MaxAttempts: 10, LeaseOwner: &owner, LeaseToken: &token},
+	}, trackLeaseState: true}
+	panicValue := "delivery panic"
+
+	defer func() {
+		if recovered := recover(); recovered != panicValue {
+			t.Fatalf("panic=%v, want %q", recovered, panicValue)
+		}
+		if !reflect.DeepEqual(store.failed, []uint64{8}) {
+			t.Fatalf("failed=%v, want active event [8]", store.failed)
+		}
+		if !reflect.DeepEqual(store.released, []uint64{9}) {
+			t.Fatalf("released=%v, want only unprocessed event [9]", store.released)
+		}
+		if store.releaseContextErr != nil {
+			t.Fatalf("panic cleanup context error=%v", store.releaseContextErr)
+		}
+		if !store.releaseRefundAttempt || store.events[0].Attempts != 1 || store.events[1].Attempts != 0 {
+			t.Fatalf("panic cleanup attempts=(%d, %d), want active=1 remaining=0", store.events[0].Attempts, store.events[1].Attempts)
+		}
+	}()
+
+	_, _ = processOutboxBatch(
+		context.Background(),
+		store,
+		outboxDelivererFunc(func(context.Context, model.OutboxEvent) error { panic(panicValue) }),
+		owner,
+		time.Now(),
+		10,
+		time.Minute,
+	)
+}
+
+func TestProcessOutboxBatchPanicPreservesAttemptWhenMarkFailedErrors(t *testing.T) {
+	owner := "panic-worker"
+	token := "panic-lease"
+	store := &fakeOutboxStore{events: []model.OutboxEvent{
+		{ID: 10, Status: model.OutboxEventStatusPublishing, Attempts: 1, MaxAttempts: 10, LeaseOwner: &owner, LeaseToken: &token},
+		{ID: 11, Status: model.OutboxEventStatusPublishing, Attempts: 1, MaxAttempts: 10, LeaseOwner: &owner, LeaseToken: &token},
+	}, trackLeaseState: true, markFailedErr: errors.New("database unavailable")}
+	panicValue := "delivery panic"
+
+	defer func() {
+		if recovered := recover(); recovered != panicValue {
+			t.Fatalf("panic=%v, want %q", recovered, panicValue)
+		}
+		if store.events[0].Attempts != 1 || store.events[1].Attempts != 0 {
+			t.Fatalf("panic cleanup attempts=(%d, %d), want active=1 remaining=0", store.events[0].Attempts, store.events[1].Attempts)
+		}
+		if !reflect.DeepEqual(store.released, []uint64{10, 11}) {
+			t.Fatalf("released=%v, want active and remaining events", store.released)
+		}
+	}()
+
+	_, _ = processOutboxBatch(
+		context.Background(),
+		store,
+		outboxDelivererFunc(func(context.Context, model.OutboxEvent) error { panic(panicValue) }),
+		owner,
+		time.Now(),
+		10,
+		time.Minute,
+	)
+}
+
 func TestOutboxRetryAndLeaseBound(t *testing.T) {
 	if got := outboxRetryDelay(1); got != 2*time.Second {
 		t.Fatalf("retry delay=%s, want 2s", got)
@@ -292,16 +393,28 @@ func TestOutboxRetryAndLeaseBound(t *testing.T) {
 }
 
 type fakeOutboxStore struct {
-	events     []model.OutboxEvent
-	published  []uint64
-	deferred   []uint64
-	failed     []uint64
-	claimLimit int
+	events               []model.OutboxEvent
+	published            []uint64
+	deferred             []uint64
+	failed               []uint64
+	released             []uint64
+	releaseOwner         string
+	releaseContextErr    error
+	releaseRefundAttempt bool
+	markFailedErr        error
+	claimLimit           int
+	trackLeaseState      bool
 }
 
 type failingOutboxDelivery struct{ err error }
 
+type outboxDelivererFunc func(context.Context, model.OutboxEvent) error
+
 func (d failingOutboxDelivery) Deliver(context.Context, model.OutboxEvent) error { return d.err }
+
+func (d outboxDelivererFunc) Deliver(ctx context.Context, event model.OutboxEvent) error {
+	return d(ctx, event)
+}
 
 func (s *fakeOutboxStore) Claim(_ context.Context, _ string, _ time.Time, limit int, _ time.Duration) ([]model.OutboxEvent, error) {
 	s.claimLimit = limit
@@ -313,16 +426,73 @@ func (s *fakeOutboxStore) Claim(_ context.Context, _ string, _ time.Time, limit 
 
 func (s *fakeOutboxStore) MarkPublished(_ context.Context, event model.OutboxEvent, _ time.Time) error {
 	s.published = append(s.published, event.ID)
+	if s.trackLeaseState {
+		s.setEventStatus(event.ID, model.OutboxEventStatusPublished)
+	}
 	return nil
 }
 
 func (s *fakeOutboxStore) DeferUnconfigured(_ context.Context, event model.OutboxEvent, _ time.Time, _ error) error {
 	s.deferred = append(s.deferred, event.ID)
+	if s.trackLeaseState {
+		s.setEventStatus(event.ID, model.OutboxEventStatusPending)
+	}
 	return nil
 }
 
 func (s *fakeOutboxStore) MarkFailed(_ context.Context, event model.OutboxEvent, _ time.Time, _ time.Duration, _ error) error {
 	s.failed = append(s.failed, event.ID)
+	if s.markFailedErr != nil {
+		return s.markFailedErr
+	}
+	if s.trackLeaseState {
+		status := model.OutboxEventStatusPending
+		if event.MaxAttempts > 0 && event.Attempts >= event.MaxAttempts {
+			status = model.OutboxEventStatusDead
+		}
+		s.setEventStatus(event.ID, status)
+	}
+	return nil
+}
+
+func (s *fakeOutboxStore) ReleaseClaims(ctx context.Context, owner string, events []model.OutboxEvent, _ time.Time, refundAttempt bool) error {
+	s.releaseContextErr = ctx.Err()
+	s.releaseOwner = owner
+	s.releaseRefundAttempt = refundAttempt
+	for _, event := range events {
+		if s.trackLeaseState {
+			current := s.eventByID(event.ID)
+			if current == nil || current.Status != model.OutboxEventStatusPublishing {
+				continue
+			}
+			current.Status = model.OutboxEventStatusPending
+			current.LeaseOwner = nil
+			current.LeaseToken = nil
+			current.LeaseExpiresAt = nil
+			if refundAttempt && current.Attempts > 0 {
+				current.Attempts--
+			}
+		}
+		s.released = append(s.released, event.ID)
+	}
+	return nil
+}
+
+func (s *fakeOutboxStore) setEventStatus(id uint64, status string) {
+	if event := s.eventByID(id); event != nil {
+		event.Status = status
+		event.LeaseOwner = nil
+		event.LeaseToken = nil
+		event.LeaseExpiresAt = nil
+	}
+}
+
+func (s *fakeOutboxStore) eventByID(id uint64) *model.OutboxEvent {
+	for i := range s.events {
+		if s.events[i].ID == id {
+			return &s.events[i]
+		}
+	}
 	return nil
 }
 

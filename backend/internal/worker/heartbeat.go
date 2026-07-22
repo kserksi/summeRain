@@ -11,7 +11,7 @@ import (
 	"github.com/kserksi/summerain/internal/model"
 )
 
-func (m *Manager) runHeartbeatMonitor(ctx context.Context) {
+func (m *Manager) runHeartbeatMonitor(ctx context.Context, drain <-chan struct{}) {
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
 
@@ -19,15 +19,10 @@ func (m *Manager) runHeartbeatMonitor(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
+		case <-drain:
+			return
 		case <-ticker.C:
-			func() {
-				defer func() {
-					if r := recover(); r != nil {
-						log.Printf("[heartbeat] panic recovered: %v", r)
-					}
-				}()
-				m.checkHeartbeats()
-			}()
+			m.checkHeartbeats()
 		}
 	}
 }

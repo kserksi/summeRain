@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 )
 
 type requirementsLock struct {
@@ -58,6 +59,27 @@ func TestComposeBackendHasHealthcheck(t *testing.T) {
 	for _, want := range []string{"healthcheck:", "http://localhost:8080/health", "interval:", "timeout:", "retries:"} {
 		if !strings.Contains(backendBlock, want) {
 			t.Fatalf("backend service block missing %q", want)
+		}
+	}
+}
+
+func TestComposeBackendStopGraceExceedsApplicationBudget(t *testing.T) {
+	const applicationShutdownBudget = 30 * time.Second
+	pattern := regexp.MustCompile(`(?m)^\s*stop_grace_period:\s*(\S+)\s*$`)
+
+	for _, path := range []string{"docker-compose.yml", "docker-compose.deploy.yml"} {
+		compose := readTestFile(t, path)
+		backendBlock := serviceBlock(t, compose, "backend", "mysql")
+		match := pattern.FindStringSubmatch(backendBlock)
+		if len(match) != 2 {
+			t.Fatalf("%s backend service is missing stop_grace_period", path)
+		}
+		grace, err := time.ParseDuration(match[1])
+		if err != nil {
+			t.Fatalf("parse %s stop_grace_period %q: %v", path, match[1], err)
+		}
+		if grace <= applicationShutdownBudget {
+			t.Fatalf("%s stop_grace_period = %s, must exceed %s", path, grace, applicationShutdownBudget)
 		}
 	}
 }

@@ -11,24 +11,25 @@ import (
 	"time"
 )
 
-func (m *Manager) runViewFlusher(ctx context.Context) {
+const (
+	viewFlushShutdownTimeout = 3 * time.Second
+	viewCountRestoreTimeout  = time.Second
+)
+
+func (m *Manager) runViewFlusher(ctx context.Context, drain <-chan struct{}) {
 	ticker := time.NewTicker(60 * time.Second)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-ctx.Done():
-			m.flushViewCounts(ctx)
+			runBoundedFinalViewFlush(viewFlushShutdownTimeout, m.flushViewCounts)
+			return
+		case <-drain:
+			runBoundedFinalViewFlush(viewFlushShutdownTimeout, m.flushViewCounts)
 			return
 		case <-ticker.C:
-			func() {
-				defer func() {
-					if r := recover(); r != nil {
-						log.Printf("[view_flusher] panic recovered: %v", r)
-					}
-				}()
-				m.flushViewCounts(ctx)
-			}()
+			m.flushViewCounts(ctx)
 		}
 	}
 }
@@ -58,12 +59,26 @@ func (m *Manager) flushViewCounts(ctx context.Context) {
 
 			imageID := strings.TrimPrefix(key, "views:")
 
-			result := m.DB.Exec(
-				"UPDATE images SET view_count = view_count + ? WHERE id = ?",
-				count, imageID,
+			updateErr, restoreErr := updateViewCountWithRestore(
+				ctx,
+				key,
+				imageID,
+				count,
+				func(updateCtx context.Context, id string, delta int64) error {
+					return m.DB.WithContext(updateCtx).Exec(
+						"UPDATE images SET view_count = view_count + ? WHERE id = ?",
+						delta, id,
+					).Error
+				},
+				func(restoreCtx context.Context, redisKey string, delta int64) error {
+					return m.Redis.IncrBy(restoreCtx, redisKey, delta).Err()
+				},
 			)
-			if result.Error != nil {
-				log.Printf("[view_flusher] db update error for image %s: %v", imageID, result.Error)
+			if updateErr != nil {
+				log.Printf("[view_flusher] db update error for image %s: %v", imageID, updateErr)
+				if restoreErr != nil {
+					log.Printf("[view_flusher] restore error for key %s: %v", key, restoreErr)
+				}
 				continue
 			}
 
@@ -79,4 +94,30 @@ func (m *Manager) flushViewCounts(ctx context.Context) {
 	if flushed > 0 {
 		log.Printf("[view_flusher] flushed %d image view counts", flushed)
 	}
+}
+
+func updateViewCountWithRestore(
+	ctx context.Context,
+	key string,
+	imageID string,
+	count int64,
+	update func(context.Context, string, int64) error,
+	restore func(context.Context, string, int64) error,
+) (updateErr error, restoreErr error) {
+	updateErr = update(ctx, imageID, count)
+	if updateErr == nil {
+		return nil, nil
+	}
+	restoreCtx, cancel := context.WithTimeout(context.Background(), viewCountRestoreTimeout)
+	defer cancel()
+	return updateErr, restore(restoreCtx, key, count)
+}
+
+func runBoundedFinalViewFlush(timeout time.Duration, flush func(context.Context)) {
+	if timeout <= 0 || flush == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	flush(ctx)
 }

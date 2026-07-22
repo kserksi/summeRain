@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"time"
@@ -23,6 +24,8 @@ import (
 )
 
 const v2PublishJobType = "v2_publish"
+
+const publishLeaseCleanupTimeout = 3 * time.Second
 
 var (
 	errV2PublishLeaseExhausted = errors.New("publish lease expired after maximum attempts")
@@ -58,9 +61,33 @@ type v2PublishJobPayload struct {
 
 // ProcessNextPublishJob claims at most one durable MySQL job. Multiple process
 // instances may call it safely because the lease is acquired under row lock.
-func (s *V2UploadService) ProcessNextPublishJob(ctx context.Context, workerID string) (bool, error) {
+func (s *V2UploadService) ProcessNextPublishJob(ctx context.Context, workerID string) (processed bool, resultErr error) {
+	var claimed *model.ProcessingJob
+	refundAttempt := false
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			if claimed != nil {
+				cause := fmt.Errorf("publish worker panic: %v", recovered)
+				// A panic is a real failed attempt. Keep the increment so a
+				// deterministic panic eventually reaches the attempt limit.
+				if releaseErr := s.releaseInterruptedPublishJob(claimed, false, cause); releaseErr != nil {
+					log.Printf("[v2_publish] release claim after panic: %v", releaseErr)
+				}
+			}
+			panic(recovered)
+		}
+		if ctxErr := ctx.Err(); ctxErr != nil && claimed != nil {
+			resultErr = errors.Join(
+				resultErr,
+				ctxErr,
+				s.releaseInterruptedPublishJob(claimed, refundAttempt, ctxErr),
+			)
+		}
+	}()
+
 	exhausted, err := s.claimExhaustedPublishJob(ctx, workerID)
 	if err == nil {
+		claimed = exhausted
 		return true, s.failPublishJob(ctx, exhausted, errV2PublishLeaseExhausted)
 	}
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
@@ -74,10 +101,61 @@ func (s *V2UploadService) ProcessNextPublishJob(ctx context.Context, workerID st
 	if err != nil {
 		return false, err
 	}
+	claimed = job
+	refundAttempt = true
 	if err := s.executePublishJobWithLease(ctx, job); err != nil {
 		return true, s.failPublishJob(ctx, job, err)
 	}
 	return true, nil
+}
+
+// releaseInterruptedPublishJob uses a fresh context because the execution
+// context is already canceled during a hard shutdown. Owner and token fencing
+// prevent an old process from releasing a lease subsequently acquired by a
+// replacement worker.
+func (s *V2UploadService) releaseInterruptedPublishJob(job *model.ProcessingJob, refundAttempt bool, cause error) error {
+	cleanupCtx, cancel := context.WithTimeout(context.Background(), publishLeaseCleanupTimeout)
+	defer cancel()
+	return s.releasePublishJobLease(cleanupCtx, job, refundAttempt, time.Now(), cause)
+}
+
+func (s *V2UploadService) releasePublishJobLease(ctx context.Context, job *model.ProcessingJob, refundAttempt bool, now time.Time, cause error) error {
+	if s == nil || s.db == nil || job == nil || job.LeaseOwner == nil || *job.LeaseOwner == "" || job.LeaseToken == nil || *job.LeaseToken == "" {
+		return nil
+	}
+	lastError := "publish worker interrupted"
+	if cause != nil {
+		lastError += ": " + cause.Error()
+	}
+	if len(lastError) > 4096 {
+		lastError = lastError[:4096]
+	}
+	updates := map[string]interface{}{
+		"status":           model.ProcessingJobStatusRetry,
+		"available_at":     now,
+		"lease_owner":      nil,
+		"lease_token":      nil,
+		"lease_expires_at": nil,
+		"last_error":       lastError,
+	}
+	if refundAttempt {
+		updates["attempts"] = gorm.Expr("GREATEST(attempts - 1, 0)")
+	}
+	result := s.db.WithContext(ctx).Model(&model.ProcessingJob{}).
+		Where(
+			"id = ? AND status = ? AND lease_owner = ? AND lease_token = ?",
+			job.ID,
+			model.ProcessingJobStatusRunning,
+			*job.LeaseOwner,
+			*job.LeaseToken,
+		).
+		Updates(updates)
+	if result.Error != nil {
+		return result.Error
+	}
+	// Zero rows means the job completed or a replacement worker acquired a new
+	// token first. The owner/token fence makes that a safe no-op.
+	return nil
 }
 
 // claimExhaustedPublishJob fences a crashed worker before dead-job

@@ -122,6 +122,7 @@ func main() {
 	r.Use(gin.Recovery())
 	r.Use(middleware.SecurityHeaders(cfg.Server.CrossOriginIsolation))
 	r.Use(middleware.LimitJSONBody(middleware.DefaultMaximumJSONBodyBytes))
+	readiness := &readinessGate{}
 
 	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
@@ -129,6 +130,10 @@ func main() {
 		c.JSON(200, gin.H{"status": "ok"})
 	})
 	r.GET("/ready", func(c *gin.Context) {
+		if readiness.IsDraining() {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"status": "draining"})
+			return
+		}
 		sqlDB, err := db.DB()
 		if err != nil {
 			c.JSON(503, gin.H{"status": "error", "detail": "db connection lost"})
@@ -285,7 +290,11 @@ func main() {
 
 	workerCtx, workerCancel := context.WithCancel(context.Background())
 	wm := worker.NewManager(db, rdb, cfg, v2UploadSvc, r2Svc)
-	go wm.Start(workerCtx)
+	workerDone := make(chan struct{})
+	go func() {
+		defer close(workerDone)
+		wm.Start(workerCtx)
+	}()
 
 	if configs, err := configRepo.FindAll(); err == nil {
 		// 启动时重新生成水印 SVG,不然改了配置要重启 imgproxy 才生效,体验很差
@@ -310,24 +319,41 @@ func main() {
 		MaxHeaderBytes:    1 << 20,
 	}
 
+	listenerErr := make(chan error, 1)
 	go func() {
 		log.Printf("server starting on :%s", cfg.Server.Port)
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("listen: %v", err)
+		if err := unexpectedHTTPServerError(srv.ListenAndServe()); err != nil {
+			listenerErr <- err
 		}
 	}()
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
-	log.Println("shutting down server...")
-
-	workerCancel()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	if err := srv.Shutdown(ctx); err != nil {
-		log.Fatalf("server forced to shutdown: %v", err)
+	var triggerErr error
+	select {
+	case sig := <-quit:
+		log.Printf("received %s, shutting down server...", sig)
+	case triggerErr = <-listenerErr:
+		log.Printf("HTTP listener stopped, shutting down server: %v", triggerErr)
 	}
+	signal.Stop(quit)
+
+	coordinator := lifecycleCoordinator{
+		gate:       readiness,
+		server:     srv,
+		workers:    wm,
+		workerDone: workerDone,
+		hardCancel: workerCancel,
+		closeRedis: rdb.Close,
+		closeSQL:   sqlDB.Close,
+		timeouts:   productionLifecycleTimeouts(),
+	}
+	shutdownErr := coordinator.Shutdown(context.Background())
+	shutdownErr = errors.Join(triggerErr, shutdownErr)
+	if shutdownErr != nil {
+		log.Printf("server stopped with error: %v", shutdownErr)
+		os.Exit(1)
+	}
+
 	log.Println("server exited")
 }

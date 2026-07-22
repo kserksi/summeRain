@@ -39,6 +39,7 @@ const (
 	outboxUnconfiguredRetryDelay   = 5 * time.Minute
 	outboxMaximumRetryDelay        = 10 * time.Minute
 	outboxMaximumResponseBodyBytes = 64 << 10
+	outboxLeaseCleanupTimeout      = 3 * time.Second
 )
 
 var (
@@ -52,6 +53,7 @@ type outboxStore interface {
 	MarkPublished(context.Context, model.OutboxEvent, time.Time) error
 	DeferUnconfigured(context.Context, model.OutboxEvent, time.Time, error) error
 	MarkFailed(context.Context, model.OutboxEvent, time.Time, time.Duration, error) error
+	ReleaseClaims(context.Context, string, []model.OutboxEvent, time.Time, bool) error
 }
 
 type outboxDeliverer interface {
@@ -176,6 +178,45 @@ func (s *gormOutboxStore) MarkFailed(ctx context.Context, event model.OutboxEven
 			"last_error":       truncateOutboxError(cause),
 		})
 	return requireOneOutboxRow(result, event.ID)
+}
+
+// ReleaseClaims makes interrupted deliveries immediately eligible without
+// touching rows that completed or were reclaimed by another worker. Orderly
+// interruption refunds the claim increment; a failed attempt such as a panic
+// keeps it so deterministic failures eventually become dead events.
+func (s *gormOutboxStore) ReleaseClaims(ctx context.Context, owner string, events []model.OutboxEvent, now time.Time, refundAttempt bool) error {
+	if owner == "" || len(events) == 0 {
+		return nil
+	}
+	idsByToken := make(map[string][]uint64)
+	for _, event := range events {
+		token := leaseToken(event)
+		if event.ID == 0 || token == "" {
+			continue
+		}
+		idsByToken[token] = append(idsByToken[token], event.ID)
+	}
+	for token, ids := range idsByToken {
+		updates := map[string]interface{}{
+			"status":           model.OutboxEventStatusPending,
+			"available_at":     now,
+			"lease_owner":      nil,
+			"lease_token":      nil,
+			"lease_expires_at": nil,
+		}
+		if refundAttempt {
+			updates["attempts"] = gorm.Expr("GREATEST(attempts - 1, 0)")
+		}
+		result := s.db.WithContext(ctx).Model(&model.OutboxEvent{}).
+			Where("id IN ? AND status = ? AND lease_owner = ? AND lease_token = ?", ids, model.OutboxEventStatusPublishing, owner, token).
+			Updates(updates)
+		if result.Error != nil {
+			return result.Error
+		}
+		// Zero rows means every event in this token group completed or lost its
+		// lease before cleanup. The owner/token fence makes that a safe no-op.
+	}
+	return nil
 }
 
 func requireOneOutboxRow(result *gorm.DB, eventID uint64) error {
@@ -614,7 +655,7 @@ func (p *requestPacer) Wait(ctx context.Context) error {
 	}
 }
 
-func (m *Manager) runOutbox(ctx context.Context) {
+func (m *Manager) runOutbox(ctx context.Context, drain <-chan struct{}) {
 	if m.DB == nil || m.Config == nil {
 		log.Printf("[outbox] disabled: database or configuration is unavailable")
 		return
@@ -629,7 +670,7 @@ func (m *Manager) runOutbox(ctx context.Context) {
 	batchSize := effectiveOutboxBatchSize(cfg)
 
 	run := func() {
-		for ctx.Err() == nil {
+		for ctx.Err() == nil && !workerDrainRequested(drain) {
 			processed, err := processOutboxBatch(ctx, store, delivery, workerID, time.Now(), batchSize, cfg.OutboxLease)
 			if err != nil {
 				if !errors.Is(err, context.Canceled) {
@@ -644,11 +685,16 @@ func (m *Manager) runOutbox(ctx context.Context) {
 	}
 
 	run()
+	if ctx.Err() != nil || workerDrainRequested(drain) {
+		return
+	}
 	ticker := time.NewTicker(cfg.OutboxPollInterval)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
+			return
+		case <-drain:
 			return
 		case <-ticker.C:
 			run()
@@ -656,15 +702,29 @@ func (m *Manager) runOutbox(ctx context.Context) {
 	}
 }
 
-func processOutboxBatch(ctx context.Context, store outboxStore, delivery outboxDeliverer, workerID string, now time.Time, limit int, lease time.Duration) (int, error) {
+func processOutboxBatch(ctx context.Context, store outboxStore, delivery outboxDeliverer, workerID string, now time.Time, limit int, lease time.Duration) (processed int, resultErr error) {
 	events, err := store.Claim(ctx, workerID, now, limit, lease)
 	if err != nil {
 		return 0, err
 	}
-	for _, event := range events {
+	var activeEvent *model.OutboxEvent
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			if cleanupErr := cleanupOutboxPanic(store, workerID, events, activeEvent, recovered, time.Now()); cleanupErr != nil {
+				log.Printf("[outbox] cleanup claims after panic: %v", cleanupErr)
+			}
+			panic(recovered)
+		}
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			resultErr = errors.Join(resultErr, ctxErr, releaseOutboxClaims(store, workerID, events, time.Now(), true))
+		}
+	}()
+	for i := range events {
 		if err := ctx.Err(); err != nil {
 			return len(events), err
 		}
+		event := events[i]
+		activeEvent = &events[i]
 		deliveryErr := delivery.Deliver(ctx, event)
 		finishedAt := time.Now()
 		switch {
@@ -688,8 +748,79 @@ func processOutboxBatch(ctx context.Context, store outboxStore, delivery outboxD
 		if err != nil {
 			return len(events), err
 		}
+		activeEvent = nil
 	}
 	return len(events), nil
+}
+
+func releaseOutboxClaims(store outboxStore, workerID string, events []model.OutboxEvent, now time.Time, refundAttempt bool) error {
+	if store == nil || len(events) == 0 {
+		return nil
+	}
+	cleanupCtx, cancel := context.WithTimeout(context.Background(), outboxLeaseCleanupTimeout)
+	defer cancel()
+	return store.ReleaseClaims(cleanupCtx, workerID, events, now, refundAttempt)
+}
+
+func cleanupOutboxPanic(store outboxStore, workerID string, events []model.OutboxEvent, activeEvent *model.OutboxEvent, recovered interface{}, now time.Time) (cleanupErr error) {
+	if store == nil || len(events) == 0 {
+		return nil
+	}
+	// Cleanup must never replace the original panic. The supervisor needs the
+	// original value to report and restart the failed worker accurately.
+	defer func() {
+		if cleanupPanic := recover(); cleanupPanic != nil {
+			cleanupErr = errors.Join(cleanupErr, fmt.Errorf("panic during outbox cleanup: %v", cleanupPanic))
+		}
+	}()
+
+	cleanupCtx, cancel := context.WithTimeout(context.Background(), outboxLeaseCleanupTimeout)
+	defer cancel()
+	if activeEvent != nil {
+		cause := fmt.Errorf("outbox delivery panic: %v", recovered)
+		cleanupErr = runOutboxCleanupStep(func() error {
+			return store.MarkFailed(cleanupCtx, *activeEvent, now, outboxRetryDelay(activeEvent.Attempts), cause)
+		})
+		// If MarkFailed itself fails, release the active claim without
+		// refunding its attempt. A deterministic delivery panic must still
+		// advance toward the dead-event threshold.
+		cleanupErr = errors.Join(cleanupErr, runOutboxCleanupStep(func() error {
+			return store.ReleaseClaims(cleanupCtx, workerID, []model.OutboxEvent{*activeEvent}, now, false)
+		}))
+	}
+	// Completed rows are skipped by the status and token fence. Exclude the
+	// active row explicitly so only untouched claims receive an attempt refund.
+	untouched := events
+	if activeEvent != nil {
+		untouched = make([]model.OutboxEvent, 0, len(events)-1)
+		for _, event := range events {
+			if event.ID != activeEvent.ID {
+				untouched = append(untouched, event)
+			}
+		}
+	}
+	cleanupErr = errors.Join(cleanupErr, runOutboxCleanupStep(func() error {
+		return store.ReleaseClaims(cleanupCtx, workerID, untouched, now, true)
+	}))
+	return cleanupErr
+}
+
+func runOutboxCleanupStep(step func() error) (resultErr error) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			resultErr = fmt.Errorf("panic during outbox cleanup: %v", recovered)
+		}
+	}()
+	return step()
+}
+
+func workerDrainRequested(drain <-chan struct{}) bool {
+	select {
+	case <-drain:
+		return true
+	default:
+		return false
+	}
 }
 
 func effectiveOutboxBatchSize(cfg config.CDNConfig) int {

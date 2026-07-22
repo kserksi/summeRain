@@ -56,7 +56,7 @@ type userDeletionCapacityLock struct {
 	ID uint8
 }
 
-func (m *Manager) runUserDeletion(ctx context.Context) {
+func (m *Manager) runUserDeletion(ctx context.Context, drain <-chan struct{}) {
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
 
@@ -64,15 +64,10 @@ func (m *Manager) runUserDeletion(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
+		case <-drain:
+			return
 		case <-ticker.C:
-			func() {
-				defer func() {
-					if r := recover(); r != nil {
-						log.Printf("[user-deletion] panic recovered: %v", r)
-					}
-				}()
-				m.processPendingDeletions()
-			}()
+			m.processPendingDeletions()
 		}
 	}
 }

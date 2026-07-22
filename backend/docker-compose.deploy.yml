@@ -18,7 +18,7 @@ services:
     image: ${DOCKER_IMAGE:?Set DOCKER_IMAGE to an exact release tag or digest}
     container_name: summerain-backend
     restart: unless-stopped
-    stop_grace_period: 35s
+    stop_grace_period: 40s
     ports:
       - "127.0.0.1:8080:8080"
     env_file:
