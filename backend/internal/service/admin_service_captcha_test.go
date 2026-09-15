@@ -29,7 +29,7 @@ func TestValidateCaptchaConfigUpdateAllowsCompatibleChanges(t *testing.T) {
 	}{
 		{name: "turnstile with isolation", items: []ConfigUpdateItem{{Key: "captcha_provider", Value: "turnstile"}}, isolation: true},
 		{name: "geetest without isolation", items: []ConfigUpdateItem{{Key: "captcha_provider", Value: "geetest_v4"}}, isolation: false},
-		{name: "unrelated config", items: []ConfigUpdateItem{{Key: "site_name", Value: "summeRain"}}, isolation: true},
+		{name: "unrelated allowed config", items: []ConfigUpdateItem{{Key: "site_language", Value: "en-US"}}, isolation: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

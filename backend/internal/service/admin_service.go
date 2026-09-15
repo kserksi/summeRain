@@ -140,6 +140,9 @@ type r2StorageLineage struct {
 }
 
 func (s *AdminService) UpdateConfigs(items []ConfigUpdateItem) (*ConfigUpdateResult, *errcode.AppError) {
+	if validationErr := validateAdminWritableSystemConfigKeys(items); validationErr != nil {
+		return nil, validationErr
+	}
 	if validationErr := validateCaptchaConfigUpdate(items, s.crossOriginIsolation); validationErr != nil {
 		return nil, validationErr
 	}
