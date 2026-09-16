@@ -15,6 +15,8 @@
 
 ## リリースノート
 
+* [V2.0.6](docs/releases/v2.0.6.md)
+* [V2.0.5](docs/releases/v2.0.5.md)
 * [V2.0.4](docs/releases/v2.0.4.md)
 * [V2.0.3](docs/releases/v2.0.3.md)
 * [V2.0.2](docs/releases/v2.0.2.md)
