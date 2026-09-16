@@ -36,6 +36,9 @@ func main() {
 	if err := cfg.Validate(); err != nil {
 		log.Fatalf("invalid configuration: %v", err)
 	}
+	for _, line := range cfg.EffectiveSummary() {
+		log.Printf("[config] %s", line)
+	}
 
 	db, err := gorm.Open(mysql.Open(cfg.DSN()), &gorm.Config{})
 	if err != nil {
@@ -103,8 +106,8 @@ func main() {
 
 	authHandler := handler.NewAuthHandler(authSvc)
 	imageHandler := handler.NewImageHandler(imageSvc)
-	v2UploadHandler := handler.NewV2UploadHandler(v2UploadSvc)
-	publicHandler := handler.NewPublicHandler(imageSvc, &cfg.Storage, rdb, signer, cfg.Imgproxy.BaseURL, publicConfigSvc, publicStatsSvc, authMw)
+	v2UploadHandler := handler.NewV2UploadHandler(v2UploadSvc, cfg.ImageV2.InitMaxJSONBytes, cfg.ImageV2.BatchStatusMaxJSONBytes)
+	publicHandler := handler.NewPublicHandler(imageSvc, &cfg.Storage, rdb, signer, cfg.Imgproxy.BaseURL, publicConfigSvc, publicStatsSvc, authMw, cfg.ImageV1)
 	userHandler := handler.NewUserHandler(userSvc)
 	notificationHandler := handler.NewNotificationHandler(notificationSvc)
 	adminHandler := handler.NewAdminHandler(adminSvc)
@@ -121,7 +124,7 @@ func main() {
 	r.Use(middleware.RequestID())
 	r.Use(gin.Recovery())
 	r.Use(middleware.SecurityHeaders(cfg.Server.CrossOriginIsolation))
-	r.Use(middleware.LimitJSONBody(middleware.DefaultMaximumJSONBodyBytes))
+	r.Use(middleware.LimitJSONBody(cfg.Server.MaxJSONBodyBytes))
 	readiness := &readinessGate{}
 
 	r.GET("/metrics", gin.WrapH(promhttp.Handler()))

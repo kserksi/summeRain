@@ -32,9 +32,6 @@ type sessionResolver interface {
 }
 
 const (
-	v1DynamicGenerationConcurrency   = 2
-	v1DynamicGenerationQueueDepth    = 4
-	v1BackgroundFormatConcurrency    = 1
 	v1DynamicMaximumResponseBytes    = 96 << 20
 	v1BackgroundMaximumResponseBytes = 32 << 20
 	v1GenerationTimeout              = 35 * time.Second
@@ -158,7 +155,7 @@ type PublicHandler struct {
 	backgroundInFlight  sync.Map
 }
 
-func NewPublicHandler(imageSvc *service.ImageService, storageCfg *config.StorageConfig, rdb *redis.Client, signer *imgproxy.Signer, imgproxyURL string, publicConfigService *service.PublicConfigService, publicStatsService *service.PublicStatsService, resolver sessionResolver) *PublicHandler {
+func NewPublicHandler(imageSvc *service.ImageService, storageCfg *config.StorageConfig, rdb *redis.Client, signer *imgproxy.Signer, imgproxyURL string, publicConfigService *service.PublicConfigService, publicStatsService *service.PublicStatsService, resolver sessionResolver, v1Limits config.ImageV1Config) *PublicHandler {
 	return &PublicHandler{
 		imageSvc:            imageSvc,
 		storageCfg:          storageCfg,
@@ -169,9 +166,9 @@ func NewPublicHandler(imageSvc *service.ImageService, storageCfg *config.Storage
 		publicConfigService: publicConfigService,
 		publicStatsService:  publicStatsService,
 		resolver:            resolver,
-		dynamicSemaphore:    make(chan struct{}, v1DynamicGenerationConcurrency),
-		dynamicCapacity:     make(chan struct{}, v1DynamicGenerationConcurrency+v1DynamicGenerationQueueDepth),
-		backgroundSemaphore: make(chan struct{}, v1BackgroundFormatConcurrency),
+		dynamicSemaphore:    make(chan struct{}, v1Limits.DynamicGenerationConcurrency),
+		dynamicCapacity:     make(chan struct{}, v1Limits.DynamicGenerationConcurrency+v1Limits.DynamicGenerationQueueDepth),
+		backgroundSemaphore: make(chan struct{}, v1Limits.BackgroundFormatConcurrency),
 	}
 }
 

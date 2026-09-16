@@ -19,6 +19,7 @@ type Config struct {
 	Redis    RedisConfig
 	Imgproxy ImgproxyConfig
 	Storage  StorageConfig
+	ImageV1  ImageV1Config
 	ImageV2  ImageV2Config
 	CDN      CDNConfig
 	Captcha  CaptchaConfig
@@ -29,6 +30,7 @@ type ServerConfig struct {
 	Mode                 string // debug, release
 	CookieSecret         string
 	CrossOriginIsolation bool
+	MaxJSONBodyBytes     int64
 }
 
 type DatabaseConfig struct {
@@ -65,20 +67,32 @@ type StorageConfig struct {
 	DiskHardPct int
 }
 
+// ImageV1Config bounds the V1 compatibility image path. The dynamic
+// transformation semaphores are sized once at startup, so changing these
+// values requires a restart.
+type ImageV1Config struct {
+	DynamicGenerationConcurrency int
+	DynamicGenerationQueueDepth  int
+	BackgroundFormatConcurrency  int
+}
+
 // ImageV2Config bounds the new client-processed upload pipeline. The values are
 // intentionally conservative because summeRain commonly shares a small host
 // with MySQL, Redis, and other applications.
 type ImageV2Config struct {
-	Enabled                 bool
-	RecipeVersion           string
-	MaxPartBytes            int64
-	MaxPixels               int64
-	SessionTTL              time.Duration
-	GlobalUploadConcurrency int
-	PerUserConcurrency      int
-	WatermarkConcurrency    int
-	JobPollInterval         time.Duration
-	JobLease                time.Duration
+	Enabled                  bool
+	RecipeVersion            string
+	MaxPartBytes             int64
+	MaxPixels                int64
+	SessionTTL               time.Duration
+	GlobalUploadConcurrency  int
+	PerUserConcurrency       int
+	WatermarkConcurrency     int
+	MaxActiveSessionsPerUser int
+	InitMaxJSONBytes         int64
+	BatchStatusMaxJSONBytes  int64
+	JobPollInterval          time.Duration
+	JobLease                 time.Duration
 }
 
 // CDNConfig controls durable outbox delivery. Cloudflare is preferred when
@@ -136,6 +150,7 @@ func Load() *Config {
 			Mode:                 getEnv("GIN_MODE", "debug"),
 			CookieSecret:         getEnv("COOKIE_SECRET", "change-me-in-production"),
 			CrossOriginIsolation: getEnvBool("CROSS_ORIGIN_ISOLATION", true),
+			MaxJSONBodyBytes:     getEnvInt64("MAX_JSON_BODY_BYTES", 1<<20),
 		},
 		Database: DatabaseConfig{
 			Host:            getEnv("DB_HOST", "mysql"),
@@ -167,17 +182,25 @@ func Load() *Config {
 			DiskSoftPct: getEnvInt("DISK_SOFT_LIMIT_PERCENT", 80),
 			DiskHardPct: getEnvInt("DISK_HARD_LIMIT_PERCENT", 90),
 		},
+		ImageV1: ImageV1Config{
+			DynamicGenerationConcurrency: getEnvInt("V1_DYNAMIC_GENERATION_CONCURRENCY", 2),
+			DynamicGenerationQueueDepth:  getEnvInt("V1_DYNAMIC_GENERATION_QUEUE_DEPTH", 4),
+			BackgroundFormatConcurrency:  getEnvInt("V1_BACKGROUND_FORMAT_CONCURRENCY", 1),
+		},
 		ImageV2: ImageV2Config{
-			Enabled:                 getEnvBool("V2_UPLOAD_ENABLED", true),
-			RecipeVersion:           getEnv("V2_RECIPE_VERSION", "2.0.0"),
-			MaxPartBytes:            getEnvInt64("V2_MAX_PART_BYTES", 64<<20),
-			MaxPixels:               getEnvInt64("V2_MAX_PIXELS", 50_000_000),
-			SessionTTL:              getEnvDuration("V2_SESSION_TTL", 30*time.Minute),
-			GlobalUploadConcurrency: getEnvInt("V2_GLOBAL_UPLOAD_CONCURRENCY", 8),
-			PerUserConcurrency:      getEnvInt("V2_PER_USER_UPLOAD_CONCURRENCY", 4),
-			WatermarkConcurrency:    getEnvInt("V2_WATERMARK_CONCURRENCY", 2),
-			JobPollInterval:         getEnvDuration("V2_JOB_POLL_INTERVAL", time.Second),
-			JobLease:                getEnvDuration("V2_JOB_LEASE", 2*time.Minute),
+			Enabled:                  getEnvBool("V2_UPLOAD_ENABLED", true),
+			RecipeVersion:            getEnv("V2_RECIPE_VERSION", "2.0.0"),
+			MaxPartBytes:             getEnvInt64("V2_MAX_PART_BYTES", 64<<20),
+			MaxPixels:                getEnvInt64("V2_MAX_PIXELS", 50_000_000),
+			SessionTTL:               getEnvDuration("V2_SESSION_TTL", 30*time.Minute),
+			GlobalUploadConcurrency:  getEnvInt("V2_GLOBAL_UPLOAD_CONCURRENCY", 8),
+			PerUserConcurrency:       getEnvInt("V2_PER_USER_UPLOAD_CONCURRENCY", 4),
+			WatermarkConcurrency:     getEnvInt("V2_WATERMARK_CONCURRENCY", 2),
+			MaxActiveSessionsPerUser: getEnvInt("V2_MAX_ACTIVE_SESSIONS_PER_USER", 8),
+			InitMaxJSONBytes:         getEnvInt64("V2_INIT_MAX_JSON_BYTES", 64<<10),
+			BatchStatusMaxJSONBytes:  getEnvInt64("V2_BATCH_STATUS_MAX_JSON_BYTES", 16<<10),
+			JobPollInterval:          getEnvDuration("V2_JOB_POLL_INTERVAL", time.Second),
+			JobLease:                 getEnvDuration("V2_JOB_LEASE", 2*time.Minute),
 		},
 		CDN: CDNConfig{
 			PublicBaseURL:          getEnv("CDN_PUBLIC_BASE_URL", ""),
@@ -260,6 +283,33 @@ func (c *Config) Validate() error {
 	if c.ImageV2.WatermarkConcurrency < 1 || c.ImageV2.WatermarkConcurrency > 2 {
 		return fmt.Errorf("V2_WATERMARK_CONCURRENCY must be 1 or 2")
 	}
+	if c.ImageV2.MaxActiveSessionsPerUser < 1 || c.ImageV2.MaxActiveSessionsPerUser > 32 {
+		return fmt.Errorf("V2_MAX_ACTIVE_SESSIONS_PER_USER must be between 1 and 32")
+	}
+	if c.Server.MaxJSONBodyBytes < 1<<10 || c.Server.MaxJSONBodyBytes > 16<<20 {
+		return fmt.Errorf("MAX_JSON_BODY_BYTES must be between 1 KiB and 16 MiB")
+	}
+	if c.ImageV2.InitMaxJSONBytes < 1<<10 || c.ImageV2.InitMaxJSONBytes > 1<<20 {
+		return fmt.Errorf("V2_INIT_MAX_JSON_BYTES must be between 1 KiB and 1 MiB")
+	}
+	if c.ImageV2.InitMaxJSONBytes > c.Server.MaxJSONBodyBytes {
+		return fmt.Errorf("V2_INIT_MAX_JSON_BYTES must not exceed MAX_JSON_BODY_BYTES")
+	}
+	if c.ImageV2.BatchStatusMaxJSONBytes < 1<<10 || c.ImageV2.BatchStatusMaxJSONBytes > 256<<10 {
+		return fmt.Errorf("V2_BATCH_STATUS_MAX_JSON_BYTES must be between 1 KiB and 256 KiB")
+	}
+	if c.ImageV2.BatchStatusMaxJSONBytes > c.Server.MaxJSONBodyBytes {
+		return fmt.Errorf("V2_BATCH_STATUS_MAX_JSON_BYTES must not exceed MAX_JSON_BODY_BYTES")
+	}
+	if c.ImageV1.DynamicGenerationConcurrency < 1 || c.ImageV1.DynamicGenerationConcurrency > 16 {
+		return fmt.Errorf("V1_DYNAMIC_GENERATION_CONCURRENCY must be between 1 and 16")
+	}
+	if c.ImageV1.DynamicGenerationQueueDepth < 0 || c.ImageV1.DynamicGenerationQueueDepth > 64 {
+		return fmt.Errorf("V1_DYNAMIC_GENERATION_QUEUE_DEPTH must be between 0 and 64")
+	}
+	if c.ImageV1.BackgroundFormatConcurrency < 1 || c.ImageV1.BackgroundFormatConcurrency > 8 {
+		return fmt.Errorf("V1_BACKGROUND_FORMAT_CONCURRENCY must be between 1 and 8")
+	}
 	if c.ImageV2.JobPollInterval < 100*time.Millisecond || c.ImageV2.JobPollInterval > time.Minute {
 		return fmt.Errorf("V2_JOB_POLL_INTERVAL must be between 100ms and 1m")
 	}
@@ -326,6 +376,21 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("V2_STAGING_PATH must be a child of STORAGE_PATH for atomic promotion")
 	}
 	return nil
+}
+
+// EffectiveSummary returns the non-sensitive effective startup configuration.
+// Credentials, secrets, and connection strings are never included.
+func (c *Config) EffectiveSummary() []string {
+	return []string{
+		fmt.Sprintf("db_max_open_conns=%d db_max_idle_conns=%d db_conn_max_lifetime=%s redis_pool_size=%d",
+			c.Database.MaxOpenConns, c.Database.MaxIdleConns, c.Database.ConnMaxLifetime, c.Redis.PoolSize),
+		fmt.Sprintf("v1_dynamic_generation_concurrency=%d v1_dynamic_generation_queue_depth=%d v1_background_format_concurrency=%d",
+			c.ImageV1.DynamicGenerationConcurrency, c.ImageV1.DynamicGenerationQueueDepth, c.ImageV1.BackgroundFormatConcurrency),
+		fmt.Sprintf("v2_global_upload_concurrency=%d v2_per_user_upload_concurrency=%d v2_watermark_concurrency=%d v2_max_active_sessions_per_user=%d",
+			c.ImageV2.GlobalUploadConcurrency, c.ImageV2.PerUserConcurrency, c.ImageV2.WatermarkConcurrency, c.ImageV2.MaxActiveSessionsPerUser),
+		fmt.Sprintf("max_json_body_bytes=%d v2_init_max_json_bytes=%d v2_batch_status_max_json_bytes=%d",
+			c.Server.MaxJSONBodyBytes, c.ImageV2.InitMaxJSONBytes, c.ImageV2.BatchStatusMaxJSONBytes),
+	}
 }
 
 // ValidateCaptchaCrossOriginIsolation rejects providers whose client script

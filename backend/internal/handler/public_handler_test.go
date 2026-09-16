@@ -26,6 +26,12 @@ import (
 	"github.com/kserksi/summerain/internal/service"
 )
 
+var testV1Limits = config.ImageV1Config{
+	DynamicGenerationConcurrency: 2,
+	DynamicGenerationQueueDepth:  4,
+	BackgroundFormatConcurrency:  1,
+}
+
 func TestPublicConfigExposesProviderAndSiteKeyWithoutSecret(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()
@@ -35,7 +41,7 @@ func TestPublicConfigExposesProviderAndSiteKeyWithoutSecret(t *testing.T) {
 			{ConfigKey: "recaptcha_site_key", ConfigValue: "public-site-key"},
 			{ConfigKey: "recaptcha_secret_key", ConfigValue: "server-secret"},
 		},
-	}, config.CaptchaConfig{Provider: "recaptcha", Recaptcha: config.RecaptchaConfig{SiteKey: "public-site-key"}}, nil), nil, nil)
+	}, config.CaptchaConfig{Provider: "recaptcha", Recaptcha: config.RecaptchaConfig{SiteKey: "public-site-key"}}, nil), nil, nil, testV1Limits)
 
 	handler.GetConfig(c)
 
@@ -405,7 +411,7 @@ func TestDynamicImageGenerationHasBoundedConcurrencyAndQueue(t *testing.T) {
 		release func()
 		err     error
 	}
-	const admitted = v1DynamicGenerationConcurrency + v1DynamicGenerationQueueDepth
+	admitted := testV1Limits.DynamicGenerationConcurrency + testV1Limits.DynamicGenerationQueueDepth
 	results := make(chan loadResult, admitted)
 	for index := range admitted {
 		go func() {
@@ -414,15 +420,15 @@ func TestDynamicImageGenerationHasBoundedConcurrencyAndQueue(t *testing.T) {
 		}()
 	}
 	waitForCondition(t, func() bool {
-		return dynamicCallCount(handler) == admitted && requests.Load() == v1DynamicGenerationConcurrency
+		return dynamicCallCount(handler) == admitted && requests.Load() == int32(testV1Limits.DynamicGenerationConcurrency)
 	}, "generation workers and queue to fill")
 
 	_, _, err := handler.loadDynamicImage(context.Background(), "/q:80/f:webp/plain/local:///images/overflow.jpg")
 	if !errors.Is(err, errDynamicImageQueueFull) {
 		t.Fatalf("overflow error = %v, want queue full", err)
 	}
-	if maximum.Load() > v1DynamicGenerationConcurrency {
-		t.Fatalf("maximum concurrency = %d, limit = %d", maximum.Load(), v1DynamicGenerationConcurrency)
+	if maximum.Load() > int32(testV1Limits.DynamicGenerationConcurrency) {
+		t.Fatalf("maximum concurrency = %d, limit = %d", maximum.Load(), testV1Limits.DynamicGenerationConcurrency)
 	}
 
 	releaseUpstream()
@@ -463,6 +469,7 @@ func newDynamicTestHandler(t *testing.T, imgproxyURL string) *PublicHandler {
 		publicConfig,
 		nil,
 		nil,
+		testV1Limits,
 	)
 	handler.client = &http.Client{Timeout: 10 * time.Second}
 	return handler

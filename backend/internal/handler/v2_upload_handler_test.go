@@ -96,7 +96,7 @@ func TestV2UploadHandlerBatchStatusRejectsOversizedJSONBeforeService(t *testing.
 	ctx, _ := gin.CreateTestContext(recorder)
 	ctx.Set(middleware.ContextKeyUserID, uint64(42))
 	body := `{"upload_ids":["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],"padding":"` +
-		strings.Repeat("x", v2BatchStatusMaximumJSONBytes) + `"}`
+		strings.Repeat("x", defaultV2BatchStatusMaximumJSONBytes) + `"}`
 	ctx.Request = httptest.NewRequest(http.MethodPost, "/api/v1/uploads/status", strings.NewReader(body))
 	ctx.Request.Header.Set("Content-Type", "application/json")
 
@@ -107,5 +107,45 @@ func TestV2UploadHandlerBatchStatusRejectsOversizedJSONBeforeService(t *testing.
 	}
 	if stub.req != nil {
 		t.Fatalf("service received oversized request: %#v", stub.req)
+	}
+}
+
+func TestV2UploadHandlerHonorsConfiguredBatchStatusLimit(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	stub := &batchStatusServiceStub{}
+	handler := &V2UploadHandler{service: stub, batchStatusMaximumJSONBytes: 512}
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Set(middleware.ContextKeyUserID, uint64(42))
+	body := `{"upload_ids":["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],"padding":"` +
+		strings.Repeat("x", 600) + `"}`
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/api/v1/uploads/status", strings.NewReader(body))
+	ctx.Request.Header.Set("Content-Type", "application/json")
+
+	handler.BatchStatus(ctx)
+
+	if recorder.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	if stub.req != nil {
+		t.Fatalf("service received oversized request: %#v", stub.req)
+	}
+}
+
+func TestV2UploadHandlerHonorsConfiguredInitLimit(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	stub := &batchStatusServiceStub{}
+	handler := &V2UploadHandler{service: stub, initMaximumJSONBytes: 512}
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Set(middleware.ContextKeyUserID, uint64(42))
+	body := `{"filename":"photo.jpg","padding":"` + strings.Repeat("x", 600) + `"}`
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/api/v1/uploads/", strings.NewReader(body))
+	ctx.Request.Header.Set("Content-Type", "application/json")
+
+	handler.Init(ctx)
+
+	if recorder.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
 	}
 }

@@ -20,14 +20,13 @@ import (
 )
 
 const (
-	v2GalleryWidth                 = 400
-	v2GalleryHeight                = 400
-	v2AdminWidth                   = 120
-	v2AdminHeight                  = 160
-	v2PublishEdge                  = 2048
-	v2MinimumPartBytes             = 64
-	v2MaximumActiveSessionsPerUser = 8
-	v2PublishOutputReserveBytes    = int64(32 << 20)
+	v2GalleryWidth              = 400
+	v2GalleryHeight             = 400
+	v2AdminWidth                = 120
+	v2AdminHeight               = 160
+	v2PublishEdge               = 2048
+	v2MinimumPartBytes          = 64
+	v2PublishOutputReserveBytes = int64(32 << 20)
 	// Terminal sessions may still wait for staging cleanup, but their files are
 	// already reflected by disk pressure and must not reserve quota a second time.
 	v2ActiveReservationCondition = "((status IN ? AND expires_at > ?) OR status = ?)"

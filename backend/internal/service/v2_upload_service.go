@@ -275,7 +275,7 @@ func (s *V2UploadService) Init(ctx context.Context, userID uint64, idempotencyKe
 			Count(&activeSessionCount).Error; err != nil {
 			return err
 		}
-		if activeSessionCount >= v2MaximumActiveSessionsPerUser {
+		if activeSessionCount >= int64(s.cfg.ImageV2.MaxActiveSessionsPerUser) {
 			return errV2SessionLimit
 		}
 		var activeReserved int64

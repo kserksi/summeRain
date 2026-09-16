@@ -17,8 +17,8 @@ import (
 )
 
 const (
-	v2InitMaximumJSONBytes        = 64 << 10
-	v2BatchStatusMaximumJSONBytes = 16 << 10
+	defaultV2InitMaximumJSONBytes        = 64 << 10
+	defaultV2BatchStatusMaximumJSONBytes = 16 << 10
 )
 
 type v2UploadService interface {
@@ -32,11 +32,31 @@ type v2UploadService interface {
 }
 
 type V2UploadHandler struct {
-	service v2UploadService
+	service                     v2UploadService
+	initMaximumJSONBytes        int64
+	batchStatusMaximumJSONBytes int64
 }
 
-func NewV2UploadHandler(uploadService *service.V2UploadService) *V2UploadHandler {
-	return &V2UploadHandler{service: uploadService}
+func NewV2UploadHandler(uploadService *service.V2UploadService, initMaximumJSONBytes, batchStatusMaximumJSONBytes int64) *V2UploadHandler {
+	return &V2UploadHandler{
+		service:                     uploadService,
+		initMaximumJSONBytes:        initMaximumJSONBytes,
+		batchStatusMaximumJSONBytes: batchStatusMaximumJSONBytes,
+	}
+}
+
+func (h *V2UploadHandler) initJSONLimit() int64 {
+	if h.initMaximumJSONBytes > 0 {
+		return h.initMaximumJSONBytes
+	}
+	return defaultV2InitMaximumJSONBytes
+}
+
+func (h *V2UploadHandler) batchStatusJSONLimit() int64 {
+	if h.batchStatusMaximumJSONBytes > 0 {
+		return h.batchStatusMaximumJSONBytes
+	}
+	return defaultV2BatchStatusMaximumJSONBytes
 }
 
 func (h *V2UploadHandler) Recipe(c *gin.Context) {
@@ -49,7 +69,7 @@ func (h *V2UploadHandler) Init(c *gin.Context) {
 		return
 	}
 	var req service.V2InitUploadRequest
-	if appErr := bindBoundedV2JSON(c, &req, v2InitMaximumJSONBytes, "无效的 V2 上传清单"); appErr != nil {
+	if appErr := bindBoundedV2JSON(c, &req, h.initJSONLimit(), "无效的 V2 上传清单"); appErr != nil {
 		response.Error(c, appErr)
 		return
 	}
@@ -80,7 +100,7 @@ func (h *V2UploadHandler) BatchStatus(c *gin.Context) {
 		return
 	}
 	var req service.V2BatchStatusRequest
-	if appErr := bindBoundedV2JSON(c, &req, v2BatchStatusMaximumJSONBytes, "无效的批量状态查询"); appErr != nil {
+	if appErr := bindBoundedV2JSON(c, &req, h.batchStatusJSONLimit(), "无效的批量状态查询"); appErr != nil {
 		response.Error(c, appErr)
 		return
 	}
