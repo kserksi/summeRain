@@ -238,7 +238,6 @@ architectures. Do not reuse an architecture-specific child-manifest digest on
 both `amd64` and `arm64` hosts.
 
 See [Deployment and Usage](./docs/USAGE.md) for the complete environment,
-configuration-source, and runtime deployment details.
 nginx/CDN, health-check, upgrade, and rollback reference.
 
 ## Release Channels
