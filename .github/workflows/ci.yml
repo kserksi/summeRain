@@ -68,7 +68,13 @@ jobs:
           tag="v${version}"
           existing_ref_sha="$(git ls-remote --refs origin "refs/tags/${tag}" | awk '{print $1}')"
           if [ "$version_changed" != "true" ]; then
-            exit 0
+            if [ -n "$existing_ref_sha" ]; then
+              # Ordinary push whose exact version tag already exists: nothing to release.
+              exit 0
+            fi
+            # The version was committed by an earlier push whose release failed
+            # before the exact tag was created; resume the pending release here.
+            echo "::notice::${tag} is missing on origin; resuming the pending release"
           fi
           if [ -n "$existing_ref_sha" ]; then
             # Resolve annotated and lightweight tags to the commit they name.
