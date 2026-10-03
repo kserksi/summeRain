@@ -1,0 +1,12 @@
+# Canonical author identity for this repository.
+# AGENTS.md §0.6: the commit author is fixed to kserksi.
+#
+# Format: Proper Name <proper@email> Commit Name <commit@email>
+# This map rewrites the author and committer identity at display time only.
+# It never changes commit hashes, tags, or history, so published tags stay
+# immutable while every view (git log, git shortlog, GitHub UI) shows kserksi.
+
+kserksi <kserksi@users.noreply.github.com> <kserks@kserks.org>
+kserksi <kserksi@users.noreply.github.com> kserks <kserks@kserks.org>
+kserksi <kserksi@users.noreply.github.com> <99547275+kserksi@users.noreply.github.com>
+kserksi <kserksi@users.noreply.github.com> kserksi <99547275+kserksi@users.noreply.github.com>
