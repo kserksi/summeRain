@@ -71,24 +71,22 @@ type StorageConfig struct {
 // transformation semaphores are sized once at startup, so changing these
 // values requires a restart.
 type ImageV1Config struct {
-	DynamicGenerationConcurrency  int
-	DynamicGenerationQueueDepth   int
-	BackgroundFormatConcurrency   int
-	DynamicMaxResponseBytes       int64
-	BackgroundMaxResponseBytes    int64
-	GenerationTimeout             time.Duration
-	ImgproxyRequestTimeout        time.Duration
-	MultipartMemoryBytes          int64
+	DynamicGenerationConcurrency int
+	DynamicGenerationQueueDepth  int
+	BackgroundFormatConcurrency  int
+	DynamicMaxResponseBytes      int64
+	BackgroundMaxResponseBytes   int64
+	GenerationTimeout            time.Duration
+	ImgproxyRequestTimeout       time.Duration
+	MultipartMemoryBytes         int64
 }
 
 // ImageV2Config bounds the new client-processed upload pipeline. The values are
 // intentionally conservative because summeRain commonly shares a small host
-// with MySQL, Redis, and other applications.
+// with MySQL, Redis, and other applications. Pixel, byte, MIME, and variant
+// policy belong to ImageRecipe and are loaded from the recipe file instead.
 type ImageV2Config struct {
 	Enabled                  bool
-	RecipeVersion            string
-	MaxPartBytes             int64
-	MaxPixels                int64
 	SessionTTL               time.Duration
 	GlobalUploadConcurrency  int
 	PerUserConcurrency       int
@@ -199,9 +197,6 @@ func Load() *Config {
 		},
 		ImageV2: ImageV2Config{
 			Enabled:                  getEnvBool("V2_UPLOAD_ENABLED", true),
-			RecipeVersion:            getEnv("V2_RECIPE_VERSION", "2.0.0"),
-			MaxPartBytes:             getEnvInt64("V2_MAX_PART_BYTES", 64<<20),
-			MaxPixels:                getEnvInt64("V2_MAX_PIXELS", 50_000_000),
 			SessionTTL:               getEnvDuration("V2_SESSION_TTL", 30*time.Minute),
 			GlobalUploadConcurrency:  getEnvInt("V2_GLOBAL_UPLOAD_CONCURRENCY", 8),
 			PerUserConcurrency:       getEnvInt("V2_PER_USER_UPLOAD_CONCURRENCY", 4),
@@ -274,12 +269,6 @@ func (c *Config) Validate() error {
 	}
 	if c.Redis.PoolSize < 1 || c.Redis.PoolSize > 64 {
 		return fmt.Errorf("REDIS_POOL_SIZE must be between 1 and 64")
-	}
-	if c.ImageV2.MaxPartBytes < 1<<20 || c.ImageV2.MaxPartBytes > 64<<20 {
-		return fmt.Errorf("V2_MAX_PART_BYTES must be between 1 MiB and 64 MiB")
-	}
-	if c.ImageV2.MaxPixels < 1_000_000 || c.ImageV2.MaxPixels > 100_000_000 {
-		return fmt.Errorf("V2_MAX_PIXELS must be between 1MP and 100MP")
 	}
 	if c.ImageV2.SessionTTL < time.Minute || c.ImageV2.SessionTTL > 24*time.Hour {
 		return fmt.Errorf("V2_SESSION_TTL must be between 1m and 24h")

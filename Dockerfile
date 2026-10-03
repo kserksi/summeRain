@@ -44,6 +44,7 @@ WORKDIR /app
 
 COPY --from=backend-builder /out/server ./server
 COPY --from=frontend-builder /src/backend/web/ ./web/
+COPY backend/internal/config/image-recipe.json ./config/image-recipe.json
 
 USER 10001:10001
 EXPOSE 8080

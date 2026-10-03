@@ -20,11 +20,6 @@ import (
 )
 
 const (
-	v2GalleryWidth              = 400
-	v2GalleryHeight             = 400
-	v2AdminWidth                = 120
-	v2AdminHeight               = 160
-	v2PublishEdge               = 2048
 	v2MinimumPartBytes          = 64
 	v2PublishOutputReserveBytes = int64(32 << 20)
 	// Terminal sessions may still wait for staging cleanup, but their files are
@@ -34,13 +29,6 @@ const (
 
 var sha256Pattern = regexp.MustCompile(`^[a-f0-9]{64}$`)
 var uploadIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{32}$`)
-
-var v2RequiredParts = []string{
-	model.ImageVariantKindMaster,
-	model.ImageVariantKindGallery,
-	model.ImageVariantKindAdmin,
-	model.ImageVariantKindPublishSource,
-}
 
 type V2SourceManifest struct {
 	MimeType string `json:"mime_type" binding:"required"`
@@ -135,7 +123,7 @@ func normalizeV2UploadIDs(req *V2BatchStatusRequest) ([]string, *errcode.AppErro
 	return uploadIDs, nil
 }
 
-func validateV2Manifest(req *V2InitUploadRequest, cfg config.ImageV2Config) *errcode.AppError {
+func validateV2Manifest(req *V2InitUploadRequest, recipe *config.ImageRecipe) *errcode.AppError {
 	req.Filename = filepath.Base(strings.TrimSpace(req.Filename))
 	if req.Filename == "." || req.Filename == "" || len(req.Filename) > 255 {
 		return errcode.New(3005, "无效的文件名", 400)
@@ -146,16 +134,16 @@ func validateV2Manifest(req *V2InitUploadRequest, cfg config.ImageV2Config) *err
 	if req.Visibility != "public" && req.Visibility != "private" {
 		return errcode.New(3005, "visibility 必须为 public 或 private", 400)
 	}
-	if req.RecipeVersion != cfg.RecipeVersion {
-		return errcode.NewWithData(4261, "客户端图片配方版本不受支持", 426, map[string]string{"required_recipe_version": cfg.RecipeVersion})
+	if req.RecipeVersion != recipe.RecipeVersion {
+		return errcode.NewWithData(4261, "客户端图片配方版本不受支持", 426, map[string]string{"required_recipe_version": recipe.RecipeVersion})
 	}
 	if strings.TrimSpace(req.ProcessorVersion) == "" || len(req.ProcessorVersion) > 64 {
 		return errcode.New(3005, "无效的客户端处理器版本", 400)
 	}
-	if !allowedV2SourceMIME(req.Source.MimeType) || req.Source.Animated {
+	if !recipe.AllowsSourceMIME(req.Source.MimeType) || req.Source.Animated {
 		return errcode.ErrUnsupportedType
 	}
-	if !v2DimensionsWithinLimit(req.Source.Width, req.Source.Height, cfg.MaxPixels) {
+	if !v2DimensionsWithinLimit(req.Source.Width, req.Source.Height, recipe.MaxPixels) {
 		return errcode.ErrDimensionExceeded
 	}
 	if (req.FocalX == nil) != (req.FocalY == nil) {
@@ -164,7 +152,8 @@ func validateV2Manifest(req *V2InitUploadRequest, cfg config.ImageV2Config) *err
 	if req.FocalX != nil && (*req.FocalX < 0 || *req.FocalX > 1 || *req.FocalY < 0 || *req.FocalY > 1) {
 		return errcode.New(3005, "裁剪焦点必须位于 0 到 1 之间", 400)
 	}
-	if len(req.Parts) != len(v2RequiredParts) {
+	requiredKinds := recipe.VariantKinds()
+	if len(req.Parts) != len(requiredKinds) {
 		return errcode.New(3005, "V2 上传必须包含 master、gallery、admin 和 publish_source", 400)
 	}
 
@@ -172,7 +161,7 @@ func validateV2Manifest(req *V2InitUploadRequest, cfg config.ImageV2Config) *err
 	for i := range req.Parts {
 		part := &req.Parts[i]
 		part.SHA256 = strings.ToLower(strings.TrimSpace(part.SHA256))
-		if seen[part.Kind] || !isRequiredV2Part(part.Kind) {
+		if seen[part.Kind] || !isRequiredV2Part(part.Kind, requiredKinds) {
 			return errcode.New(3005, "上传部件类型重复或不受支持", 400)
 		}
 		seen[part.Kind] = true
@@ -182,13 +171,13 @@ func validateV2Manifest(req *V2InitUploadRequest, cfg config.ImageV2Config) *err
 		if part.Size < v2MinimumPartBytes {
 			return errcode.New(3005, "上传部件大小低于有效 WebP 的最小限制", 400)
 		}
-		if part.Size > cfg.MaxPartBytes {
+		if part.Size > recipe.MaxPartBytes {
 			return errcode.ErrFileTooLarge
 		}
-		if !v2DimensionsWithinLimit(part.Width, part.Height, cfg.MaxPixels) {
+		if !v2DimensionsWithinLimit(part.Width, part.Height, recipe.MaxPixels) {
 			return errcode.ErrDimensionExceeded
 		}
-		if err := validateV2PartGeometry(*part, req.Source); err != nil {
+		if err := validateV2PartGeometry(*part, req.Source, recipe); err != nil {
 			return errcode.New(3005, err.Error(), 400)
 		}
 	}
@@ -204,35 +193,36 @@ func v2DimensionsWithinLimit(width, height int, maximumPixels int64) bool {
 	return int64(width) <= maximumPixels/int64(height)
 }
 
-func validateV2PartGeometry(part V2PartManifest, source V2SourceManifest) error {
-	expectedQuality := uint8(80)
+func validateV2PartGeometry(part V2PartManifest, source V2SourceManifest, recipe *config.ImageRecipe) error {
+	variant, ok := recipe.Variant(part.Kind)
+	if !ok {
+		return fmt.Errorf("未知上传部件")
+	}
 	switch part.Kind {
 	case model.ImageVariantKindMaster:
 		if part.Width != source.Width || part.Height != source.Height {
 			return fmt.Errorf("master 尺寸必须与源图片一致")
 		}
 	case model.ImageVariantKindGallery:
-		expectedQuality = 60
-		if part.Width != v2GalleryWidth || part.Height != v2GalleryHeight {
-			return fmt.Errorf("gallery 尺寸必须为 400x400")
+		if part.Width != variant.Width || part.Height != variant.Height {
+			return fmt.Errorf("gallery 尺寸必须为 %dx%d", variant.Width, variant.Height)
 		}
 	case model.ImageVariantKindAdmin:
-		expectedQuality = 60
-		if part.Width != v2AdminWidth || part.Height != v2AdminHeight {
-			return fmt.Errorf("admin 尺寸必须为 120x160")
+		if part.Width != variant.Width || part.Height != variant.Height {
+			return fmt.Errorf("admin 尺寸必须为 %dx%d", variant.Width, variant.Height)
 		}
 	case model.ImageVariantKindPublishSource:
-		if part.Width > v2PublishEdge || part.Height > v2PublishEdge {
-			return fmt.Errorf("publish_source 最长边不得超过 2048")
+		if part.Width > variant.LongEdge || part.Height > variant.LongEdge {
+			return fmt.Errorf("publish_source 最长边不得超过 %d", variant.LongEdge)
 		}
-		wantWidth, wantHeight := fitWithin(source.Width, source.Height, v2PublishEdge)
+		wantWidth, wantHeight := fitWithin(source.Width, source.Height, variant.LongEdge)
 		if part.Width != wantWidth || part.Height != wantHeight {
 			return fmt.Errorf("publish_source 尺寸与固定配方不一致")
 		}
 	default:
 		return fmt.Errorf("未知上传部件")
 	}
-	if part.Quality != expectedQuality {
+	if part.Quality != variant.Quality {
 		return fmt.Errorf("%s 质量参数与固定配方不一致", part.Kind)
 	}
 	return nil
@@ -248,17 +238,8 @@ func fitWithin(width, height, edge int) (int, int) {
 	return maxInt(1, int(float64(width)*float64(edge)/float64(height)+0.5)), edge
 }
 
-func allowedV2SourceMIME(mimeType string) bool {
-	switch strings.ToLower(mimeType) {
-	case "image/jpeg", "image/png", "image/bmp", "image/webp", "image/avif":
-		return true
-	default:
-		return false
-	}
-}
-
-func isRequiredV2Part(kind string) bool {
-	for _, expected := range v2RequiredParts {
+func isRequiredV2Part(kind string, required []string) bool {
+	for _, expected := range required {
 		if kind == expected {
 			return true
 		}
@@ -266,11 +247,12 @@ func isRequiredV2Part(kind string) bool {
 	return false
 }
 
-func v2PartQuality(kind string) uint8 {
-	if kind == model.ImageVariantKindGallery || kind == model.ImageVariantKindAdmin {
-		return 60
+// v2PartQuality reports the recipe quality for a persisted variant kind.
+func v2PartQuality(kind string, recipe *config.ImageRecipe) uint8 {
+	if variant, ok := recipe.Variant(kind); ok {
+		return variant.Quality
 	}
-	return 80
+	return 0
 }
 
 func randomURLToken(byteCount int) (string, error) {

@@ -36,9 +36,14 @@ func main() {
 	if err := cfg.Validate(); err != nil {
 		log.Fatalf("invalid configuration: %v", err)
 	}
+	imageRecipe, err := config.LoadImageRecipe()
+	if err != nil {
+		log.Fatalf("invalid image recipe: %v", err)
+	}
 	for _, line := range cfg.EffectiveSummary() {
 		log.Printf("[config] %s", line)
 	}
+	log.Printf("[config] %s", imageRecipe.Summary())
 
 	db, err := gorm.Open(mysql.Open(cfg.DSN()), &gorm.Config{})
 	if err != nil {
@@ -84,7 +89,7 @@ func main() {
 	}
 
 	imgproxySvc := service.NewImgproxyService(&cfg.Imgproxy)
-	v2UploadSvc, err := service.NewV2UploadService(db, cfg, configRepo, imgproxySvc)
+	v2UploadSvc, err := service.NewV2UploadService(db, cfg, imageRecipe, configRepo, imgproxySvc)
 	if err != nil {
 		log.Fatalf("failed to initialize V2 upload pipeline: %v", err)
 	}

@@ -435,17 +435,17 @@ func TestCompleteRollbackRestoresStagingAndCleansPersistentParts(t *testing.T) {
 		PipelineVersion: model.ImagePipelineVersionV2, Visibility: "public", Filename: "rollback.webp",
 		SourceMimeType: "image/webp", SourceWidth: 10, SourceHeight: 10,
 		ProcessorVersion: "test", RecipeVersion: "test",
-		ExpectedPartCount: uint8(len(v2RequiredParts)), ReceivedPartCount: uint8(len(v2RequiredParts)),
+		ExpectedPartCount: uint8(len(testV2RequiredParts)), ReceivedPartCount: uint8(len(testV2RequiredParts)),
 		StagingPath: sessionPath, ExpiresAt: time.Now().Add(time.Hour),
 	}
 	if err := db.Create(&session).Error; err != nil {
 		t.Fatal(err)
 	}
 
-	parts := make([]model.UploadPart, 0, len(v2RequiredParts))
-	contentByKind := make(map[string][]byte, len(v2RequiredParts))
+	parts := make([]model.UploadPart, 0, len(testV2RequiredParts))
+	contentByKind := make(map[string][]byte, len(testV2RequiredParts))
 	finalPathByKind := make(map[string]string, 3)
-	for index, kind := range v2RequiredParts {
+	for index, kind := range testV2RequiredParts {
 		content := []byte(fmt.Sprintf("rollback-%s-%s-%d", suffix, kind, index))
 		hash := testSHA256(content)
 		sourcePath := filepath.Join(sessionPath, kind+".ready")

@@ -33,6 +33,11 @@ func TestValidateAdminWritableSystemConfigKeysRejectsDeploymentAndRecipeConfig(t
 		"V1_BACKGROUND_FORMAT_CONCURRENCY",
 		"recipe_version",
 		"image_recipe",
+		"image_recipe_file",
+		"max_pixels",
+		"max_part_bytes",
+		"pipeline_version",
+		"supported_source_mime_types",
 		"unknown_key",
 	} {
 		t.Run(key, func(t *testing.T) {

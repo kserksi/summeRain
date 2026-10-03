@@ -6,11 +6,37 @@ package service
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/kserksi/summerain/internal/config"
 	"github.com/kserksi/summerain/internal/model"
 	"github.com/kserksi/summerain/internal/pkg/errcode"
 )
+
+var testV2RequiredParts = []string{
+	model.ImageVariantKindMaster,
+	model.ImageVariantKindGallery,
+	model.ImageVariantKindAdmin,
+	model.ImageVariantKindPublishSource,
+}
+
+// testV2Recipe mirrors the embedded default recipe with a smaller part limit so
+// validation tests stay cheap.
+func testV2Recipe() *config.ImageRecipe {
+	return &config.ImageRecipe{
+		PipelineVersion: config.ImageRecipePipelineVersion,
+		RecipeVersion:   "2.0.0",
+		MaxPixels:       50_000_000,
+		MaxPartBytes:    20 << 20,
+		SourceMIMETypes: []string{"image/jpeg", "image/png", "image/bmp", "image/webp", "image/avif"},
+		Variants: []config.ImageRecipeVariant{
+			{Kind: model.ImageVariantKindMaster, Quality: 80, Fit: "original"},
+			{Kind: model.ImageVariantKindGallery, Width: 400, Height: 400, Quality: 60, Fit: "cover"},
+			{Kind: model.ImageVariantKindAdmin, Width: 120, Height: 160, Quality: 60, Fit: "cover"},
+			{Kind: model.ImageVariantKindPublishSource, LongEdge: 2048, Quality: 80, Fit: "contain"},
+		},
+	}
+}
 
 func validV2Manifest() V2InitUploadRequest {
 	hash := strings.Repeat("a", 64)
@@ -30,57 +56,143 @@ func validV2Manifest() V2InitUploadRequest {
 }
 
 func TestValidateV2ManifestRejectsImplausiblySmallPart(t *testing.T) {
-	cfg := config.ImageV2Config{RecipeVersion: "2.0.0", MaxPartBytes: 20 << 20, MaxPixels: 50_000_000}
+	recipe := testV2Recipe()
 	req := validV2Manifest()
 	req.Parts[0].Size = v2MinimumPartBytes - 1
-	if appErr := validateV2Manifest(&req, cfg); appErr == nil || appErr.HTTP != 400 {
+	if appErr := validateV2Manifest(&req, recipe); appErr == nil || appErr.HTTP != 400 {
 		t.Fatalf("undersized part error = %#v, want HTTP 400", appErr)
 	}
 }
 
 func TestValidateV2Manifest(t *testing.T) {
-	cfg := config.ImageV2Config{RecipeVersion: "2.0.0", MaxPartBytes: 20 << 20, MaxPixels: 50_000_000}
+	recipe := testV2Recipe()
 	req := validV2Manifest()
-	if appErr := validateV2Manifest(&req, cfg); appErr != nil {
+	if appErr := validateV2Manifest(&req, recipe); appErr != nil {
 		t.Fatalf("valid manifest rejected: %v", appErr)
 	}
 }
 
 func TestV2RecipeReportsWhetherNewSessionsAreEnabled(t *testing.T) {
 	for _, enabled := range []bool{false, true} {
-		svc := &V2UploadService{cfg: &config.Config{ImageV2: config.ImageV2Config{
-			Enabled:       enabled,
-			RecipeVersion: "2.0.0",
-		}}}
+		svc := &V2UploadService{
+			cfg:    &config.Config{ImageV2: config.ImageV2Config{Enabled: enabled}},
+			recipe: testV2Recipe(),
+		}
 		if got := svc.Recipe().V2Enabled; got != enabled {
 			t.Fatalf("recipe V2Enabled = %v, want %v", got, enabled)
 		}
 	}
 }
 
+func TestV2RecipeResponseFollowsRecipeValues(t *testing.T) {
+	recipe := testV2Recipe()
+	svc := &V2UploadService{
+		cfg:    &config.Config{ImageV2: config.ImageV2Config{Enabled: true, SessionTTL: 30 * time.Minute}},
+		recipe: recipe,
+	}
+	response := svc.Recipe()
+	if response.PipelineVersion != config.ImageRecipePipelineVersion {
+		t.Fatalf("pipeline version = %d, want %d", response.PipelineVersion, config.ImageRecipePipelineVersion)
+	}
+	if response.RecipeVersion != recipe.RecipeVersion {
+		t.Fatalf("recipe version = %q, want %q", response.RecipeVersion, recipe.RecipeVersion)
+	}
+	if response.MaxPartBytes != recipe.MaxPartBytes || response.MaxPixels != recipe.MaxPixels {
+		t.Fatalf("limits = %d/%d, want %d/%d", response.MaxPartBytes, response.MaxPixels, recipe.MaxPartBytes, recipe.MaxPixels)
+	}
+	if response.SessionTTLMs != (30 * time.Minute).Milliseconds() {
+		t.Fatalf("session ttl = %d, want 30m", response.SessionTTLMs)
+	}
+	if len(response.Variants) != len(recipe.Variants) {
+		t.Fatalf("variant count = %d, want %d", len(response.Variants), len(recipe.Variants))
+	}
+	galleryFound := false
+	for _, variant := range response.Variants {
+		if variant.Kind != model.ImageVariantKindGallery {
+			continue
+		}
+		galleryFound = variant.Width == 400 && variant.Height == 400 && variant.Quality == 60 && variant.Fit == "cover"
+	}
+	if !galleryFound {
+		t.Fatalf("gallery variant does not mirror the recipe: %#v", response.Variants)
+	}
+}
+
 func TestValidateV2ManifestRejectsAnimationAndBadRecipe(t *testing.T) {
-	cfg := config.ImageV2Config{RecipeVersion: "2.0.0", MaxPartBytes: 20 << 20, MaxPixels: 50_000_000}
+	recipe := testV2Recipe()
 	req := validV2Manifest()
 	req.Source.Animated = true
-	if appErr := validateV2Manifest(&req, cfg); appErr == nil {
+	if appErr := validateV2Manifest(&req, recipe); appErr == nil {
 		t.Fatal("animated source should be rejected")
 	}
 
 	req = validV2Manifest()
 	req.RecipeVersion = "1.0.0"
-	if appErr := validateV2Manifest(&req, cfg); appErr == nil || appErr.HTTP != 426 {
+	if appErr := validateV2Manifest(&req, recipe); appErr == nil || appErr.HTTP != 426 {
 		t.Fatalf("bad recipe should require upgrade, got %#v", appErr)
 	}
 }
 
 func TestValidateV2ManifestRejectsOverflowingPixelDimensions(t *testing.T) {
-	cfg := config.ImageV2Config{RecipeVersion: "2.0.0", MaxPartBytes: 20 << 20, MaxPixels: 50_000_000}
+	recipe := testV2Recipe()
 	req := validV2Manifest()
 	maximumInt := int(^uint(0) >> 1)
 	req.Source.Width = maximumInt
 	req.Source.Height = maximumInt
-	if appErr := validateV2Manifest(&req, cfg); appErr == nil || appErr != errcode.ErrDimensionExceeded {
+	if appErr := validateV2Manifest(&req, recipe); appErr == nil || appErr != errcode.ErrDimensionExceeded {
 		t.Fatalf("overflowing dimensions error = %#v, want dimension exceeded", appErr)
+	}
+}
+
+func TestValidateV2ManifestUsesRecipeGeometry(t *testing.T) {
+	recipe := testV2Recipe()
+	recipe.Variants[1] = config.ImageRecipeVariant{
+		Kind: model.ImageVariantKindGallery, Width: 200, Height: 200, Quality: 70, Fit: "cover",
+	}
+
+	req := validV2Manifest()
+	req.Parts[1] = V2PartManifest{
+		Kind: model.ImageVariantKindGallery, Size: 128, SHA256: strings.Repeat("a", 64),
+		MimeType: "image/webp", Width: 200, Height: 200, Quality: 70,
+	}
+	if appErr := validateV2Manifest(&req, recipe); appErr != nil {
+		t.Fatalf("manifest matching the custom recipe rejected: %v", appErr)
+	}
+
+	req = validV2Manifest()
+	if appErr := validateV2Manifest(&req, recipe); appErr == nil || appErr.HTTP != 400 {
+		t.Fatalf("default geometry accepted against a custom recipe: %#v", appErr)
+	}
+}
+
+func TestValidateV2ManifestUsesRecipeSourceMIMETypes(t *testing.T) {
+	recipe := testV2Recipe()
+	recipe.SourceMIMETypes = []string{"image/jpeg", "image/png"}
+
+	req := validV2Manifest()
+	if appErr := validateV2Manifest(&req, recipe); appErr != nil {
+		t.Fatalf("allowed source type rejected: %v", appErr)
+	}
+
+	req.Source.MimeType = "image/avif"
+	if appErr := validateV2Manifest(&req, recipe); appErr != errcode.ErrUnsupportedType {
+		t.Fatalf("recipe-excluded source type error = %#v, want unsupported type", appErr)
+	}
+}
+
+func TestValidateV2ManifestUsesRecipeLimits(t *testing.T) {
+	recipe := testV2Recipe()
+	recipe.MaxPixels = 1_000_000
+	req := validV2Manifest()
+	if appErr := validateV2Manifest(&req, recipe); appErr != errcode.ErrDimensionExceeded {
+		t.Fatalf("source above recipe max_pixels error = %#v, want dimension exceeded", appErr)
+	}
+
+	recipe = testV2Recipe()
+	recipe.MaxPartBytes = 100
+	req = validV2Manifest()
+	if appErr := validateV2Manifest(&req, recipe); appErr != errcode.ErrFileTooLarge {
+		t.Fatalf("part above recipe max_part_bytes error = %#v, want file too large", appErr)
 	}
 }
 

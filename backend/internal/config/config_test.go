@@ -118,7 +118,6 @@ func validConfigForTest(t *testing.T) *Config {
 			MultipartMemoryBytes: 8 << 20,
 		},
 		ImageV2: ImageV2Config{
-			MaxPartBytes: 20 << 20, MaxPixels: 50_000_000,
 			GlobalUploadConcurrency: 8, PerUserConcurrency: 4, WatermarkConcurrency: 1,
 			MaxActiveSessionsPerUser: 8, InitMaxJSONBytes: 64 << 10, BatchStatusMaxJSONBytes: 16 << 10,
 			SessionTTL: 30 * time.Minute, JobPollInterval: time.Second, JobLease: 2 * time.Minute,

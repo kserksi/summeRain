@@ -49,6 +49,7 @@ type v2CapacityLock struct {
 type V2UploadService struct {
 	db               *gorm.DB
 	cfg              *config.Config
+	recipe           *config.ImageRecipe
 	configRepo       *repository.SystemConfigRepo
 	imgproxy         *ImgproxyService
 	limiter          *v2UploadLimiter
@@ -69,7 +70,10 @@ type immutableTargetPrevalidation struct {
 	info os.FileInfo
 }
 
-func NewV2UploadService(db *gorm.DB, cfg *config.Config, configRepo *repository.SystemConfigRepo, imgproxy *ImgproxyService) (*V2UploadService, error) {
+func NewV2UploadService(db *gorm.DB, cfg *config.Config, recipe *config.ImageRecipe, configRepo *repository.SystemConfigRepo, imgproxy *ImgproxyService) (*V2UploadService, error) {
+	if recipe == nil {
+		return nil, errors.New("image recipe is required for the V2 upload pipeline")
+	}
 	if err := os.MkdirAll(cfg.Storage.StagingPath, 0750); err != nil {
 		return nil, fmt.Errorf("create V2 staging directory: %w", err)
 	}
@@ -88,6 +92,7 @@ func NewV2UploadService(db *gorm.DB, cfg *config.Config, configRepo *repository.
 	return &V2UploadService{
 		db:         db,
 		cfg:        cfg,
+		recipe:     recipe,
 		configRepo: configRepo,
 		imgproxy:   imgproxy,
 		limiter:    newV2UploadLimiter(cfg.ImageV2.GlobalUploadConcurrency, cfg.ImageV2.PerUserConcurrency),
@@ -97,46 +102,22 @@ func NewV2UploadService(db *gorm.DB, cfg *config.Config, configRepo *repository.
 func (s *V2UploadService) Recipe() V2RecipeResponse {
 	response := V2RecipeResponse{
 		V2Enabled:       s.cfg.ImageV2.Enabled,
-		PipelineVersion: model.ImagePipelineVersionV2,
-		RecipeVersion:   s.cfg.ImageV2.RecipeVersion,
-		MaxPartBytes:    s.cfg.ImageV2.MaxPartBytes,
-		MaxPixels:       s.cfg.ImageV2.MaxPixels,
+		PipelineVersion: s.recipe.PipelineVersion,
+		RecipeVersion:   s.recipe.RecipeVersion,
+		MaxPartBytes:    s.recipe.MaxPartBytes,
+		MaxPixels:       s.recipe.MaxPixels,
 		SessionTTLMs:    s.cfg.ImageV2.SessionTTL.Milliseconds(),
 	}
-	response.Variants = append(response.Variants,
-		struct {
+	for _, variant := range s.recipe.Variants {
+		response.Variants = append(response.Variants, struct {
 			Kind     string `json:"kind"`
 			Width    int    `json:"width,omitempty"`
 			Height   int    `json:"height,omitempty"`
 			LongEdge int    `json:"long_edge,omitempty"`
 			Quality  uint8  `json:"quality"`
 			Fit      string `json:"fit"`
-		}{Kind: model.ImageVariantKindMaster, Quality: 80, Fit: "original"},
-		struct {
-			Kind     string `json:"kind"`
-			Width    int    `json:"width,omitempty"`
-			Height   int    `json:"height,omitempty"`
-			LongEdge int    `json:"long_edge,omitempty"`
-			Quality  uint8  `json:"quality"`
-			Fit      string `json:"fit"`
-		}{Kind: model.ImageVariantKindGallery, Width: v2GalleryWidth, Height: v2GalleryHeight, Quality: 60, Fit: "cover"},
-		struct {
-			Kind     string `json:"kind"`
-			Width    int    `json:"width,omitempty"`
-			Height   int    `json:"height,omitempty"`
-			LongEdge int    `json:"long_edge,omitempty"`
-			Quality  uint8  `json:"quality"`
-			Fit      string `json:"fit"`
-		}{Kind: model.ImageVariantKindAdmin, Width: v2AdminWidth, Height: v2AdminHeight, Quality: 60, Fit: "cover"},
-		struct {
-			Kind     string `json:"kind"`
-			Width    int    `json:"width,omitempty"`
-			Height   int    `json:"height,omitempty"`
-			LongEdge int    `json:"long_edge,omitempty"`
-			Quality  uint8  `json:"quality"`
-			Fit      string `json:"fit"`
-		}{Kind: model.ImageVariantKindPublishSource, LongEdge: v2PublishEdge, Quality: 80, Fit: "contain"},
-	)
+		}{Kind: variant.Kind, Width: variant.Width, Height: variant.Height, LongEdge: variant.LongEdge, Quality: variant.Quality, Fit: variant.Fit})
+	}
 	return response
 }
 
@@ -144,7 +125,7 @@ func (s *V2UploadService) Init(ctx context.Context, userID uint64, idempotencyKe
 	if !s.cfg.ImageV2.Enabled {
 		return nil, errcode.New(5031, "V2 上传暂未启用", 503)
 	}
-	if appErr := validateV2Manifest(req, s.cfg.ImageV2); appErr != nil {
+	if appErr := validateV2Manifest(req, s.recipe); appErr != nil {
 		return nil, appErr
 	}
 	idempotencyKey = strings.TrimSpace(idempotencyKey)
@@ -652,7 +633,7 @@ func (s *V2UploadService) Complete(ctx context.Context, userID uint64, uploadKey
 		if !locked.ExpiresAt.After(now) {
 			return errV2SessionExpired
 		}
-		for _, kind := range v2RequiredParts {
+		for _, kind := range s.recipe.VariantKinds() {
 			part := findV2Part(locked.Parts, kind)
 			if part == nil || part.Status != model.UploadPartStatusReceived {
 				return errV2UploadIncomplete
@@ -752,7 +733,7 @@ func (s *V2UploadService) Complete(ctx context.Context, userID uint64, uploadKey
 				MimeType:        "image/webp",
 				Width:           part.ActualWidth,
 				Height:          part.ActualHeight,
-				Quality:         v2PartQuality(kind),
+				Quality:         v2PartQuality(kind, s.recipe),
 				StoragePath:     finalPaths[kind],
 				IsActive:        true,
 				ReadyAt:         &readyAt,
