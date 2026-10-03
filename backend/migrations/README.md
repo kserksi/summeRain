@@ -34,6 +34,34 @@ intentionally absent from the checksummed V2 migrations. The legacy
 access-token cleanup is a dedicated compatibility stage outside that additive
 migration list.
 
+## Generated SQL for production
+
+`scripts/generate-sql-migration.sh` renders the schema that the models and the
+checksummed migrations produce into an explicit snapshot in this directory, for
+example `20261003_122900_baseline_schema.up.sql`:
+
+```bash
+./scripts/dev-wsl.sh deps-up
+bash scripts/generate-sql-migration.sh baseline_schema
+bash scripts/generate-sql-migration.sh --verify backend/migrations/<file>.up.sql
+```
+
+The command works only on a disposable database that it creates and drops on
+`SUMMERAIN_SCHEMA_DSN` (default `root:summerain-dev@tcp(127.0.0.1:13306)/`) and
+never touches an existing database. Every generated file is verified before it
+is accepted: the file is applied to an empty database and the running bootstrap
+must then leave that schema unchanged, which proves the snapshot matches the
+models and every checksummed migration. The same check runs in
+`go test ./cmd/schema-migration-gen/...` when `SUMMERAIN_SCHEMA_DSN` is set.
+
+Apply the snapshot to an empty database before starting a production release.
+Server startup still validates the schema and records the migration ledger; it
+never adds columns or tables outside that contract, so a partial or ambiguous
+restore fails fast instead of mutating production silently. Existing databases
+continue to upgrade through the additive checksummed runner described above. A
+snapshot is immutable once committed: regenerate the current schema and commit
+a new dated file for every schema change.
+
 ## First upgrade to v2.0.3
 
 Stop every backend instance running v2.0.2 or earlier before starting the first

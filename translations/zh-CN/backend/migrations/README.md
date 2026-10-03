@@ -27,6 +27,29 @@ MySQL DDL 会隐式提交。因此，每项带校验和的迁移操作都必须�
 单独的兼容与回滚方案，因此带校验和的 V2 迁移有意不包含这些操作。旧版访问令牌清理是一个
 位于该增量迁移列表之外的专用兼容阶段。
 
+## 面向生产环境的 SQL 生成
+
+`scripts/generate-sql-migration.sh` 会把模型与带校验和迁移所产生的结构，
+渲染成本目录下的显式快照文件，例如 `20261003_122900_baseline_schema.up.sql`：
+
+```bash
+./scripts/dev-wsl.sh deps-up
+bash scripts/generate-sql-migration.sh baseline_schema
+bash scripts/generate-sql-migration.sh --verify backend/migrations/<file>.up.sql
+```
+
+该命令只会在 `SUMMERAIN_SCHEMA_DSN`（默认
+`root:summerain-dev@tcp(127.0.0.1:13306)/`）上创建并删除一次性数据库，
+绝不接触已有数据库。每个生成的文件在被接受前都会校验：先把文件应用到一个空数据库，
+随后运行的引导过程必须让该结构保持不变，从而证明快照与模型及所有带校验和的迁移一致。
+当设置 `SUMMERAIN_SCHEMA_DSN` 时，`go test ./cmd/schema-migration-gen/...`
+会执行同样的检查。
+
+在生产环境启动本版本前，请先把快照应用到空数据库。服务器启动仍会校验结构并记录迁移账本；
+它不会在该约定之外新增列或表，因此不完整或含糊的恢复会快速失败，而不会静默修改生产数据。
+已有数据库继续通过上述追加型带校验和运行器升级。快照一经提交即不可更改：
+每次结构变更都应重新生成当前结构并提交一份新的带日期文件。
+
 ## 首次升级到 v2.0.3
 
 启动第一个 v2.0.3 实例之前，必须停止所有正在运行 v2.0.2 或更旧版本的后端实例。
