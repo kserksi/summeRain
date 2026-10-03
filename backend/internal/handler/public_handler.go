@@ -15,7 +15,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
@@ -30,12 +29,6 @@ import (
 type sessionResolver interface {
 	Resolve(c *gin.Context) (userID uint64, role string, ok bool)
 }
-
-const (
-	v1DynamicMaximumResponseBytes    = 96 << 20
-	v1BackgroundMaximumResponseBytes = 32 << 20
-	v1GenerationTimeout              = 35 * time.Second
-)
 
 var (
 	errDynamicImageQueueFull  = errors.New("dynamic image generation queue is full")
@@ -153,6 +146,7 @@ type PublicHandler struct {
 	backgroundSemaphore chan struct{}
 	dynamicImages       dynamicImageGroup
 	backgroundInFlight  sync.Map
+	v1Limits            config.ImageV1Config
 }
 
 func NewPublicHandler(imageSvc *service.ImageService, storageCfg *config.StorageConfig, rdb *redis.Client, signer *imgproxy.Signer, imgproxyURL string, publicConfigService *service.PublicConfigService, publicStatsService *service.PublicStatsService, resolver sessionResolver, v1Limits config.ImageV1Config) *PublicHandler {
@@ -162,13 +156,14 @@ func NewPublicHandler(imageSvc *service.ImageService, storageCfg *config.Storage
 		rdb:                 rdb,
 		signer:              signer,
 		imgproxyURL:         imgproxyURL,
-		client:              &http.Client{Timeout: 30 * time.Second},
+		client:              &http.Client{Timeout: v1Limits.ImgproxyRequestTimeout},
 		publicConfigService: publicConfigService,
 		publicStatsService:  publicStatsService,
 		resolver:            resolver,
 		dynamicSemaphore:    make(chan struct{}, v1Limits.DynamicGenerationConcurrency),
 		dynamicCapacity:     make(chan struct{}, v1Limits.DynamicGenerationConcurrency+v1Limits.DynamicGenerationQueueDepth),
 		backgroundSemaphore: make(chan struct{}, v1Limits.BackgroundFormatConcurrency),
+		v1Limits:            v1Limits,
 	}
 }
 
@@ -647,7 +642,7 @@ func (h *PublicHandler) loadDynamicImage(waitCtx context.Context, path string) (
 	if leader {
 		select {
 		case h.dynamicCapacity <- struct{}{}:
-			generationCtx, cancel := context.WithTimeout(context.Background(), v1GenerationTimeout)
+			generationCtx, cancel := context.WithTimeout(context.Background(), h.v1Limits.GenerationTimeout)
 			h.dynamicImages.setLifecycle(call, cancel, func() { <-h.dynamicCapacity })
 			go h.runDynamicImageCall(generationCtx, cancel, key, call, path, wm)
 		default:
@@ -734,7 +729,7 @@ func (h *PublicHandler) generateDynamicImage(ctx context.Context, path string, w
 		if value := resp.Header.Get("Content-Type"); strings.HasPrefix(value, "image/") {
 			contentType = value
 		}
-		return copyGeneratedImage(file, resp.Body, v1DynamicMaximumResponseBytes)
+		return copyGeneratedImage(file, resp.Body, h.v1Limits.DynamicMaxResponseBytes)
 	})
 	if err != nil {
 		return generatedImageFile{}, err
@@ -861,7 +856,7 @@ func (h *PublicHandler) triggerBackgroundFormat(imageFile *model.ImageFile, form
 
 		path := fmt.Sprintf("/q:%d/f:%s/plain/%s", quality, format, source)
 		wm := h.publicConfigService.GetWatermark()
-		ctx, cancel := context.WithTimeout(context.Background(), v1GenerationTimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), h.v1Limits.GenerationTimeout)
 		defer cancel()
 		err = h.withWatermark(ctx, wm, func(wm *service.WatermarkConfig) error {
 			requestPath := applyWatermarkToV1Path(path, wm)
@@ -878,7 +873,7 @@ func (h *PublicHandler) triggerBackgroundFormat(imageFile *model.ImageFile, form
 			if resp.StatusCode != http.StatusOK {
 				return fmt.Errorf("imgproxy returned status %d", resp.StatusCode)
 			}
-			return copyGeneratedImage(file, resp.Body, v1BackgroundMaximumResponseBytes)
+			return copyGeneratedImage(file, resp.Body, h.v1Limits.BackgroundMaxResponseBytes)
 		})
 		if err != nil {
 			log.Printf("[bg-%s] imgproxy generation failed for %s: %v", format, variantKey, err)

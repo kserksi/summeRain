@@ -71,9 +71,14 @@ type StorageConfig struct {
 // transformation semaphores are sized once at startup, so changing these
 // values requires a restart.
 type ImageV1Config struct {
-	DynamicGenerationConcurrency int
-	DynamicGenerationQueueDepth  int
-	BackgroundFormatConcurrency  int
+	DynamicGenerationConcurrency  int
+	DynamicGenerationQueueDepth   int
+	BackgroundFormatConcurrency   int
+	DynamicMaxResponseBytes       int64
+	BackgroundMaxResponseBytes    int64
+	GenerationTimeout             time.Duration
+	ImgproxyRequestTimeout        time.Duration
+	MultipartMemoryBytes          int64
 }
 
 // ImageV2Config bounds the new client-processed upload pipeline. The values are
@@ -186,6 +191,11 @@ func Load() *Config {
 			DynamicGenerationConcurrency: getEnvInt("V1_DYNAMIC_GENERATION_CONCURRENCY", 2),
 			DynamicGenerationQueueDepth:  getEnvInt("V1_DYNAMIC_GENERATION_QUEUE_DEPTH", 4),
 			BackgroundFormatConcurrency:  getEnvInt("V1_BACKGROUND_FORMAT_CONCURRENCY", 1),
+			DynamicMaxResponseBytes:      getEnvInt64("V1_DYNAMIC_MAX_RESPONSE_BYTES", 100663296),
+			BackgroundMaxResponseBytes:   getEnvInt64("V1_BACKGROUND_MAX_RESPONSE_BYTES", 33554432),
+			GenerationTimeout:            getEnvDuration("V1_GENERATION_TIMEOUT", 35*time.Second),
+			ImgproxyRequestTimeout:       getEnvDuration("IMGPROXY_REQUEST_TIMEOUT", 30*time.Second),
+			MultipartMemoryBytes:         getEnvInt64("V1_MULTIPART_MEMORY_BYTES", 8388608),
 		},
 		ImageV2: ImageV2Config{
 			Enabled:                  getEnvBool("V2_UPLOAD_ENABLED", true),
@@ -310,6 +320,24 @@ func (c *Config) Validate() error {
 	if c.ImageV1.BackgroundFormatConcurrency < 1 || c.ImageV1.BackgroundFormatConcurrency > 8 {
 		return fmt.Errorf("V1_BACKGROUND_FORMAT_CONCURRENCY must be between 1 and 8")
 	}
+	if c.ImageV1.DynamicMaxResponseBytes < 1<<20 || c.ImageV1.DynamicMaxResponseBytes > 512<<20 {
+		return fmt.Errorf("V1_DYNAMIC_MAX_RESPONSE_BYTES must be between 1 MiB and 512 MiB")
+	}
+	if c.ImageV1.BackgroundMaxResponseBytes < 1<<20 || c.ImageV1.BackgroundMaxResponseBytes > 256<<20 {
+		return fmt.Errorf("V1_BACKGROUND_MAX_RESPONSE_BYTES must be between 1 MiB and 256 MiB")
+	}
+	if c.ImageV1.GenerationTimeout < 5*time.Second || c.ImageV1.GenerationTimeout > 5*time.Minute {
+		return fmt.Errorf("V1_GENERATION_TIMEOUT must be between 5s and 5m")
+	}
+	if c.ImageV1.ImgproxyRequestTimeout < 5*time.Second || c.ImageV1.ImgproxyRequestTimeout > 5*time.Minute {
+		return fmt.Errorf("IMGPROXY_REQUEST_TIMEOUT must be between 5s and 5m")
+	}
+	if c.ImageV1.ImgproxyRequestTimeout >= c.ImageV1.GenerationTimeout {
+		return fmt.Errorf("IMGPROXY_REQUEST_TIMEOUT must be less than V1_GENERATION_TIMEOUT")
+	}
+	if c.ImageV1.MultipartMemoryBytes < 1<<20 || c.ImageV1.MultipartMemoryBytes > 64<<20 {
+		return fmt.Errorf("V1_MULTIPART_MEMORY_BYTES must be between 1 MiB and 64 MiB")
+	}
 	if c.ImageV2.JobPollInterval < 100*time.Millisecond || c.ImageV2.JobPollInterval > time.Minute {
 		return fmt.Errorf("V2_JOB_POLL_INTERVAL must be between 100ms and 1m")
 	}
@@ -386,6 +414,8 @@ func (c *Config) EffectiveSummary() []string {
 			c.Database.MaxOpenConns, c.Database.MaxIdleConns, c.Database.ConnMaxLifetime, c.Redis.PoolSize),
 		fmt.Sprintf("v1_dynamic_generation_concurrency=%d v1_dynamic_generation_queue_depth=%d v1_background_format_concurrency=%d",
 			c.ImageV1.DynamicGenerationConcurrency, c.ImageV1.DynamicGenerationQueueDepth, c.ImageV1.BackgroundFormatConcurrency),
+		fmt.Sprintf("v1_dynamic_max_response_bytes=%d v1_background_max_response_bytes=%d v1_generation_timeout=%s imgproxy_request_timeout=%s v1_multipart_memory_bytes=%d",
+			c.ImageV1.DynamicMaxResponseBytes, c.ImageV1.BackgroundMaxResponseBytes, c.ImageV1.GenerationTimeout, c.ImageV1.ImgproxyRequestTimeout, c.ImageV1.MultipartMemoryBytes),
 		fmt.Sprintf("v2_global_upload_concurrency=%d v2_per_user_upload_concurrency=%d v2_watermark_concurrency=%d v2_max_active_sessions_per_user=%d",
 			c.ImageV2.GlobalUploadConcurrency, c.ImageV2.PerUserConcurrency, c.ImageV2.WatermarkConcurrency, c.ImageV2.MaxActiveSessionsPerUser),
 		fmt.Sprintf("max_json_body_bytes=%d v2_init_max_json_bytes=%d v2_batch_status_max_json_bytes=%d",

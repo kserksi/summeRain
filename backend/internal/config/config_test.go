@@ -113,6 +113,9 @@ func validConfigForTest(t *testing.T) *Config {
 		},
 		ImageV1: ImageV1Config{
 			DynamicGenerationConcurrency: 2, DynamicGenerationQueueDepth: 4, BackgroundFormatConcurrency: 1,
+			DynamicMaxResponseBytes: 96 << 20, BackgroundMaxResponseBytes: 32 << 20,
+			GenerationTimeout: 35 * time.Second, ImgproxyRequestTimeout: 30 * time.Second,
+			MultipartMemoryBytes: 8 << 20,
 		},
 		ImageV2: ImageV2Config{
 			MaxPartBytes: 20 << 20, MaxPixels: 50_000_000,

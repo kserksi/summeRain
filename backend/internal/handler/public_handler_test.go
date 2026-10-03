@@ -30,6 +30,11 @@ var testV1Limits = config.ImageV1Config{
 	DynamicGenerationConcurrency: 2,
 	DynamicGenerationQueueDepth:  4,
 	BackgroundFormatConcurrency:  1,
+	DynamicMaxResponseBytes:      96 << 20,
+	BackgroundMaxResponseBytes:   32 << 20,
+	GenerationTimeout:            35 * time.Second,
+	ImgproxyRequestTimeout:       30 * time.Second,
+	MultipartMemoryBytes:         8 << 20,
 }
 
 func TestPublicConfigExposesProviderAndSiteKeyWithoutSecret(t *testing.T) {

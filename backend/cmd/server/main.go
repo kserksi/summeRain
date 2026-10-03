@@ -119,7 +119,7 @@ func main() {
 		log.Fatalf("failed to set trusted proxies: %v", err)
 	}
 
-	r.MaxMultipartMemory = 8 << 20 // 8MB,跟前端单文件限制对齐,改的时候两边一起改
+	r.MaxMultipartMemory = cfg.ImageV1.MultipartMemoryBytes
 
 	r.Use(middleware.RequestID())
 	r.Use(gin.Recovery())
