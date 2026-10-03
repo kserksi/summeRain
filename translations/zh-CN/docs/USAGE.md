@@ -151,15 +151,19 @@ Compose 将 Redis 数据上限设为 `128mb`（容器上限 `192m`）并使用 `
 | 变量 | 默认值 | 说明 |
 |---|---|---|
 | `V2_UPLOAD_ENABLED` | `true` | 启用固定配方的 V2 会话式上传；关闭后才开放 V1 multipart 上传 |
-| `V2_RECIPE_VERSION` | `2.0.0` | 客户端与服务端必须完全一致的处理配方版本 |
-| `V2_MAX_PART_BYTES` | `67108864` | 单个 WebP 部件上限（64 MiB） |
-| `V2_MAX_PIXELS` | `50000000` | 源图与部件像素上限（50 MP） |
+| `IMAGE_RECIPE_FILE` | `/app/config/image-recipe.json` | 固定图片策略文件：变体尺寸、像素与体积上限、可接受的源格式 |
+| `IMAGE_RECIPE_REQUIRED` | `false` | 配方文件缺失时拒绝启动，而不是回退到内置默认配方 |
 | `V2_SESSION_TTL` | `30m` | 未完成上传会话的有效期 |
 | `V2_GLOBAL_UPLOAD_CONCURRENCY` | `8` | 单个后端实例同时接收部件的全局上限 |
 | `V2_PER_USER_UPLOAD_CONCURRENCY` | `4` | 单个用户同时接收部件的上限 |
 | `V2_WATERMARK_CONCURRENCY` | `2` | 发布/水印 Worker 数；3 核 4 GB 共享主机的上限 |
 | `V2_JOB_POLL_INTERVAL` | `1s` | 发布任务轮询间隔 |
 | `V2_JOB_LEASE` | `2m` | 发布任务租约；Worker 会续租，并使用 fencing token 提交 |
+
+图片配方属于服务端策略，而不是环境变量：变体尺寸、像素与体积上限、可接受的源格式，以及
+浏览器必须发送的 `recipe_version` 都来自 `IMAGE_RECIPE_FILE`。容器会把默认配方写入
+`/app/config/image-recipe.json`，二进制文件也内置了同一份默认配方。修改配方需要重启并提升
+`recipe_version`，配方永远不会通过管理员 API 暴露。
 
 浏览器上传流水线并发为 2，但图片解码与编码串行执行；活跃服务端会话限制为 4，为其他
 标签页和恢复请求预留后端容量。服务端发布与 imgproxy 默认均为 2 个 Worker，相同水印

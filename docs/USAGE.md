@@ -164,15 +164,22 @@ rate-limit or replay-protection state and preventing a container OOM.
 | Variable | Default | Description |
 |---|---|---|
 | `V2_UPLOAD_ENABLED` | `true` | Enables fixed-recipe V2 session uploads. V1 multipart upload is available only when this is disabled |
-| `V2_RECIPE_VERSION` | `2.0.0` | Processing recipe version that must match exactly between client and server |
-| `V2_MAX_PART_BYTES` | `67108864` | Maximum size of one WebP part (64 MiB) |
-| `V2_MAX_PIXELS` | `50000000` | Source-image and part pixel limit (50 MP) |
+| `IMAGE_RECIPE_FILE` | `/app/config/image-recipe.json` | Fixed image policy file: variant geometry, pixel and byte limits, and accepted source formats |
+| `IMAGE_RECIPE_REQUIRED` | `false` | Refuse to start when the recipe file is missing instead of falling back to the embedded default |
 | `V2_SESSION_TTL` | `30m` | Lifetime of an unfinished upload session |
 | `V2_GLOBAL_UPLOAD_CONCURRENCY` | `8` | Global concurrent part-receive limit for one backend instance |
 | `V2_PER_USER_UPLOAD_CONCURRENCY` | `4` | Concurrent part-receive limit for one user |
 | `V2_WATERMARK_CONCURRENCY` | `2` | Publication/watermark worker count; the upper bound for a shared 3-core, 4 GB host |
 | `V2_JOB_POLL_INTERVAL` | `1s` | Publication-job polling interval |
 | `V2_JOB_LEASE` | `2m` | Publication-job lease; workers renew it and commit with a fencing token |
+
+The image recipe is server-side policy, not an environment variable: variant
+geometry, the pixel and byte limits, the accepted source formats, and the
+`recipe_version` the browser must send all come from `IMAGE_RECIPE_FILE`. The
+container bakes the default at `/app/config/image-recipe.json` and the binary
+embeds the same default. Changing the recipe requires a restart and a
+`recipe_version` bump, and the recipe is never exposed through the
+administrator API.
 
 The browser upload pipeline has concurrency 2, while image decoding and encoding
 remain serial. The active server-side session limit is 4, leaving backend
