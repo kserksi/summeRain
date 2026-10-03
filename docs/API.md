@@ -322,12 +322,36 @@ edge of 2048 at Q80. The server receives and validates complete WebP containers
 while streaming and applies a watermark only to the final `publish` asset in
 the background.
 
-1. `GET /api/v1/uploads/recipe` (authentication required): returns the active recipe, part limits, pixel limit, and session TTL. `v2_enabled` is the capability switch for new uploads. When it is `false`, the Web client skips local preprocessing and uses V1 multipart upload.
+1. `GET /api/v1/uploads/recipe` (authentication required): returns the active recipe, part limits, pixel limit, and session TTL. Recent releases also return advisory client hints (`max_source_bytes`, `client_pipeline_concurrency`, `client_active_session_concurrency`, `client_max_native_concurrency`, and `supported_source_mime_types`); older clients ignore the extra keys and the server still validates every request independently. `v2_enabled` is the capability switch for new uploads. When it is `false`, the Web client skips local preprocessing and uses V1 multipart upload.
 2. `POST /api/v1/uploads/` (authentication and CSRF required): creates a session. Send an `Idempotency-Key` of at most 64 characters. A key can replay only an identical manifest.
 3. `PUT /api/v1/uploads/:uploadID/parts/:kind` (authentication and CSRF required): uploads the raw `image/webp` request body to the response's `put_url`. `Content-Length`, SHA-256, dimensions, and the complete RIFF container must match the manifest.
 4. `POST /api/v1/uploads/:uploadID/complete` (authentication and CSRF required): atomically promotes `master`, `gallery`, and `admin`, then creates a durable publication job that produces `publish` from `publish_source`.
 5. `POST /api/v1/uploads/status` (authentication and CSRF required): queries 1-100 `upload_ids` in a batch. Missing or unauthorized IDs produce a uniform 404 without partial results.
 6. `GET /api/v1/uploads/:uploadID` (authentication required): queries one status. `DELETE` on the same path can cancel a session that has not entered processing.
+
+**Recipe response example**
+
+```json
+{
+  "v2_enabled": true,
+  "pipeline_version": 2,
+  "recipe_version": "2.0.0",
+  "max_part_bytes": 67108864,
+  "max_pixels": 50000000,
+  "session_ttl_ms": 1800000,
+  "variants": [
+    { "kind": "master", "quality": 80, "fit": "original" },
+    { "kind": "gallery", "width": 400, "height": 400, "quality": 60, "fit": "cover" },
+    { "kind": "admin", "width": 120, "height": 160, "quality": 60, "fit": "cover" },
+    { "kind": "publish_source", "long_edge": 2048, "quality": 80, "fit": "contain" }
+  ],
+  "max_source_bytes": 15728640,
+  "client_pipeline_concurrency": 2,
+  "client_active_session_concurrency": 4,
+  "client_max_native_concurrency": 2,
+  "supported_source_mime_types": ["image/jpeg", "image/png", "image/bmp", "image/webp", "image/avif"]
+}
+```
 
 **Manifest example**
 

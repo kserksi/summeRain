@@ -14,6 +14,7 @@
 * [发布与标签管理](docs/RELEASING.md)
 
 ## 发布说明
+* [V2.0.9](docs/releases/v2.0.9.md)
 * [V2.0.8](docs/releases/v2.0.8.md)
 * [V2.0.7](docs/releases/v2.0.7.md)
 

@@ -315,12 +315,36 @@ V2 は既定で有効です。ブラウザーは静止画の JPG/JPEG、PNG、BM
 `publish_source` は長辺 2048 で Q80 です。サーバーはストリーミング中に完全な WebP コンテナーを
 受信して検証し、バックグラウンドで最終 `publish` アセットだけに透かしを適用します。
 
-1. `GET /api/v1/uploads/recipe`（認証必須）：現在のレシピ、パート上限、ピクセル上限、セッション TTL を返します。`v2_enabled` は新規アップロードの機能スイッチです。`false` の場合、Web クライアントはローカル前処理を省略して V1 multipart アップロードを使用します。
+1. `GET /api/v1/uploads/recipe`（認証必須）：現在のレシピ、パート上限、ピクセル上限、セッション TTL を返します。新しいリリースではクライアント向けヒント（`max_source_bytes`、`client_pipeline_concurrency`、`client_active_session_concurrency`、`client_max_native_concurrency`、`supported_source_mime_types`）も返しますが、古いクライアントは余分なキーを無視し、サーバーは引き続きすべてのリクエストを独立して検証します。`v2_enabled` は新規アップロードの機能スイッチです。`false` の場合、Web クライアントはローカル前処理を省略して V1 multipart アップロードを使用します。
 2. `POST /api/v1/uploads/`（認証と CSRF が必須）：セッションを作成します。64 文字以内の `Idempotency-Key` を送信してください。同じキーで再送できるのは、完全に同一のマニフェストだけです。
 3. `PUT /api/v1/uploads/:uploadID/parts/:kind`（認証と CSRF が必須）：レスポンスの `put_url` へ未加工の `image/webp` リクエスト本文をアップロードします。`Content-Length`、SHA-256、寸法、完全な RIFF コンテナーがマニフェストと一致する必要があります。
 4. `POST /api/v1/uploads/:uploadID/complete`（認証と CSRF が必須）：`master`、`gallery`、`admin` をアトミックに昇格させ、`publish_source` から `publish` を生成する永続的な公開ジョブを作成します。
 5. `POST /api/v1/uploads/status`（認証と CSRF が必須）：1～100 個の `upload_ids` を一括照会します。存在しない、または権限のない ID は部分結果を返さず、一律 404 になります。
 6. `GET /api/v1/uploads/:uploadID`（認証必須）：1 件の状態を照会します。同じパスへの `DELETE` で、処理段階に入っていないセッションをキャンセルできます。
+
+**レシピ応答例**
+
+```json
+{
+  "v2_enabled": true,
+  "pipeline_version": 2,
+  "recipe_version": "2.0.0",
+  "max_part_bytes": 67108864,
+  "max_pixels": 50000000,
+  "session_ttl_ms": 1800000,
+  "variants": [
+    { "kind": "master", "quality": 80, "fit": "original" },
+    { "kind": "gallery", "width": 400, "height": 400, "quality": 60, "fit": "cover" },
+    { "kind": "admin", "width": 120, "height": 160, "quality": 60, "fit": "cover" },
+    { "kind": "publish_source", "long_edge": 2048, "quality": 80, "fit": "contain" }
+  ],
+  "max_source_bytes": 15728640,
+  "client_pipeline_concurrency": 2,
+  "client_active_session_concurrency": 4,
+  "client_max_native_concurrency": 2,
+  "supported_source_mime_types": ["image/jpeg", "image/png", "image/bmp", "image/webp", "image/avif"]
+}
+```
 
 **マニフェスト例**
 

@@ -172,6 +172,10 @@ Compose は Redis のデータ上限を `128mb`、コンテナ上限を `192m` �
 | `V2_WATERMARK_CONCURRENCY` | `2` | 公開/ウォーターマークワーカー数。3 コア、4 GB の共有ホストにおける上限 |
 | `V2_JOB_POLL_INTERVAL` | `1s` | 公開ジョブのポーリング間隔 |
 | `V2_JOB_LEASE` | `2m` | 公開ジョブのリース。ワーカーは更新し、フェンシングトークンを使ってコミット |
+| `CLIENT_UPLOAD_PIPELINE_CONCURRENCY` | `2` | `/api/v1/uploads/recipe` が返すブラウザー側アップロードパイプラインの並行数のヒント |
+| `CLIENT_ACTIVE_SESSION_CONCURRENCY` | `4` | 同時アップロードセッション数のヒント。`V2_MAX_ACTIVE_SESSIONS_PER_USER` を超えてはならない |
+| `CLIENT_MAX_NATIVE_CONCURRENCY` | `2` | ネイティブ（Canvas/Pica）処理の並行数のヒント |
+| `V2_MAX_SOURCE_BYTES` | `15728640` | 処理前にブラウザーが受け付けるソースファイルの上限（15 MiB） |
 
 画像レシピはサーバー側のポリシーであり、環境変数ではありません。バリアントの寸法、
 ピクセルとサイズの上限、受け付けるソース形式、そしてブラウザーが送信すべき

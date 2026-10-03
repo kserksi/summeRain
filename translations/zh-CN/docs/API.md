@@ -269,12 +269,36 @@ X-CSRF-Token: <__Host-csrf_token cookie 的值>
 
 V2 默认启用。浏览器接受静态 JPG/JPEG、PNG、BMP、WebP、AVIF，拒绝动图，并在客户端生成四份 WebP：`master`（原分辨率，Q80）、`gallery`（400x400 cover，Q60）、`admin`（120x160 cover，Q60，在 Image Management 中以 CSS 60x80 显示，提供 2x 像素密度）和 `publish_source`（最长边 2048，Q80）。服务端流式接收、校验完整 WebP 容器，并仅在后台为最终 `publish` 产物应用水印。
 
-1. `GET /api/v1/uploads/recipe` 🔒：获取当前配方、部件上限、像素上限和会话 TTL。响应中的 `v2_enabled` 是新建上传的能力开关；为 `false` 时 Web 客户端不执行本地预处理，改走 V1 multipart。
+1. `GET /api/v1/uploads/recipe` 🔒：获取当前配方、部件上限、像素上限和会话 TTL。较新版本还会返回客户端提示字段（`max_source_bytes`、`client_pipeline_concurrency`、`client_active_session_concurrency`、`client_max_native_concurrency` 与 `supported_source_mime_types`）；旧客户端会忽略这些额外键，服务端仍独立校验每次请求。响应中的 `v2_enabled` 是新建上传的能力开关；为 `false` 时 Web 客户端不执行本地预处理，改走 V1 multipart。
 2. `POST /api/v1/uploads/` 🔒 CSRF：创建会话。必须发送最长 64 字符的 `Idempotency-Key`；同一 key 只能重放完全相同的清单。
 3. `PUT /api/v1/uploads/:uploadID/parts/:kind` 🔒 CSRF：按响应的 `put_url` 上传 `image/webp` 原始请求体；`Content-Length`、SHA-256、尺寸和完整 RIFF 容器必须与清单一致。
 4. `POST /api/v1/uploads/:uploadID/complete` 🔒 CSRF：原子固化 `master`、`gallery`、`admin`，并创建从 `publish_source` 生成 `publish` 的持久化发布任务。
 5. `POST /api/v1/uploads/status` 🔒 CSRF：批量查询 1-100 个 `upload_ids`；缺失或无权 ID 返回统一 404，不返回部分结果。
 6. `GET /api/v1/uploads/:uploadID` 🔒：查询单个状态。`DELETE` 同一路径可取消尚未进入处理阶段的会话。
+
+**配方响应示例**
+
+```json
+{
+  "v2_enabled": true,
+  "pipeline_version": 2,
+  "recipe_version": "2.0.0",
+  "max_part_bytes": 67108864,
+  "max_pixels": 50000000,
+  "session_ttl_ms": 1800000,
+  "variants": [
+    { "kind": "master", "quality": 80, "fit": "original" },
+    { "kind": "gallery", "width": 400, "height": 400, "quality": 60, "fit": "cover" },
+    { "kind": "admin", "width": 120, "height": 160, "quality": 60, "fit": "cover" },
+    { "kind": "publish_source", "long_edge": 2048, "quality": 80, "fit": "contain" }
+  ],
+  "max_source_bytes": 15728640,
+  "client_pipeline_concurrency": 2,
+  "client_active_session_concurrency": 4,
+  "client_max_native_concurrency": 2,
+  "supported_source_mime_types": ["image/jpeg", "image/png", "image/bmp", "image/webp", "image/avif"]
+}
+```
 
 **创建清单示例**
 

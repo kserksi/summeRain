@@ -172,6 +172,10 @@ rate-limit or replay-protection state and preventing a container OOM.
 | `V2_WATERMARK_CONCURRENCY` | `2` | Publication/watermark worker count; the upper bound for a shared 3-core, 4 GB host |
 | `V2_JOB_POLL_INTERVAL` | `1s` | Publication-job polling interval |
 | `V2_JOB_LEASE` | `2m` | Publication-job lease; workers renew it and commit with a fencing token |
+| `CLIENT_UPLOAD_PIPELINE_CONCURRENCY` | `2` | Advisory browser upload-pipeline concurrency returned by `/api/v1/uploads/recipe` |
+| `CLIENT_ACTIVE_SESSION_CONCURRENCY` | `4` | Advisory concurrent upload-session hint; must not exceed `V2_MAX_ACTIVE_SESSIONS_PER_USER` |
+| `CLIENT_MAX_NATIVE_CONCURRENCY` | `2` | Advisory native (Canvas/Pica) processor concurrency hint |
+| `V2_MAX_SOURCE_BYTES` | `15728640` | Source file size the browser accepts before processing (15 MiB) |
 
 The image recipe is server-side policy, not an environment variable: variant
 geometry, the pixel and byte limits, the accepted source formats, and the

@@ -159,6 +159,10 @@ Compose 将 Redis 数据上限设为 `128mb`（容器上限 `192m`）并使用 `
 | `V2_WATERMARK_CONCURRENCY` | `2` | 发布/水印 Worker 数；3 核 4 GB 共享主机的上限 |
 | `V2_JOB_POLL_INTERVAL` | `1s` | 发布任务轮询间隔 |
 | `V2_JOB_LEASE` | `2m` | 发布任务租约；Worker 会续租，并使用 fencing token 提交 |
+| `CLIENT_UPLOAD_PIPELINE_CONCURRENCY` | `2` | `/api/v1/uploads/recipe` 下发的浏览器上传流水线并发提示 |
+| `CLIENT_ACTIVE_SESSION_CONCURRENCY` | `4` | 并发上传会话提示值，不得超过 `V2_MAX_ACTIVE_SESSIONS_PER_USER` |
+| `CLIENT_MAX_NATIVE_CONCURRENCY` | `2` | 原生（Canvas/Pica）处理器并发提示 |
+| `V2_MAX_SOURCE_BYTES` | `15728640` | 处理前浏览器接受的源文件体积上限（15 MiB） |
 
 图片配方属于服务端策略，而不是环境变量：变体尺寸、像素与体积上限、可接受的源格式，以及
 浏览器必须发送的 `recipe_version` 都来自 `IMAGE_RECIPE_FILE`。容器会把默认配方写入
