@@ -107,6 +107,12 @@ func (s *V2UploadService) Recipe() V2RecipeResponse {
 		MaxPartBytes:    s.recipe.MaxPartBytes,
 		MaxPixels:       s.recipe.MaxPixels,
 		SessionTTLMs:    s.cfg.ImageV2.SessionTTL.Milliseconds(),
+
+		MaxSourceBytes:                 s.cfg.ImageV2.MaxSourceBytes,
+		ClientPipelineConcurrency:      s.cfg.ImageV2.ClientPipelineConcurrency,
+		ClientActiveSessionConcurrency: s.cfg.ImageV2.ClientActiveSessionConcurrency,
+		ClientMaxNativeConcurrency:     s.cfg.ImageV2.ClientMaxNativeConcurrency,
+		SupportedSourceMIMETypes:       append([]string(nil), s.recipe.SourceMIMETypes...),
 	}
 	for _, variant := range s.recipe.Variants {
 		response.Variants = append(response.Variants, struct {

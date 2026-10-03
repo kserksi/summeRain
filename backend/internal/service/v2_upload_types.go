@@ -101,6 +101,13 @@ type V2RecipeResponse struct {
 		Quality  uint8  `json:"quality"`
 		Fit      string `json:"fit"`
 	} `json:"variants"`
+	// Advisory client hints. Older clients ignore these keys; the server
+	// still validates every request on its own.
+	MaxSourceBytes                 int64    `json:"max_source_bytes"`
+	ClientPipelineConcurrency      int      `json:"client_pipeline_concurrency"`
+	ClientActiveSessionConcurrency int      `json:"client_active_session_concurrency"`
+	ClientMaxNativeConcurrency     int      `json:"client_max_native_concurrency"`
+	SupportedSourceMIMETypes       []string `json:"supported_source_mime_types"`
 }
 
 func normalizeV2UploadIDs(req *V2BatchStatusRequest) ([]string, *errcode.AppError) {

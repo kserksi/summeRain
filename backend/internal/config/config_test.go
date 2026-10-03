@@ -121,6 +121,8 @@ func validConfigForTest(t *testing.T) *Config {
 			GlobalUploadConcurrency: 8, PerUserConcurrency: 4, WatermarkConcurrency: 1,
 			MaxActiveSessionsPerUser: 8, InitMaxJSONBytes: 64 << 10, BatchStatusMaxJSONBytes: 16 << 10,
 			SessionTTL: 30 * time.Minute, JobPollInterval: time.Second, JobLease: 2 * time.Minute,
+			ClientPipelineConcurrency: 2, ClientActiveSessionConcurrency: 4,
+			ClientMaxNativeConcurrency: 2, MaxSourceBytes: 15 << 20,
 		},
 		CDN: CDNConfig{
 			CloudflareAPIBaseURL: "https://api.cloudflare.com/client/v4",
@@ -140,6 +142,10 @@ func TestLoadStartupLimitDefaults(t *testing.T) {
 		"V1_DYNAMIC_GENERATION_CONCURRENCY",
 		"V1_DYNAMIC_GENERATION_QUEUE_DEPTH",
 		"V1_BACKGROUND_FORMAT_CONCURRENCY",
+		"CLIENT_UPLOAD_PIPELINE_CONCURRENCY",
+		"CLIENT_ACTIVE_SESSION_CONCURRENCY",
+		"CLIENT_MAX_NATIVE_CONCURRENCY",
+		"V2_MAX_SOURCE_BYTES",
 	} {
 		t.Setenv(key, "")
 	}
@@ -161,6 +167,12 @@ func TestLoadStartupLimitDefaults(t *testing.T) {
 	if cfg.ImageV1.DynamicGenerationConcurrency != 2 || cfg.ImageV1.DynamicGenerationQueueDepth != 4 || cfg.ImageV1.BackgroundFormatConcurrency != 1 {
 		t.Fatalf("V1 defaults = %#v, want concurrency 2, queue depth 4, background 1", cfg.ImageV1)
 	}
+	if cfg.ImageV2.ClientPipelineConcurrency != 2 || cfg.ImageV2.ClientActiveSessionConcurrency != 4 ||
+		cfg.ImageV2.ClientMaxNativeConcurrency != 2 || cfg.ImageV2.MaxSourceBytes != 15<<20 {
+		t.Fatalf("client hint defaults = %d/%d/%d/%d, want 2/4/2/%d",
+			cfg.ImageV2.ClientPipelineConcurrency, cfg.ImageV2.ClientActiveSessionConcurrency,
+			cfg.ImageV2.ClientMaxNativeConcurrency, cfg.ImageV2.MaxSourceBytes, 15<<20)
+	}
 }
 
 func TestLoadStartupLimitsFromEnvironment(t *testing.T) {
@@ -171,6 +183,10 @@ func TestLoadStartupLimitsFromEnvironment(t *testing.T) {
 	t.Setenv("V1_DYNAMIC_GENERATION_CONCURRENCY", "5")
 	t.Setenv("V1_DYNAMIC_GENERATION_QUEUE_DEPTH", "9")
 	t.Setenv("V1_BACKGROUND_FORMAT_CONCURRENCY", "2")
+	t.Setenv("CLIENT_UPLOAD_PIPELINE_CONCURRENCY", "3")
+	t.Setenv("CLIENT_ACTIVE_SESSION_CONCURRENCY", "2")
+	t.Setenv("CLIENT_MAX_NATIVE_CONCURRENCY", "4")
+	t.Setenv("V2_MAX_SOURCE_BYTES", "8388608")
 
 	cfg := Load()
 
@@ -185,6 +201,12 @@ func TestLoadStartupLimitsFromEnvironment(t *testing.T) {
 	}
 	if cfg.ImageV1.DynamicGenerationConcurrency != 5 || cfg.ImageV1.DynamicGenerationQueueDepth != 9 || cfg.ImageV1.BackgroundFormatConcurrency != 2 {
 		t.Fatalf("V1 limits = %#v", cfg.ImageV1)
+	}
+	if cfg.ImageV2.ClientPipelineConcurrency != 3 || cfg.ImageV2.ClientActiveSessionConcurrency != 2 ||
+		cfg.ImageV2.ClientMaxNativeConcurrency != 4 || cfg.ImageV2.MaxSourceBytes != 8388608 {
+		t.Fatalf("client hint limits = %d/%d/%d/%d, want 3/2/4/8388608",
+			cfg.ImageV2.ClientPipelineConcurrency, cfg.ImageV2.ClientActiveSessionConcurrency,
+			cfg.ImageV2.ClientMaxNativeConcurrency, cfg.ImageV2.MaxSourceBytes)
 	}
 }
 
@@ -221,10 +243,37 @@ func TestValidateStartupLimitBoundaries(t *testing.T) {
 			cfg.ImageV2.BatchStatusMaxJSONBytes = 2 << 10
 		}, wantErr: "must not exceed MAX_JSON_BODY_BYTES"},
 
-		{name: "active sessions lower bound accepted", mutate: func(cfg *Config) { cfg.ImageV2.MaxActiveSessionsPerUser = 1 }},
+		{name: "active sessions lower bound accepted", mutate: func(cfg *Config) {
+			cfg.ImageV2.MaxActiveSessionsPerUser = 1
+			cfg.ImageV2.ClientActiveSessionConcurrency = 1
+		}},
 		{name: "active sessions upper bound accepted", mutate: func(cfg *Config) { cfg.ImageV2.MaxActiveSessionsPerUser = 32 }},
 		{name: "active sessions zero", mutate: func(cfg *Config) { cfg.ImageV2.MaxActiveSessionsPerUser = 0 }, wantErr: "V2_MAX_ACTIVE_SESSIONS_PER_USER"},
 		{name: "active sessions too large", mutate: func(cfg *Config) { cfg.ImageV2.MaxActiveSessionsPerUser = 33 }, wantErr: "V2_MAX_ACTIVE_SESSIONS_PER_USER"},
+
+		{name: "client pipeline lower bound accepted", mutate: func(cfg *Config) { cfg.ImageV2.ClientPipelineConcurrency = 1 }},
+		{name: "client pipeline upper bound accepted", mutate: func(cfg *Config) { cfg.ImageV2.ClientPipelineConcurrency = 8 }},
+		{name: "client pipeline zero", mutate: func(cfg *Config) { cfg.ImageV2.ClientPipelineConcurrency = 0 }, wantErr: "CLIENT_UPLOAD_PIPELINE_CONCURRENCY"},
+		{name: "client pipeline too large", mutate: func(cfg *Config) { cfg.ImageV2.ClientPipelineConcurrency = 9 }, wantErr: "CLIENT_UPLOAD_PIPELINE_CONCURRENCY"},
+
+		{name: "client active sessions lower bound accepted", mutate: func(cfg *Config) { cfg.ImageV2.ClientActiveSessionConcurrency = 1 }},
+		{name: "client active sessions equal to server limit accepted", mutate: func(cfg *Config) {
+			cfg.ImageV2.ClientActiveSessionConcurrency = cfg.ImageV2.MaxActiveSessionsPerUser
+		}},
+		{name: "client active sessions above server limit", mutate: func(cfg *Config) {
+			cfg.ImageV2.ClientActiveSessionConcurrency = cfg.ImageV2.MaxActiveSessionsPerUser + 1
+		}, wantErr: "CLIENT_ACTIVE_SESSION_CONCURRENCY"},
+		{name: "client active sessions zero", mutate: func(cfg *Config) { cfg.ImageV2.ClientActiveSessionConcurrency = 0 }, wantErr: "CLIENT_ACTIVE_SESSION_CONCURRENCY"},
+
+		{name: "client native lower bound accepted", mutate: func(cfg *Config) { cfg.ImageV2.ClientMaxNativeConcurrency = 1 }},
+		{name: "client native upper bound accepted", mutate: func(cfg *Config) { cfg.ImageV2.ClientMaxNativeConcurrency = 4 }},
+		{name: "client native zero", mutate: func(cfg *Config) { cfg.ImageV2.ClientMaxNativeConcurrency = 0 }, wantErr: "CLIENT_MAX_NATIVE_CONCURRENCY"},
+		{name: "client native too large", mutate: func(cfg *Config) { cfg.ImageV2.ClientMaxNativeConcurrency = 5 }, wantErr: "CLIENT_MAX_NATIVE_CONCURRENCY"},
+
+		{name: "max source bytes lower bound accepted", mutate: func(cfg *Config) { cfg.ImageV2.MaxSourceBytes = 1 << 20 }},
+		{name: "max source bytes upper bound accepted", mutate: func(cfg *Config) { cfg.ImageV2.MaxSourceBytes = 64 << 20 }},
+		{name: "max source bytes too small", mutate: func(cfg *Config) { cfg.ImageV2.MaxSourceBytes = (1 << 20) - 1 }, wantErr: "V2_MAX_SOURCE_BYTES"},
+		{name: "max source bytes too large", mutate: func(cfg *Config) { cfg.ImageV2.MaxSourceBytes = (64 << 20) + 1 }, wantErr: "V2_MAX_SOURCE_BYTES"},
 
 		{name: "v1 concurrency lower bound accepted", mutate: func(cfg *Config) { cfg.ImageV1.DynamicGenerationConcurrency = 1 }},
 		{name: "v1 concurrency upper bound accepted", mutate: func(cfg *Config) { cfg.ImageV1.DynamicGenerationConcurrency = 16 }},

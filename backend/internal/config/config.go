@@ -96,6 +96,14 @@ type ImageV2Config struct {
 	BatchStatusMaxJSONBytes  int64
 	JobPollInterval          time.Duration
 	JobLease                 time.Duration
+
+	// Client hints are advisory values returned by /api/v1/uploads/recipe so
+	// the browser can size its own pipeline. The server still validates every
+	// request independently and never trusts these values.
+	ClientPipelineConcurrency      int
+	ClientActiveSessionConcurrency int
+	ClientMaxNativeConcurrency     int
+	MaxSourceBytes                 int64
 }
 
 // CDNConfig controls durable outbox delivery. Cloudflare is preferred when
@@ -196,16 +204,20 @@ func Load() *Config {
 			MultipartMemoryBytes:         getEnvInt64("V1_MULTIPART_MEMORY_BYTES", 8388608),
 		},
 		ImageV2: ImageV2Config{
-			Enabled:                  getEnvBool("V2_UPLOAD_ENABLED", true),
-			SessionTTL:               getEnvDuration("V2_SESSION_TTL", 30*time.Minute),
-			GlobalUploadConcurrency:  getEnvInt("V2_GLOBAL_UPLOAD_CONCURRENCY", 8),
-			PerUserConcurrency:       getEnvInt("V2_PER_USER_UPLOAD_CONCURRENCY", 4),
-			WatermarkConcurrency:     getEnvInt("V2_WATERMARK_CONCURRENCY", 2),
-			MaxActiveSessionsPerUser: getEnvInt("V2_MAX_ACTIVE_SESSIONS_PER_USER", 8),
-			InitMaxJSONBytes:         getEnvInt64("V2_INIT_MAX_JSON_BYTES", 64<<10),
-			BatchStatusMaxJSONBytes:  getEnvInt64("V2_BATCH_STATUS_MAX_JSON_BYTES", 16<<10),
-			JobPollInterval:          getEnvDuration("V2_JOB_POLL_INTERVAL", time.Second),
-			JobLease:                 getEnvDuration("V2_JOB_LEASE", 2*time.Minute),
+			Enabled:                        getEnvBool("V2_UPLOAD_ENABLED", true),
+			SessionTTL:                     getEnvDuration("V2_SESSION_TTL", 30*time.Minute),
+			GlobalUploadConcurrency:        getEnvInt("V2_GLOBAL_UPLOAD_CONCURRENCY", 8),
+			PerUserConcurrency:             getEnvInt("V2_PER_USER_UPLOAD_CONCURRENCY", 4),
+			WatermarkConcurrency:           getEnvInt("V2_WATERMARK_CONCURRENCY", 2),
+			MaxActiveSessionsPerUser:       getEnvInt("V2_MAX_ACTIVE_SESSIONS_PER_USER", 8),
+			InitMaxJSONBytes:               getEnvInt64("V2_INIT_MAX_JSON_BYTES", 64<<10),
+			BatchStatusMaxJSONBytes:        getEnvInt64("V2_BATCH_STATUS_MAX_JSON_BYTES", 16<<10),
+			JobPollInterval:                getEnvDuration("V2_JOB_POLL_INTERVAL", time.Second),
+			JobLease:                       getEnvDuration("V2_JOB_LEASE", 2*time.Minute),
+			ClientPipelineConcurrency:      getEnvInt("CLIENT_UPLOAD_PIPELINE_CONCURRENCY", 2),
+			ClientActiveSessionConcurrency: getEnvInt("CLIENT_ACTIVE_SESSION_CONCURRENCY", 4),
+			ClientMaxNativeConcurrency:     getEnvInt("CLIENT_MAX_NATIVE_CONCURRENCY", 2),
+			MaxSourceBytes:                 getEnvInt64("V2_MAX_SOURCE_BYTES", 15<<20),
 		},
 		CDN: CDNConfig{
 			PublicBaseURL:          getEnv("CDN_PUBLIC_BASE_URL", ""),
@@ -284,6 +296,18 @@ func (c *Config) Validate() error {
 	}
 	if c.ImageV2.MaxActiveSessionsPerUser < 1 || c.ImageV2.MaxActiveSessionsPerUser > 32 {
 		return fmt.Errorf("V2_MAX_ACTIVE_SESSIONS_PER_USER must be between 1 and 32")
+	}
+	if c.ImageV2.ClientPipelineConcurrency < 1 || c.ImageV2.ClientPipelineConcurrency > 8 {
+		return fmt.Errorf("CLIENT_UPLOAD_PIPELINE_CONCURRENCY must be between 1 and 8")
+	}
+	if c.ImageV2.ClientActiveSessionConcurrency < 1 || c.ImageV2.ClientActiveSessionConcurrency > c.ImageV2.MaxActiveSessionsPerUser {
+		return fmt.Errorf("CLIENT_ACTIVE_SESSION_CONCURRENCY must be between 1 and V2_MAX_ACTIVE_SESSIONS_PER_USER")
+	}
+	if c.ImageV2.ClientMaxNativeConcurrency < 1 || c.ImageV2.ClientMaxNativeConcurrency > 4 {
+		return fmt.Errorf("CLIENT_MAX_NATIVE_CONCURRENCY must be between 1 and 4")
+	}
+	if c.ImageV2.MaxSourceBytes < 1<<20 || c.ImageV2.MaxSourceBytes > 64<<20 {
+		return fmt.Errorf("V2_MAX_SOURCE_BYTES must be between 1 MiB and 64 MiB")
 	}
 	if c.Server.MaxJSONBodyBytes < 1<<10 || c.Server.MaxJSONBodyBytes > 16<<20 {
 		return fmt.Errorf("MAX_JSON_BODY_BYTES must be between 1 KiB and 16 MiB")
@@ -407,6 +431,8 @@ func (c *Config) EffectiveSummary() []string {
 			c.ImageV1.DynamicMaxResponseBytes, c.ImageV1.BackgroundMaxResponseBytes, c.ImageV1.GenerationTimeout, c.ImageV1.ImgproxyRequestTimeout, c.ImageV1.MultipartMemoryBytes),
 		fmt.Sprintf("v2_global_upload_concurrency=%d v2_per_user_upload_concurrency=%d v2_watermark_concurrency=%d v2_max_active_sessions_per_user=%d",
 			c.ImageV2.GlobalUploadConcurrency, c.ImageV2.PerUserConcurrency, c.ImageV2.WatermarkConcurrency, c.ImageV2.MaxActiveSessionsPerUser),
+		fmt.Sprintf("client_upload_pipeline_concurrency=%d client_active_session_concurrency=%d client_max_native_concurrency=%d v2_max_source_bytes=%d",
+			c.ImageV2.ClientPipelineConcurrency, c.ImageV2.ClientActiveSessionConcurrency, c.ImageV2.ClientMaxNativeConcurrency, c.ImageV2.MaxSourceBytes),
 		fmt.Sprintf("max_json_body_bytes=%d v2_init_max_json_bytes=%d v2_batch_status_max_json_bytes=%d",
 			c.Server.MaxJSONBodyBytes, c.ImageV2.InitMaxJSONBytes, c.ImageV2.BatchStatusMaxJSONBytes),
 	}

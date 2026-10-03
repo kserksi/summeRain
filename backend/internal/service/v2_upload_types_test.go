@@ -4,6 +4,7 @@
 package service
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -87,7 +88,11 @@ func TestV2RecipeReportsWhetherNewSessionsAreEnabled(t *testing.T) {
 func TestV2RecipeResponseFollowsRecipeValues(t *testing.T) {
 	recipe := testV2Recipe()
 	svc := &V2UploadService{
-		cfg:    &config.Config{ImageV2: config.ImageV2Config{Enabled: true, SessionTTL: 30 * time.Minute}},
+		cfg: &config.Config{ImageV2: config.ImageV2Config{
+			Enabled: true, SessionTTL: 30 * time.Minute,
+			MaxSourceBytes: 15 << 20, ClientPipelineConcurrency: 2,
+			ClientActiveSessionConcurrency: 4, ClientMaxNativeConcurrency: 2,
+		}},
 		recipe: recipe,
 	}
 	response := svc.Recipe()
@@ -106,6 +111,15 @@ func TestV2RecipeResponseFollowsRecipeValues(t *testing.T) {
 	if len(response.Variants) != len(recipe.Variants) {
 		t.Fatalf("variant count = %d, want %d", len(response.Variants), len(recipe.Variants))
 	}
+	if response.MaxSourceBytes != 15<<20 || response.ClientPipelineConcurrency != 2 ||
+		response.ClientActiveSessionConcurrency != 4 || response.ClientMaxNativeConcurrency != 2 {
+		t.Fatalf("client hints = %d/%d/%d/%d, want 15728640/2/4/2",
+			response.MaxSourceBytes, response.ClientPipelineConcurrency,
+			response.ClientActiveSessionConcurrency, response.ClientMaxNativeConcurrency)
+	}
+	if strings.Join(response.SupportedSourceMIMETypes, ",") != strings.Join(recipe.SourceMIMETypes, ",") {
+		t.Fatalf("source MIME list = %v, want %v", response.SupportedSourceMIMETypes, recipe.SourceMIMETypes)
+	}
 	galleryFound := false
 	for _, variant := range response.Variants {
 		if variant.Kind != model.ImageVariantKindGallery {
@@ -115,6 +129,74 @@ func TestV2RecipeResponseFollowsRecipeValues(t *testing.T) {
 	}
 	if !galleryFound {
 		t.Fatalf("gallery variant does not mirror the recipe: %#v", response.Variants)
+	}
+}
+
+// TestV2RecipeResponseKeepsLegacyFieldsAndAddsClientHints pins the wire
+// contract: older clients must keep parsing every legacy key, and the Phase 4
+// client hints must be present with the configured values.
+func TestV2RecipeResponseKeepsLegacyFieldsAndAddsClientHints(t *testing.T) {
+	recipe := testV2Recipe()
+	svc := &V2UploadService{
+		cfg: &config.Config{ImageV2: config.ImageV2Config{
+			Enabled: true, SessionTTL: 30 * time.Minute,
+			MaxSourceBytes: 15 << 20, ClientPipelineConcurrency: 2,
+			ClientActiveSessionConcurrency: 4, ClientMaxNativeConcurrency: 2,
+		}},
+		recipe: recipe,
+	}
+	encoded, err := json.Marshal(svc.Recipe())
+	if err != nil {
+		t.Fatalf("marshal recipe response: %v", err)
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(encoded, &fields); err != nil {
+		t.Fatalf("decode recipe response: %v", err)
+	}
+
+	legacy := map[string]string{
+		"v2_enabled":       "true",
+		"pipeline_version": "2",
+		"recipe_version":   `"2.0.0"`,
+		"max_part_bytes":   "20971520",
+		"max_pixels":       "50000000",
+		"session_ttl_ms":   "1800000",
+	}
+	for key, want := range legacy {
+		got, ok := fields[key]
+		if !ok {
+			t.Fatalf("legacy key %q missing from %s", key, encoded)
+		}
+		if string(got) != want {
+			t.Fatalf("%s = %s, want %s", key, got, want)
+		}
+	}
+	variants, ok := fields["variants"]
+	if !ok || string(variants) == "null" || string(variants) == "[]" {
+		t.Fatalf("variants missing or empty: %s", encoded)
+	}
+
+	hints := map[string]string{
+		"max_source_bytes":                  "15728640",
+		"client_pipeline_concurrency":       "2",
+		"client_active_session_concurrency": "4",
+		"client_max_native_concurrency":     "2",
+	}
+	for key, want := range hints {
+		got, ok := fields[key]
+		if !ok {
+			t.Fatalf("client hint %q missing from %s", key, encoded)
+		}
+		if string(got) != want {
+			t.Fatalf("%s = %s, want %s", key, got, want)
+		}
+	}
+	var mimeTypes []string
+	if err := json.Unmarshal(fields["supported_source_mime_types"], &mimeTypes); err != nil {
+		t.Fatalf("decode source MIME list: %v", err)
+	}
+	if len(mimeTypes) != len(recipe.SourceMIMETypes) {
+		t.Fatalf("source MIME list = %v, want %v", mimeTypes, recipe.SourceMIMETypes)
 	}
 }
 

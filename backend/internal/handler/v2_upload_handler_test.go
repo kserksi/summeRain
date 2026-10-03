@@ -18,6 +18,51 @@ import (
 	"github.com/kserksi/summerain/internal/service"
 )
 
+type recipeServiceStub struct {
+	*service.V2UploadService
+	result service.V2RecipeResponse
+}
+
+func (s *recipeServiceStub) Recipe() service.V2RecipeResponse { return s.result }
+
+func TestV2UploadHandlerRecipeReturnsClientHints(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	stub := &recipeServiceStub{result: service.V2RecipeResponse{
+		V2Enabled: true, PipelineVersion: 2, RecipeVersion: "2.0.0",
+		MaxPartBytes: 64 << 20, MaxPixels: 50_000_000, SessionTTLMs: 1_800_000,
+		MaxSourceBytes: 15 << 20, ClientPipelineConcurrency: 2,
+		ClientActiveSessionConcurrency: 4, ClientMaxNativeConcurrency: 2,
+		SupportedSourceMIMETypes: []string{"image/jpeg", "image/png"},
+	}}
+	handler := &V2UploadHandler{service: stub}
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodGet, "/api/v1/uploads/recipe", nil)
+
+	handler.Recipe(ctx)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	var body struct {
+		Code int                      `json:"code"`
+		Data service.V2RecipeResponse `json:"data"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if body.Code != 0 || !body.Data.V2Enabled || body.Data.RecipeVersion != "2.0.0" {
+		t.Fatalf("envelope = %s", recorder.Body.String())
+	}
+	if body.Data.MaxSourceBytes != 15<<20 || body.Data.ClientPipelineConcurrency != 2 ||
+		body.Data.ClientActiveSessionConcurrency != 4 || body.Data.ClientMaxNativeConcurrency != 2 {
+		t.Fatalf("client hints = %#v", body.Data)
+	}
+	if len(body.Data.SupportedSourceMIMETypes) != 2 {
+		t.Fatalf("source MIME list = %v", body.Data.SupportedSourceMIMETypes)
+	}
+}
+
 type batchStatusServiceStub struct {
 	*service.V2UploadService
 	result *service.V2BatchStatusResponse
