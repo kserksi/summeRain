@@ -78,7 +78,6 @@ self.onmessage = async (event: MessageEvent<WorkerRequest>) => {
             height: image.height,
             animated: false,
           },
-          recipe_version: "2.0.0",
           parts,
         },
       });

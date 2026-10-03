@@ -31,6 +31,7 @@ describe("preflightClientImage", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
     sniffInput.mockReset();
     getNativeCanvasCapability.mockReset();
     probeWasmVips.mockReset();
@@ -135,6 +136,33 @@ describe("preflightClientImage", () => {
     });
   });
 
+  it("reports the negotiated recipe version and native concurrency", async () => {
+    vi.stubGlobal("navigator", { hardwareConcurrency: 1 });
+    await expect(preflightClientImage(testFile(), recipe())).resolves.toMatchObject({
+      recipeVersion: "2.0.0",
+      nativeConcurrency: 1,
+    });
+  });
+
+  it("accepts a newer recipe version when the contract still matches", async () => {
+    await expect(
+      preflightClientImage(testFile(), { ...recipe(), recipe_version: "2.1.0" }),
+    ).resolves.toMatchObject({ processor: "wasm-vips" });
+  });
+
+  it("rejects a source above the server source-size limit", async () => {
+    await expect(
+      preflightClientImage(testFile(2 * 1024 * 1024), {
+        ...recipe(),
+        max_source_bytes: 1024 * 1024,
+      }),
+    ).rejects.toMatchObject({
+      code: "IMAGE_FILE_SIZE_EXCEEDED",
+      details: { maxMB: 1 },
+    });
+    expect(sniffInput).not.toHaveBeenCalled();
+  });
+
   it("does not let an aborted caller wait on shared inspection work", async () => {
     let resolveInspection: (value: unknown) => void = () => {};
     sniffInput.mockReturnValue(
@@ -168,8 +196,8 @@ function recipe(): V2RecipeResponse {
   };
 }
 
-function testFile(): File {
-  return new File([new Uint8Array([0xff, 0xd8, 0xff])], "photo.jpg", {
+function testFile(size = 3): File {
+  return new File([new Uint8Array(size)], "photo.jpg", {
     type: "image/jpeg",
   });
 }

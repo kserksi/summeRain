@@ -1,9 +1,9 @@
 // Copyright 2026 The summeRain Authors
 // SPDX-License-Identifier: Apache-2.0
 
+import { MAX_SOURCE_BYTES_CAP } from "../upload-limits";
 import { ClientImageError } from "./errors";
 
-const MAX_SOURCE_BYTES = 15 * 1024 * 1024;
 const MAX_SOURCE_PIXELS = 50_000_000;
 
 const MIME_BY_EXTENSION: Record<string, string> = {
@@ -39,10 +39,13 @@ export async function sniffInput(file: File): Promise<SniffedInput> {
   if (file.size <= 0) {
     throw new ClientImageError("IMAGE_FILE_INVALID", "The image file is empty");
   }
-  if (file.size > MAX_SOURCE_BYTES) {
-    throw new ClientImageError("IMAGE_FILE_SIZE_EXCEEDED", "Image exceeds the 15 MB limit", {
-      details: { maxMB: 15 },
-    });
+  if (file.size > MAX_SOURCE_BYTES_CAP) {
+    const maxMB = MAX_SOURCE_BYTES_CAP / (1024 * 1024);
+    throw new ClientImageError(
+      "IMAGE_FILE_SIZE_EXCEEDED",
+      `Image exceeds the ${maxMB} MB limit`,
+      { details: { maxMB } },
+    );
   }
   const dot = file.name.lastIndexOf(".");
   const extension = dot >= 0 ? file.name.slice(dot).toLowerCase() : "";

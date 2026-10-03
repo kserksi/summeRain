@@ -70,6 +70,7 @@ import {
   type PersistedUploadTask,
 } from "../upload-queue-store";
 import { ConcurrencyGate, runWithConcurrency } from "../upload-concurrency";
+import { resolveUploadLimits, type UploadLimits } from "../upload-limits";
 import { beginV1Upload, type V1UploadResult } from "../v1-upload";
 import {
   beginV2Upload,
@@ -148,12 +149,7 @@ const STATUS_VARIANT: Record<Status, "default" | "secondary" | "destructive" | "
   failed: "destructive",
 };
 
-const PIPELINE_CONCURRENCY = 2;
-// The backend permits eight active sessions per user. Keep half available for
-// status recovery or another tab while still keeping the single publish worker busy.
-const ACTIVE_SESSION_CONCURRENCY = 4;
 const LEASE_RENEW_INTERVAL_MS = 10_000;
-const MAX_SOURCE_BYTES = 15 * 1024 * 1024;
 
 const ALLOWED_EXTS = [".png", ".jpg", ".jpeg", ".bmp", ".webp", ".avif"];
 
@@ -240,11 +236,19 @@ export default function Upload() {
   const qc = useQueryClient();
   const refreshUser = useAuthStore((s) => s.refreshUser);
   const { copied, copy } = useCopy();
+  const [uploadLimits, setUploadLimits] = useState<UploadLimits>(() =>
+    resolveUploadLimits(undefined),
+  );
+  const uploadLimitsRef = useRef(uploadLimits);
+  const limitsWarningShownRef = useRef(false);
 
   const itemsRef = useRef(items);
   useEffect(() => {
     itemsRef.current = items;
   });
+  useEffect(() => {
+    uploadLimitsRef.current = uploadLimits;
+  }, [uploadLimits]);
   useEffect(() => {
     const activeControllers = activeControllersRef.current;
     const previewURLs = previewURLsRef.current;
@@ -285,6 +289,31 @@ export default function Upload() {
     };
   }, []);
 
+  // The server recipe decides the effective concurrency and source-size limits.
+  // Fetch it once so the file picker applies the size limit before the first
+  // upload run; a server that omits the hints keeps the shipped values.
+  useEffect(() => {
+    let cancelled = false;
+    getV2Recipe()
+      .then((recipe) => {
+        if (cancelled) return;
+        const limits = resolveUploadLimits(recipe);
+        setUploadLimits(limits);
+        if (limits.invalidHints.length > 0 && !limitsWarningShownRef.current) {
+          limitsWarningShownRef.current = true;
+          toast.warning(
+            t("upload.toast.serverLimitsFallback", {
+              fields: limits.invalidHints.join(", "),
+            }),
+          );
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [t]);
+
   const addFiles = useCallback((files: FileList | File[]) => {
     const ownerUserId = useAuthStore.getState().user?.id;
     if (!ownerUserId) return;
@@ -294,10 +323,12 @@ export default function Upload() {
       let failure: QueueFailure | undefined;
       if (file.size <= 0) {
         failure = { code: "IMAGE_FILE_INVALID", retryable: false };
-      } else if (file.size > MAX_SOURCE_BYTES) {
+      } else if (file.size > uploadLimitsRef.current.maxSourceBytes) {
         failure = {
           code: "IMAGE_FILE_SIZE_EXCEEDED",
-          details: { maxMB: 15 },
+          details: {
+            maxMB: Math.floor(uploadLimitsRef.current.maxSourceBytes / (1024 * 1024)),
+          },
           retryable: false,
         };
       } else if (!ALLOWED_EXTS.includes(ext)) {
@@ -861,7 +892,9 @@ export default function Upload() {
     uploadingRef.current = true;
     setUploading(true);
     const processSerially = createSerialExecutor();
-    const activeSessions = new ConcurrencyGate(ACTIVE_SESSION_CONCURRENCY);
+    const activeSessions = new ConcurrencyGate(
+      uploadLimitsRef.current.activeSessionConcurrency,
+    );
     const pendingPolls: Array<Promise<UploadRunResult>> = [];
     const started = await runWithConcurrency(
       toUpload,
@@ -1024,7 +1057,7 @@ export default function Upload() {
         }
         return result;
       },
-      PIPELINE_CONCURRENCY,
+      uploadLimitsRef.current.pipelineConcurrency,
     );
     const statuses = [...started, ...(await Promise.all(pendingPolls))];
     uploadingRef.current = false;

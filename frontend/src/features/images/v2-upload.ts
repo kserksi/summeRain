@@ -48,6 +48,13 @@ export interface V2RecipeResponse {
   max_pixels: number;
   session_ttl_ms: number;
   variants: V2RecipeVariant[];
+  // Phase 4 advisory hints. They stay `unknown` on purpose: the limits
+  // resolver validates them so a malformed hint cannot break negotiation.
+  max_source_bytes?: unknown;
+  client_pipeline_concurrency?: unknown;
+  client_active_session_concurrency?: unknown;
+  client_max_native_concurrency?: unknown;
+  supported_source_mime_types?: unknown;
 }
 
 export interface V2RecipeVariant {
@@ -151,6 +158,11 @@ const recipeSchema = z.object({
   max_pixels: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
   session_ttl_ms: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
   variants: z.array(recipeVariantSchema).length(4),
+  max_source_bytes: z.unknown().optional(),
+  client_pipeline_concurrency: z.unknown().optional(),
+  client_active_session_concurrency: z.unknown().optional(),
+  client_max_native_concurrency: z.unknown().optional(),
+  supported_source_mime_types: z.unknown().optional(),
 });
 
 const expectedVariants: V2RecipeVariant[] = [
@@ -168,13 +180,15 @@ export function parseV2Recipe(value: unknown): V2RecipeResponse {
   const parsed = recipeSchema.safeParse(value);
   if (!parsed.success) throw unsupportedRecipeError(parsed.error);
   const recipe = parsed.data;
+  // The recipe version is server data, not a client constant: this client
+  // echoes it in the manifest and reprocesses persisted results when it
+  // changes. Compatibility is decided by the pipeline version and the fixed
+  // variant geometry the browser processor can actually produce.
   if (
     isV2UploadEnabled(recipe) &&
-    (recipe.pipeline_version !== 2 ||
-      recipe.recipe_version !== "2.0.0" ||
-      !variantsMatch(recipe.variants))
+    (recipe.pipeline_version !== 2 || !variantsMatch(recipe.variants))
   ) {
-    throw unsupportedRecipeError();
+    throw unsupportedRecipeError(undefined, recipe);
   }
   return recipe;
 }
@@ -198,11 +212,19 @@ function variantsMatch(variants: V2RecipeVariant[]): boolean {
   });
 }
 
-function unsupportedRecipeError(cause?: unknown): ClientImageError {
+function unsupportedRecipeError(
+  cause?: unknown,
+  recipe?: Pick<V2RecipeResponse, "recipe_version" | "pipeline_version">,
+): ClientImageError {
   return new ClientImageError(
     "IMAGE_RECIPE_UNSUPPORTED",
     "This client does not support the server image recipe",
-    { cause },
+    {
+      cause,
+      details: recipe
+        ? { recipe_version: recipe.recipe_version, pipeline_version: recipe.pipeline_version }
+        : undefined,
+    },
   );
 }
 

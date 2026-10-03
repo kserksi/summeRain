@@ -6,16 +6,35 @@ import pica, { type PicaSource } from "pica";
 import { assertNativeCanvasCapability } from "./native-capability";
 import type { ProcessedImage, ProcessedPart, ProcessingProgress, V2VariantKind } from "./types";
 
-const concurrency = Math.max(1, Math.min(2, Math.floor((navigator.hardwareConcurrency || 2) / 2)));
-const resizer = pica({ tile: 512, concurrency });
+type PicaResizer = ReturnType<typeof pica>;
 
-export async function processWithNative(
-  file: File,
-  mimeType: string,
-  onProgress: ProcessingProgress,
-  signal?: AbortSignal,
-): Promise<ProcessedImage> {
+let cachedResizer: PicaResizer | undefined;
+let cachedConcurrency = 0;
+
+// The pica resizer is created lazily so the effective concurrency, which
+// the caller derives as min(device capability, server hint), applies
+// without a rebuild. Processing is serial, so one cached instance is enough.
+function getResizer(nativeConcurrency: number): PicaResizer {
+  if (!cachedResizer || cachedConcurrency !== nativeConcurrency) {
+    cachedResizer = pica({ tile: 512, concurrency: nativeConcurrency });
+    cachedConcurrency = nativeConcurrency;
+  }
+  return cachedResizer;
+}
+
+export interface NativeProcessOptions {
+  file: File;
+  mimeType: string;
+  recipeVersion: string;
+  nativeConcurrency: number;
+  onProgress: ProcessingProgress;
+  signal?: AbortSignal;
+}
+
+export async function processWithNative(options: NativeProcessOptions): Promise<ProcessedImage> {
+  const { file, mimeType, recipeVersion, nativeConcurrency, onProgress, signal } = options;
   throwIfAborted(signal);
+  const resizer = getResizer(nativeConcurrency);
   const decoded = await decodeSource(file);
   try {
     const pixels = decoded.width * decoded.height;
@@ -24,7 +43,7 @@ export async function processWithNative(
     throwIfAborted(signal);
 
     const parts: ProcessedPart[] = [];
-    parts.push(await renderMaster(decoded.source, decoded.width, decoded.height));
+    parts.push(await renderMaster(decoded.source, decoded.width, decoded.height, resizer));
     throwIfAborted(signal);
     onProgress(30);
     parts.push(
@@ -36,6 +55,7 @@ export async function processWithNative(
         400,
         400,
         60,
+        resizer,
         signal,
       ),
     );
@@ -50,12 +70,15 @@ export async function processWithNative(
         120,
         160,
         60,
+        resizer,
         signal,
       ),
     );
     throwIfAborted(signal);
     onProgress(65);
-    parts.push(await renderPublishSource(decoded.source, decoded.width, decoded.height, signal));
+    parts.push(
+      await renderPublishSource(decoded.source, decoded.width, decoded.height, resizer, signal),
+    );
     throwIfAborted(signal);
     onProgress(80);
 
@@ -67,7 +90,7 @@ export async function processWithNative(
         animated: false,
       },
       processor_version: "native-pica-10.0.2",
-      recipe_version: "2.0.0",
+      recipe_version: recipeVersion,
       parts,
     };
   } finally {
@@ -79,6 +102,7 @@ async function renderMaster(
   source: PicaSource,
   width: number,
   height: number,
+  resizer: PicaResizer,
 ): Promise<ProcessedPart> {
   const canvas = createCanvas(width, height);
   try {
@@ -103,6 +127,7 @@ async function renderCover(
   width: number,
   height: number,
   quality: 60,
+  resizer: PicaResizer,
   signal?: AbortSignal,
 ): Promise<ProcessedPart> {
   const sourceRatio = sourceImageWidth / sourceImageHeight;
@@ -120,7 +145,7 @@ async function renderCover(
     if (typeof createImageBitmap === "function") {
       cropped = await createImageBitmap(source, sourceX, sourceY, sourceWidth, sourceHeight);
       throwIfAborted(signal);
-      await resizeWithSignal(cropped, canvas, signal);
+      await resizeWithSignal(cropped, canvas, resizer, signal);
     } else {
       const context = canvas.getContext("2d") as
         | CanvasRenderingContext2D
@@ -141,6 +166,7 @@ async function renderPublishSource(
   source: PicaSource,
   sourceWidth: number,
   sourceHeight: number,
+  resizer: PicaResizer,
   signal?: AbortSignal,
 ): Promise<ProcessedPart> {
   const scale = Math.min(1, 2048 / Math.max(sourceWidth, sourceHeight));
@@ -148,7 +174,7 @@ async function renderPublishSource(
   const height = Math.max(1, Math.round(sourceHeight * scale));
   const canvas = createCanvas(width, height);
   try {
-    await resizeWithSignal(source, canvas, signal);
+    await resizeWithSignal(source, canvas, resizer, signal);
     const blob = await resizer.toBlob(canvas, "image/webp", 0.8);
     return makePart("publish_source", blob, width, height, 80);
   } finally {
@@ -159,6 +185,7 @@ async function renderPublishSource(
 async function resizeWithSignal(
   source: PicaSource,
   canvas: HTMLCanvasElement | OffscreenCanvas,
+  resizer: PicaResizer,
   signal?: AbortSignal,
 ): Promise<void> {
   throwIfAborted(signal);

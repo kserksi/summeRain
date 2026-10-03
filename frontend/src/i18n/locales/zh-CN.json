@@ -108,7 +108,8 @@
       "itemFailed": "{{name}}: {{msg}}",
       "copied": "已复制 {{count}} 个链接（{{format}}）",
       "errorCode": "错误码 {{code}}",
-      "parseFailed": "响应解析失败"
+      "parseFailed": "响应解析失败",
+      "serverLimitsFallback": "无法读取服务器图片限制，已使用安全默认值（{{fields}}）"
     },
     "copy": {
       "button": "复制全部链接",

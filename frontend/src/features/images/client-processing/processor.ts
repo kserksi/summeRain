@@ -22,7 +22,13 @@ export async function processClientImage(
   throwIfAborted(signal);
   if (plan.processor === "wasm-vips" && canAttemptWasmVips()) {
     try {
-      return await processWithVipsWorker(file, plan.input.mimeType, onProgress, signal);
+      return await processWithVipsWorker(
+        file,
+        plan.input.mimeType,
+        plan.recipeVersion,
+        onProgress,
+        signal,
+      );
     } catch (error) {
       if (!(error instanceof VipsUnavailableError)) throw error;
       if (!plan.nativeFallbackSafe) {
@@ -44,7 +50,14 @@ export async function processClientImage(
   // serial processing slot until its finally blocks release decoded pixels and
   // canvases, then surface the cancellation before the next image starts.
   try {
-    const processed = await processWithNative(file, plan.input.mimeType, onProgress, signal);
+    const processed = await processWithNative({
+      file,
+      mimeType: plan.input.mimeType,
+      recipeVersion: plan.recipeVersion,
+      nativeConcurrency: plan.nativeConcurrency,
+      onProgress,
+      signal,
+    });
     throwIfAborted(signal);
     return processed;
   } catch (error) {
@@ -74,6 +87,7 @@ class VipsUnavailableError extends Error {}
 function processWithVipsWorker(
   file: File,
   mimeType: string,
+  recipeVersion: string,
   onProgress: ProcessingProgress,
   signal?: AbortSignal,
 ): Promise<ProcessedImage> {
@@ -143,7 +157,11 @@ function processWithVipsWorker(
         return;
       }
       finish(() =>
-        resolve({ ...message.result, processor_version: "wasm-vips-0.0.18" }),
+        resolve({
+          ...message.result,
+          processor_version: "wasm-vips-0.0.18",
+          recipe_version: recipeVersion,
+        }),
       );
     };
     worker.onerror = () => {

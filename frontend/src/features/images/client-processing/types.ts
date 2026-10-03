@@ -24,7 +24,7 @@ export interface ProcessedImage {
     animated: false;
   };
   processor_version: string;
-  recipe_version: "2.0.0";
+  recipe_version: string;
   parts: ProcessedPart[];
 }
 
@@ -52,7 +52,7 @@ export interface WorkerReadyMessage {
 export interface WorkerSuccessMessage {
   type: "result";
   id: string;
-  result: Omit<ProcessedImage, "processor_version">;
+  result: Omit<ProcessedImage, "processor_version" | "recipe_version">;
 }
 
 export interface WorkerErrorMessage {

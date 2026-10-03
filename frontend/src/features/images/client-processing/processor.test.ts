@@ -130,7 +130,6 @@ describe("processClientImage", () => {
                     height: 1,
                     animated: false,
                   },
-                  recipe_version: "2.0.0",
                   parts: [],
                 },
               },
@@ -222,7 +221,6 @@ describe("processClientImage", () => {
                     height: 6_250,
                     animated: false,
                   },
-                  recipe_version: "2.0.0",
                   parts: [],
                 },
               },
@@ -302,6 +300,63 @@ describe("processClientImage", () => {
     resolveNative(nativeResult);
     await expect(result).rejects.toBe(reason);
   });
+
+  it("stamps the negotiated recipe version on worker results", async () => {
+    enableWasmPath();
+    vi.stubGlobal(
+      "Worker",
+      class {
+        onmessage: ((event: MessageEvent) => void) | null = null;
+        onerror: ((event: ErrorEvent) => void) | null = null;
+
+        postMessage(message: { id: string }) {
+          queueMicrotask(() =>
+            this.onmessage?.({
+              data: {
+                type: "result",
+                id: message.id,
+                result: {
+                  source: { mime_type: "image/jpeg", width: 1, height: 1, animated: false },
+                  parts: [],
+                },
+              },
+            } as MessageEvent),
+          );
+        }
+
+        terminate() {}
+      },
+    );
+
+    await expect(
+      processClientImage(testFile(), { ...wasmPlan(true), recipeVersion: "3.1.4" }, vi.fn()),
+    ).resolves.toMatchObject({
+      processor_version: "wasm-vips-0.0.18",
+      recipe_version: "3.1.4",
+    });
+  });
+
+  it("forwards the negotiated native concurrency to pica", async () => {
+    enableWasmPath();
+    vi.stubGlobal(
+      "Worker",
+      class {
+        constructor() {
+          throw new TypeError("Module workers are unsupported");
+        }
+      },
+    );
+
+    await processClientImage(
+      testFile(),
+      { ...wasmPlan(true), recipeVersion: "3.1.4", nativeConcurrency: 1 },
+      vi.fn(),
+    );
+
+    expect(processWithNative).toHaveBeenCalledWith(
+      expect.objectContaining({ recipeVersion: "3.1.4", nativeConcurrency: 1 }),
+    );
+  });
 });
 
 function enableWasmPath(): void {
@@ -314,6 +369,8 @@ function nativePlan(): ClientProcessingPlan {
     input: { mimeType: "image/jpeg", animated: false, width: 1, height: 1 },
     processor: "native-pica",
     nativeFallbackSafe: true,
+    recipeVersion: "2.0.0",
+    nativeConcurrency: 2,
   };
 }
 
@@ -326,6 +383,8 @@ function wasmPlan(
     input: { mimeType: "image/jpeg", animated: false, width, height },
     processor: "wasm-vips",
     nativeFallbackSafe,
+    recipeVersion: "2.0.0",
+    nativeConcurrency: 2,
   };
 }
 

@@ -108,7 +108,8 @@
       "itemFailed": "{{name}}: {{msg}}",
       "copied": "Copied {{count}} links ({{format}})",
       "errorCode": "Error code {{code}}",
-      "parseFailed": "Could not parse the response"
+      "parseFailed": "Could not parse the response",
+      "serverLimitsFallback": "The server image limits could not be read; using safe defaults ({{fields}})"
     },
     "copy": {
       "button": "Copy all links",

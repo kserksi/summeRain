@@ -108,7 +108,8 @@
       "itemFailed": "{{name}}: {{msg}}",
       "copied": "{{count}} 個のリンクをコピーしました（{{format}}）",
       "errorCode": "エラーコード {{code}}",
-      "parseFailed": "レスポンスの解析に失敗しました"
+      "parseFailed": "レスポンスの解析に失敗しました",
+      "serverLimitsFallback": "サーバーの画像制限を読み取れないため、安全な既定値を使用します（{{fields}}）"
     },
     "copy": {
       "button": "全リンクをコピー",

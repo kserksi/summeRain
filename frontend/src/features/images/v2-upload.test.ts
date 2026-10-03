@@ -139,6 +139,35 @@ describe("upload pipeline capability", () => {
       expect.objectContaining({ code: "IMAGE_RECIPE_UNSUPPORTED" }),
     );
   });
+
+  it("accepts a newer recipe version when the fixed contract still matches", () => {
+    expect(parseV2Recipe({ ...recipe, recipe_version: "2.1.0" })).toMatchObject({
+      recipe_version: "2.1.0",
+    });
+  });
+
+  it("tolerates malformed client hints without rejecting the recipe", () => {
+    const parsed = parseV2Recipe({
+      ...recipe,
+      client_pipeline_concurrency: "2",
+      max_source_bytes: -1,
+      client_active_session_concurrency: null,
+      client_max_native_concurrency: 1.5,
+    });
+    expect(parsed.recipe_version).toBe("2.0.0");
+  });
+
+  it("reports the recipe version when the contract is unsupported", () => {
+    expect(() => parseV2Recipe({ ...recipe, pipeline_version: 3 })).toThrowError(
+      expect.objectContaining({
+        code: "IMAGE_RECIPE_UNSUPPORTED",
+        details: expect.objectContaining({
+          recipe_version: "2.0.0",
+          pipeline_version: 3,
+        }),
+      }),
+    );
+  });
 });
 
 describe("beginV2Upload cancellation", () => {

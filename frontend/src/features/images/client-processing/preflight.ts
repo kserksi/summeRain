@@ -1,6 +1,7 @@
 // Copyright 2026 The summeRain Authors
 // SPDX-License-Identifier: Apache-2.0
 
+import { resolveUploadLimits } from "../upload-limits";
 import type { V2RecipeResponse } from "../v2-upload";
 import { ClientImageError } from "./errors";
 import { getNativeCanvasCapability } from "./native-capability";
@@ -14,6 +15,9 @@ export interface ClientProcessingPlan {
   readonly input: SniffedInput;
   readonly processor: ClientProcessorKind;
   readonly nativeFallbackSafe: boolean;
+  // Resolved from the server recipe, the device capability, and the caps.
+  readonly recipeVersion: string;
+  readonly nativeConcurrency: number;
 }
 
 export async function preflightClientImage(
@@ -23,6 +27,14 @@ export async function preflightClientImage(
 ): Promise<ClientProcessingPlan> {
   throwIfAborted(signal);
   assertSupportedRecipe(recipe);
+  const limits = resolveUploadLimits(recipe);
+  if (file.size > limits.maxSourceBytes) {
+    throw new ClientImageError(
+      "IMAGE_FILE_SIZE_EXCEEDED",
+      "Image exceeds the server source-size limit",
+      { details: { maxMB: Math.floor(limits.maxSourceBytes / (1024 * 1024)) } },
+    );
+  }
   const input = await waitWithSignal(sniffInput(file), signal);
   throwIfAborted(signal);
 
@@ -57,10 +69,18 @@ export async function preflightClientImage(
       input,
       processor: "wasm-vips",
       nativeFallbackSafe: nativeCapability.safe,
+      recipeVersion: recipe.recipe_version,
+      nativeConcurrency: limits.nativeConcurrency,
     };
   }
   if (nativeCapability.safe) {
-    return { input, processor: "native-pica", nativeFallbackSafe: true };
+    return {
+      input,
+      processor: "native-pica",
+      nativeFallbackSafe: true,
+      recipeVersion: recipe.recipe_version,
+      nativeConcurrency: limits.nativeConcurrency,
+    };
   }
 
   throw new ClientImageError(
@@ -80,13 +100,18 @@ function assertSupportedRecipe(recipe: V2RecipeResponse): void {
   if (
     recipe.v2_enabled === false ||
     recipe.pipeline_version !== 2 ||
-    recipe.recipe_version !== "2.0.0" ||
     !Number.isSafeInteger(recipe.max_pixels) ||
     recipe.max_pixels <= 0
   ) {
     throw new ClientImageError(
       "IMAGE_RECIPE_UNSUPPORTED",
       "This client does not support the server image recipe",
+      {
+        details: {
+          recipe_version: recipe.recipe_version,
+          pipeline_version: recipe.pipeline_version,
+        },
+      },
     );
   }
 }
