@@ -699,6 +699,51 @@ for 50 MP upload deployments.
 | `views` | Cumulative views from `SUM(view_count)`, persisted with approximately 60 seconds of delay |
 | `storage_used` | Site-wide storage usage in bytes |
 
+### 9.4 Client Crash Reports
+
+`POST /api/v1/public/client-errors` (no authentication required)
+
+The Web client submits one bounded report when React rendering crashes, or when
+an uncaught error or unhandled promise rejection never reaches an error
+boundary. The server writes a single structured log line and keeps no database
+state.
+
+**Request body**
+
+```json
+{
+  "kind": "boundary",
+  "message": "Cannot read properties of undefined",
+  "stack": "TypeError: ...",
+  "component_stack": "at Upload",
+  "source": "/assets/app.js:10:5",
+  "path": "/upload"
+}
+```
+
+| Field | Required | Notes |
+|---|---|---|
+| `kind` | yes | `boundary`, `error`, or `unhandledrejection` |
+| `message` | yes | Non-empty; truncated to 300 bytes |
+| `stack` | no | Truncated to 2000 bytes |
+| `component_stack` | no | Truncated to 2000 bytes |
+| `source` | no | File and position; query strings and fragments are stripped, then truncated to 200 bytes |
+| `path` | no | Client route path only; the client strips query strings and fragments, so private image tokens never reach the log |
+
+**Limits**
+
+- Request body: at most 8 KiB; a larger body returns `3002` (413).
+- Rate limit: 20 reports per IP per minute; further reports return `2091` (429)
+  with a `Retry-After: 60` header.
+- Each entry is logged with the request ID and never includes IP addresses,
+  cookies, or tokens.
+
+**Success 200** returns the standard envelope without `data`.
+
+```json
+{ "code": 0, "message": "success" }
+```
+
 ---
 
 ## 10. Error Code Reference
@@ -714,6 +759,7 @@ for 50 MP upload deployments.
 | 2008 | 429 | Too many login attempts |
 | 2009 | 403 | reCAPTCHA validation failed |
 | 2090 | 429 | Too many bootstrap requests |
+| 2091 | 429 | Too many client error reports |
 | 3000 | 400 | Parameter validation error |
 | 3001 | 400 | Missing file or invalid ID |
 | 3002 | 413 | File exceeds the size limit |

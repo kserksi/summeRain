@@ -588,6 +588,47 @@ V2 默认启用。浏览器接受静态 JPG/JPEG、PNG、BMP、WebP、AVIF，拒
 | `views` | 累计浏览量（`SUM(view_count)`，约 60s 延迟落库） |
 | `storage_used` | 全站已用存储（字节） |
 
+### 9.4 客户端错误上报
+
+`POST /api/v1/public/client-errors`（无需登录）
+
+当 React 渲染崩溃，或未捕获错误、未处理的 Promise 拒绝没有进入错误边界时，Web 客户端会
+提交一条有界上报。服务端只写入一行结构化日志，不保留任何数据库状态。
+
+**请求体**
+
+```json
+{
+  "kind": "boundary",
+  "message": "Cannot read properties of undefined",
+  "stack": "TypeError: ...",
+  "component_stack": "at Upload",
+  "source": "/assets/app.js:10:5",
+  "path": "/upload"
+}
+```
+
+| 字段 | 必填 | 说明 |
+|---|---|---|
+| `kind` | 是 | `boundary`、`error` 或 `unhandledrejection` |
+| `message` | 是 | 不能为空；截断到 300 字节 |
+| `stack` | 否 | 截断到 2000 字节 |
+| `component_stack` | 否 | 截断到 2000 字节 |
+| `source` | 否 | 文件与位置；会剥离 query 与 fragment，再截断到 200 字节 |
+| `path` | 否 | 仅客户端路由路径；客户端会剥离 query 与 fragment，私密图片令牌不会进入日志 |
+
+**上限**
+
+- 请求体最多 8 KiB；超出返回 `3002`(413)。
+- 每个 IP 每分钟最多 20 条；超出返回 `2091`(429)，并带 `Retry-After: 60`。
+- 每条记录都带请求 ID，绝不包含 IP、Cookie 或令牌。
+
+**成功 200** 返回标准信封，不带 `data`。
+
+```json
+{ "code": 0, "message": "success" }
+```
+
 ---
 
 ## 10. 错误码参考
@@ -603,6 +644,7 @@ V2 默认启用。浏览器接受静态 JPG/JPEG、PNG、BMP、WebP、AVIF，拒
 | 2008 | 429 | 登录尝试过于频繁 |
 | 2009 | 403 | reCAPTCHA 校验失败 |
 | 2090 | 429 | Bootstrap 请求过于频繁 |
+| 2091 | 429 | 客户端错误上报过于频繁 |
 | 3000 | 400 | 参数校验错误 |
 | 3001 | 400 | 缺少文件 / 无效 ID |
 | 3002 | 413 | 文件大小超出限制 |
