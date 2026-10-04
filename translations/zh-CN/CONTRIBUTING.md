@@ -41,7 +41,7 @@ npm run build                  # 输出目录：../backend/web/
 
 ### Go 后端
 
-- 遵循 [Effective Go](https://go.dev/doc/effective_go)、`gofmt` 和 `go vet`。
+- 遵循 [Google Go Style Guide](https://google.github.io/styleguide/go/guide)（含 Decisions 与 Best Practices 配套文档），以 Effective Go 为基础。`gofmt` 和 `go vet` 必须通过。
 - 新功能需在 `_test.go` 文件中包含测试。
 - import 顺序依次为：标准库、第三方包、`github.com/kserksi/summerain/...` 下的项目包。
 - 每个源文件均需保留版权头：`// Copyright 2026 The summeRain Authors`。
@@ -59,14 +59,16 @@ go test ./...
 
 - 使用项目现有的 React 19、TanStack Query 和 shadcn/ui 技术栈。
 - 新功能需包含 Vitest 测试。
-- 遵循现有 ESLint 配置。
+- 遵循现有 ESLint 与 Prettier 配置；`console.*` 和 `debugger` 会被 lint 拒绝。
+- 已归档的[前端编码规范](docs/design/frontend-architecture/08-coding-standards.md)仍是现行模式的参考。
 
 提交前运行以下检查：
 
 ```bash
 cd frontend
+npx prettier --check .
 npm run lint
-npm run build
+npx tsc --noEmit
 npx vitest run
 ```
 
@@ -121,6 +123,16 @@ GitBook 文档校验器。
 bash scripts/update-translation-source-hashes.sh
 bash scripts/verify-gitbook-docs.sh
 ```
+
+### 文档维护
+
+- 英文页面保持简洁、以读者任务为中心，每个事实只写一次。阈值统一放在
+  `docs/USAGE.md` 第 7 节，环境变量放在第 3 节，开发命令放在根 README，
+  发布渠道规则放在 `docs/RELEASING.md`；需要时链接到这些权威位置，不要重复数值。
+- `docs/design/` 下的页面是归档设计记录，按原样保留以供追溯，不受「文档不得使用表情符号」规则约束。
+- 在 `docs/THIRD-PARTY.md` 中记录所采用库与服务的名称、作者或组织、许可证和链接；依赖变化时同步更新该页。
+- 翻译页面统一使用既定产品措辞；outbox、advisory lock、fencing token、nonce
+  等技术术语首次出现时保留英文。产品类别按本地化术语约定统一为「图片托管」，不使用「图床」。
 
 ## 行为准则
 

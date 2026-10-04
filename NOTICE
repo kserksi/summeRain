@@ -1,2 +1,10 @@
 summeRain
 Copyright 2026 The summeRain Authors
+
+summeRain is built on open-source software. The complete list of adopted
+libraries, services, and toolchains, with their authors, licenses, and links,
+is maintained in docs/THIRD-PARTY.md.
+
+Portions of this product use libvips (https://github.com/libvips/libvips),
+developed by John Cupitt and the libvips contributors and licensed under the
+GNU Lesser General Public License, version 2.1 or later.

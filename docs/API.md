@@ -1,14 +1,11 @@
 # summeRain Backend API Reference
 
-> This reference was verified file by file against the `backend/` source (Go +
-> Gin + GORM/MySQL + Redis + imgproxy) and serves as the integration contract
-> between the frontend and backend.
+> This reference is the integration contract between the frontend and the
+> backend (Go + Gin + GORM/MySQL + Redis + imgproxy).
 >
 > - **Base URL:** `/api/v1`
 > - **Default port:** `8080` (`SERVER_PORT`)
 > - **Direct image route:** `GET /i/:link` (outside `/api/v1`)
-> - **Verification baseline:** `v2.0.0`. Early V2 releases may change frequently;
->   the source and release notes for the relevant version take precedence.
 
 ---
 
@@ -794,9 +791,9 @@ state.
 | 4093 | 409 | Image still processing or cleaning up |
 | 4094 | 409 | R2 storage target still referenced by historical files or pending cleanup and cannot be changed |
 | 4095 | 409 | Current user state does not allow the requested transition |
+| 4260 | 426 | Client version too old |
 | 4261 | 426 | Client image recipe version unsupported |
 | 4262 | 426 | Deployment requires V2 client-preprocessed upload |
-| 4260 | 426 | Client version too old |
 | 4291 | 429 | Upload concurrency or active-session capacity exhausted |
 | 5030 | 503 | Server storage pressure too high |
 | 5031 | 503 | V2 upload temporarily disabled |
@@ -812,20 +809,7 @@ state.
 3. **Response handling:** treat `body.code === 0` as success; otherwise display `message`. Redirect 401 responses to login.
 4. **`__Host-` cookie constraints:** HTTPS and same-origin deployment are mandatory. A browser may reject these cookies on local `http://localhost`; use a same-origin proxy or a self-signed certificate.
 
-### 11.2 Existing Frontend Mock Field Mapping
-
-| Frontend mock field | Backend field | Notes |
-|---|---|---|
-| `userId` | `user_id` | snake_case |
-| `uploadedAt` | `created_at` | ISO 8601 string |
-| `views` | `view_count` | |
-| `size` | `file_size` | |
-| `isPublic: boolean` | `visibility: "public"|"private"` | Boolean to string |
-| `id` (string) | `id` (uint64) | Numeric |
-| `url`/`thumb` | `/i/<unique_link>` | Frontend must construct the direct URL |
-| `banned` status | `suspended` | The backend has no `banned` state |
-
-### 11.3 Frontend Features Not Covered by the Backend
+### 11.2 Frontend Features Not Covered by the Backend
 
 - **Public gallery or discovery page:** the backend has no public image-list endpoint; `images` returns only the current user's images. Add `GET /images/public` or remove the feature from the frontend.
 - **Categories or tags:** the `Image` model has no `category` or `tags` fields.
@@ -833,10 +817,3 @@ state.
 The current frontend already integrates administrator image listing and
 deletion, user deletion requests and cancellation, and display of
 `pending_deletion` and `deleting`; these are no longer capability gaps.
-
----
-
-*Sources used to generate this document: `cmd/server/main.go`,
-`internal/handler/*`, `internal/service/*`, `internal/model/*`,
-`internal/middleware/{auth,csrf}.go`, and
-`internal/pkg/{response,errcode}/*`.*

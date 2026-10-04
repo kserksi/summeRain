@@ -5,7 +5,7 @@
 If you discover a security vulnerability, **do not open a public issue**.
 
 Report it privately through
-[GitHub Security Advisories](https://github.com/kserksi/summerain/security/advisories/new).
+[GitHub Security Advisories](https://github.com/kserksi/summeRain/security/advisories/new).
 We will acknowledge the report and assess its impact as soon as possible.
 
 Please include as much of the following information as possible:
@@ -25,8 +25,9 @@ Please include as much of the following information as possible:
 
 ## Supported Versions
 
-Only the latest release on the `main` branch receives security fixes. Older
-versions do not receive separate security patches.
+Only the latest stable release published from `main` receives security fixes.
+Development builds from the `dev` branch are previews and are not supported for
+production use. Older versions do not receive separate security patches.
 
 ## Deployment Security
 

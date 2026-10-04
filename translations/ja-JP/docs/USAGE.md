@@ -1,8 +1,7 @@
 # summeRain デプロイ・利用ガイド
 
-> このガイドは `backend/` のソースコードとデプロイ設定に基づき、**デプロイ、設定、
-> 運用、日常的な利用方法**を説明します。完全な API 契約については
-> [`API.md`](./API.md) を参照してください。
+> このガイドは**デプロイ、設定、運用、日常的な利用方法**を説明します。完全な API 契約に
+> ついては [`API.md`](./API.md) を参照してください。
 
 ---
 
@@ -23,8 +22,8 @@
 
 summeRain はセルフホスト型の画像ホスティング・フォトアルバムサービスです。
 
-- **バックエンド：** Go 1.26 + Gin + GORM（MySQL）+ Redis。imgproxy は V1
-  互換パスを提供し、V2 公開時のウォーターマークを適用します。
+- **バックエンド：** Go 1.24+（CI とコンテナービルドは Go 1.26.5）+ Gin + GORM（MySQL）
+  + Redis。imgproxy は V1 互換パスを提供し、V2 公開時のウォーターマークを適用します。
 - **フロントエンド：** React + Vite。ビルド成果物は Go サービスから同一オリジンで
   配信されます。
 - **主な機能：** ユーザー登録とログイン、画像のアップロードと管理、公開/非公開の
@@ -47,25 +46,8 @@ summeRain はセルフホスト型の画像ホスティング・フォトアル�
 
 ### 2.1 ローカル開発
 
-```bash
-# ターミナル 1：固定バージョンの MySQL / Redis / imgproxy だけを Compose で起動
-./scripts/dev-wsl.sh deps-up
-./scripts/dev-wsl.sh backend
-
-# ターミナル 2：初回起動前に frontend/ で npm ci を実行
-./scripts/dev-wsl.sh frontend
-```
-
-- バックエンドは既定で `127.0.0.1:18080` を待ち受けます。ヘルスチェックは
-  `GET http://127.0.0.1:18080/health` -> `{"status":"ok"}` です。
-- フロントエンドは既定で `https://127.0.0.1:5173` を待ち受け、同一オリジンから
-  `/api/` と `/i/` をバックエンドへプロキシします。
-- 初回起動時に、チェックサム付きデータベースマイグレーションと互換モデルマイグレーションが
-  自動実行されます。
-
-> ローカルの `http://localhost` では、`__Host-` プレフィックスの Cookie に必要な HTTPS と
-> 同一オリジンの条件を満たさないため、ブラウザーは Cookie の設定を拒否します。
-> ローカル結合テストでは自己署名証明書または同一オリジンプロキシを使用してください。
+ローカル開発環境（MySQL、Redis、imgproxy、バックエンド、フロントエンド）の起動方法は、
+ルート README の[WSL クイックスタート](../README.md)を参照してください。
 
 ### 2.2 本番デプロイ（GitHub Actions イメージ）
 
@@ -93,8 +75,8 @@ docker compose --env-file backend/.env -f backend/docker-compose.deploy.yml up -
 
 ## 3. 設定リファレンス（環境変数）
 
-参照元：`internal/config/config.go`。**既定値**がある項目は明示的に設定しなくても
-構いません。
+**既定値**がある項目は明示的に設定しなくても構いません。すべての環境変数は起動時に
+一度だけ読み込まれ、変更には再起動が必要です。
 
 ### 3.1 サービス
 
@@ -104,12 +86,12 @@ docker compose --env-file backend/.env -f backend/docker-compose.deploy.yml up -
 | `GIN_MODE` | `debug` | `debug` / `release`。本番では `release` を使用 |
 | `COOKIE_SECRET` | `change-me-in-production` | 予約済み。現在のセッションは不透明なランダム文字列を使い、実際には署名していないが、強い値を推奨 |
 | `CROSS_ORIGIN_ISOLATION` | `true` | COOP/COEP を送信し、wasm-vips の大画像処理パスを有効化。無効にするとブラウザー固有の安全しきい値を超える画像を処理できない |
-| `GOMEMLIMIT` | `512MiB`（Compose） | 640 MiB のコンテナ制限内に Go ヒープの目標値を抑え、スタック、ネイティブメモリ、ランタイム用の余裕を確保 |
+| `GOMEMLIMIT` | `512MiB`（Compose） | 640 MiB のコンテナ制限内に Go ヒープの目標値を抑える。Compose プロファイルが注入し、アプリケーション自体は読み取らない |
 
 `CROSS_ORIGIN_ISOLATION=true` の場合、サードパーティのスクリプト、フォント、画像は CORS
 または `Cross-Origin-Resource-Policy` で埋め込みを明示的に許可する必要があります。
-許可がなければブラウザーは COEP に従って遮断します。50MP アップロードという目標は、
-このモードで有効になる分離済み wasm-vips パスに依存します。
+許可がなければブラウザーは COEP に従って遮断します。CAPTCHA との関係は 3.8 節を
+参照してください。
 
 ### 3.2 データベース（MySQL）
 
@@ -169,7 +151,7 @@ Compose は Redis のデータ上限を `128mb`、コンテナ上限を `192m` �
 | `V2_SESSION_TTL` | `30m` | 未完了アップロードセッションの有効期間 |
 | `V2_GLOBAL_UPLOAD_CONCURRENCY` | `8` | 1 バックエンドインスタンスが同時受信できるパートの全体上限 |
 | `V2_PER_USER_UPLOAD_CONCURRENCY` | `4` | 1 ユーザーが同時受信できるパートの上限 |
-| `V2_WATERMARK_CONCURRENCY` | `2` | 公開/ウォーターマークワーカー数。3 コア、4 GB の共有ホストにおける上限 |
+| `V2_WATERMARK_CONCURRENCY` | `2` | 公開/ウォーターマークワーカー数 |
 | `V2_JOB_POLL_INTERVAL` | `1s` | 公開ジョブのポーリング間隔 |
 | `V2_JOB_LEASE` | `2m` | 公開ジョブのリース。ワーカーは更新し、フェンシングトークンを使ってコミット |
 | `CLIENT_UPLOAD_PIPELINE_CONCURRENCY` | `2` | `/api/v1/uploads/recipe` が返すブラウザー側アップロードパイプラインの並行数のヒント |
@@ -184,12 +166,12 @@ Compose は Redis のデータ上限を `128mb`、コンテナ上限を `192m` �
 レシピの変更には再起動と `recipe_version` の更新が必要で、レシピが管理者 API に
 公開されることはありません。
 
-ブラウザーのアップロードパイプラインの並行数は 2 ですが、画像のデコードとエンコードは
-直列です。アクティブなサーバー側セッションの上限は 4 で、別タブや復旧リクエスト用の
-バックエンド容量を残します。サーバー公開と imgproxy はそれぞれ既定で 2 ワーカーのため、
-同一のウォーターマークスナップショットを並列処理できます。同じホスト上の別コンポーネントで
-CPU またはメモリ負荷が継続する場合は、両方の並行数を 1 に下げてください。
+`/api/v1/uploads/recipe` が返すクライアントヒントにより、ブラウザーはパイプラインの規模を
+自身で決定します。デコードとエンコードは直列で、実際の並行数はサーバーヒント、デバイス
+能力、ブラウザー上限の最小値になります。サーバーは引き続き各リクエストを独立に検証します。
 中間の `publish_source` とセッションステージングファイルは公開後に削除されます。
+ホストで CPU またはメモリ負荷が継続する場合は、`V2_WATERMARK_CONCURRENCY` と
+`IMGPROXY_WORKERS` を 1 に下げてください。
 
 ### 3.7 CDN と永続アウトボックス
 
@@ -237,11 +219,9 @@ CPU またはメモリ負荷が継続する場合は、両方の並行数を 1 �
 
 ### 4.1 リクエスト経路
 
-```text
-利用者 --HTTPS--> Cloudflare --> nginx(:443) --HTTP--> backend(:8080, 127.0.0.1)
-                                          \- TLS 終端 / レート制限 / 実 IP 転送
-backend --> MySQL / Redis / imgproxy（Docker プライベートネットワーク）
-```
+本番トラフィックは Cloudflare を経由し、nginx が TLS を終端して `127.0.0.1:8080` の
+バックエンドへ転送します。バックエンドは Docker プライベートネットワーク経由で MySQL、
+Redis、imgproxy を利用します。完全な構成図はルート README を参照してください。
 
 ### 4.2 nginx の重要設定（本番）
 
@@ -250,7 +230,11 @@ backend --> MySQL / Redis / imgproxy（Docker プライベートネットワー�
 - `proxy_set_header X-Forwarded-For $remote_addr;` は追加せず**上書き**し、XFF
   偽装を防ぎます。
 - `location = /metrics { return 404; }` で Prometheus メトリクスの公開範囲を抑えます。
-- `client_max_body_size 20m;` を 1 リクエストあたりのアップロードサイズ上限に合わせます。
+- `client_max_body_size 64m;` は、レシピの `max_part_bytes`（既定 64 MiB）で制限される
+  V2 パートという、単一アップロードリクエストの最大サイズを許可します。V1 のマルチパート
+  一括アップロードはこれを超える場合があるため、V1 一括アップロードを使う場合はこの上限を
+  引き上げてください。バックエンドは引き続き 1 ファイル 10 MiB、1 リクエスト最大 20
+  ファイルを強制します。
 - セキュリティヘッダー：`HSTS` / `X-Content-Type-Options` / `X-Frame-Options` /
   `Content-Security-Policy`。
 
@@ -288,12 +272,12 @@ backend --> MySQL / Redis / imgproxy（Docker プライベートネットワー�
 | ワーカー | 間隔 | 役割 |
 |---|---|---|
 | `heartbeat` | 5 分 | ハートビートがタイムアウトしたデバイスセッションを期限切れにする |
-| `view_flusher` | 60 秒 | Redis の `views:*` カウンターをデータベースへ書き出す |
+| `view-flusher` | 60 秒 | Redis の `views:*` カウンターをデータベースへ書き出す |
 | `cleanup` | 1 時間 | 期限切れセッション/CSRF/アクセストークン、失敗したアップロード記録、孤立した一時ファイルを削除 |
-| `v2_publish` | 継続。既定並行数 2 | `publish_source` から最終公開画像を生成し、ウォーターマークを適用 |
-| `v2_cleanup` | 継続・増分 | 期限切れセッション、ステージングディレクトリ、孤立した V2 ファイルを回収 |
+| `v2-publish` | 継続。既定並行数 2 | `publish_source` から最終公開画像を生成し、ウォーターマークを適用 |
+| `v2-cleanup` | 継続・増分 | 期限切れセッション、ステージングディレクトリ、孤立した V2 ファイルを回収 |
 | `outbox` | 既定 2 秒 | CDN パージイベントとローカル/R2 物理削除イベントを配信 |
-| `user_deletion` | 5 分 | 期限到来済みアカウント削除を小さく復旧可能なバッチで実行 |
+| `user-deletion` | 5 分 | 期限到来済みアカウント削除を小さく復旧可能なバッチで実行 |
 
 すべてのワーカーに `recover` があり、1 回のパニックでマネージャー全体が停止することは
 ありません。
@@ -307,20 +291,19 @@ backend --> MySQL / Redis / imgproxy（Docker プライベートネットワー�
 
 ```bash
 # GitHub Actions が公開した新しい正確なバージョンへアップグレード
-# backend/.env を編集し、DOCKER_IMAGE を jaykserks/summerain:v2.0.1 に設定
+# backend/.env を編集し、DOCKER_IMAGE を jaykserks/summerain:<new-version> に設定
 docker compose --env-file backend/.env -f backend/docker-compose.deploy.yml pull backend
 docker compose --env-file backend/.env -f backend/docker-compose.deploy.yml up -d --no-build backend
 
 # 直前の動作確認済み不変バージョンへロールバック
-# backend/.env を編集し、DOCKER_IMAGE を jaykserks/summerain:v2.0.0 に戻す
+# backend/.env を編集し、DOCKER_IMAGE を jaykserks/summerain:<previous-version> に戻す
 docker compose --env-file backend/.env -f backend/docker-compose.deploy.yml pull backend
 docker compose --env-file backend/.env -f backend/docker-compose.deploy.yml up -d --no-build backend
 ```
 
 ダイジェスト単位で固定する場合は、`DOCKER_IMAGE` を
 `jaykserks/summerain@sha256:<oci-index-digest>` に設定します。マルチプラットフォーム
-デプロイでは OCI インデックス/マニフェストリストのダイジェストを固定してください。`amd64` または
-`arm64` 固有の子マニフェストのダイジェストを別のアーキテクチャに再利用してはいけません。
+デプロイでは OCI インデックス/マニフェストリストのダイジェストを固定してください。
 
 > 非 root イメージへ切り替える前に、データボリュームで `chown -R 10001:10001` を
 > 実行してください。新規作成した名前付きボリュームはイメージ内 `/data` の所有者を
@@ -359,19 +342,17 @@ FLUSH PRIVILEGES;
 
 ### 6.2 アップロードと直接リンク
 
-1. Web クライアントは 15 MiB、50 MP 以下の静止 JPG/JPEG、PNG、BMP、WebP、AVIF を
-   受け付けます。V2 初回リリースではアニメーション画像を拒否します。
-2. ブラウザーは画像ごとに `master`（元解像度、Q80）、`gallery`（400x400、Q60）、
-   `admin`（120x160、Q60）、`publish_source`（長辺 2048、Q80）を生成し、
-   `/api/v1/uploads/*` を通じてパートごとにアップロードします。
+1. Web クライアントは静止 JPG/JPEG、PNG、BMP、WebP、AVIF を受け付け（上限は第 7 節）、
+   アニメーション画像を拒否します。
+2. ブラウザーは画像ごとに固定レシピのバリアント（`master`、`gallery`、`admin`、
+   `publish_source`）を生成し、`/api/v1/uploads/*` を通じてパートごとにアップロード
+   します。正確な寸法と品質はサーバーレシピから取得します。
 3. バックエンドは `master`、`gallery`、`admin` を確定します。バックグラウンドワーカーは
    `publish_source` から任意でウォーターマーク付きの `publish` アセットを作成した後、
-   `publish_source` とセッション中間ファイルを削除します。Image Management は
-   120x160 の `admin` ファイルを CSS で 60x80 として表示し、2x ピクセル密度を
-   保持します。
-4. V2 公開直接リンクは `/i/<asset_link>.webp`、固定バリアントは
-   `/i/<asset_link>/{master|gallery|admin|publish}.webp` です。クエリパラメーターから
-   追加の V2 サイズは生成されません。
+   `publish_source` とセッション中間ファイルを削除します。
+4. 公開ファイルは `/i/<asset_link>.webp` から、固定バリアントは `/i/<asset_link>/`
+   配下から配信されます。正確なルートは API リファレンスを参照してください。クエリ
+   パラメーターから追加の V2 サイズは生成されません。
 5. Web クライアントは最初に `/api/v1/uploads/recipe` から `v2_enabled` 機能フラグを
    読み取ります。`V2_UPLOAD_ENABLED=false` の場合だけクライアント前処理を省略し、
    `POST /api/v1/images/` から V1 互換マルチパートアップロードを使用します。任意サイズを
@@ -391,8 +372,8 @@ V1 画像は安全なローカルパスを最初に使用します。ローカ�
 - 各画像の `visibility` は `public` または `private` です。
 - **非公開画像**には、クエリ `?token=`、ヘッダー `X-Image-Token`、または
   `Authorization: Bearer` で渡すアクセストークンが必要です。
-- `POST /api/v1/images/:id/tokens` でトークンを発行します。有効期間は 10 分から
-  3 日です。平文は発行レスポンスと画像詳細で `owner`/`admin` にだけ返されます。
+- `POST /api/v1/images/:id/tokens` でトークンを発行します。有効期間は上限付きで設定可能
+  です（第 7 節を参照）。平文は発行レスポンスと画像詳細で `owner`/`admin` にだけ返されます。
 - `private` から `public` へ切り替えると、**その画像のすべてのトークンを自動的に失効**
   させます。
 
@@ -409,32 +390,33 @@ V1 画像は安全なローカルパスを最初に使用します。ローカ�
 必要です。
 
 - ユーザー一覧と状態変更。`suspended` に設定するとすべてのデバイスを強制ログアウトします。
-- システム統計の表示と、ウォーターマーク項目
-  `watermark_enabled/text/position/opacity` などのシステム設定変更。
+- システム統計の表示と、ウォーターマーク項目 `watermark_enabled`、`watermark_text`、
+  `watermark_position`、`watermark_opacity`、`watermark_size`、`watermark_color` などの
+  システム設定変更。
 
 ---
 
 ## 7. 制限値としきい値
 
-| 項目 | 値 | 参照元 |
-|---|---|---|
-| V2 ソースファイル上限 | 15 MiB | `frontend/src/features/images/pages/Upload.tsx` |
-| V2 画像ごとのピクセル上限 | 50 MP | `config.go` / `v2_upload_types.go` |
-| 固定 V2 配信用バリアント | `master`、400x400 `gallery`、120x160 `admin`、長辺 2048 `publish` | `v2_upload_types.go` |
-| V1 マルチパート上限 | 1 ファイル 10 MiB、1 リクエスト最大 20 ファイル | `image_service.go` |
-| 既定ストレージクォータ | 500 MiB（524288000 バイト） | `model.User` |
-| クォータ警告しきい値 | 90% | `image_service.go` |
-| 画像短縮リンク | V2 は 12 桁の 16 進数。V1 は既定 12 桁で、連続衝突後に 16 桁へ切り替え | `generateUniqueLink` |
-| Web セッション | 30 日 | `auth_service.go` |
-| CSRF 有効期間 | 24 時間（スライド更新） | `auth_service.go` |
-| デバイス識別情報 | 90 日 | `auth_service.go` |
-| デバイスセッション | 15 分（ハートビート更新、猶予 600s） | `auth_service.go` / `model.Session` |
-| プラットフォームごとのデバイス数 | 最大 3 | `auth_service.go` |
-| ログインレート制限 | IP：15 分に 5 回。`username`：15 分に 3 回 | `auth_service.go` |
-| Bootstrap レート制限 | 1 分に 10 回 | `auth_service.go` |
-| アクセストークン有効期間 | 10 分から 3 日 | `image_service.go` |
-| V1 動的変換サイズパラメーター | `w/h` は 4096 以下 | `public_handler.go` |
-| V2 アップロード形式 | 静止 jpg/jpeg/png/bmp/webp/avif | `sniff.ts` / `v2_upload_types.go` |
+| 項目 | 値 |
+|---|---|
+| V2 ソースファイル上限 | 15 MiB |
+| V2 画像ごとのピクセル上限 | 50 MP |
+| 固定 V2 配信用バリアント | `master`、`gallery`、`admin`、`publish`（固定レシピ。ルート README のパイプライン表を参照） |
+| V1 マルチパート上限 | 1 ファイル 10 MiB、1 リクエスト最大 20 ファイル |
+| 既定ストレージクォータ | 500 MiB（524288000 バイト） |
+| クォータ警告しきい値 | 90% |
+| 画像短縮リンク | V2 は 12 桁の 16 進数。V1 は既定 12 桁で、連続衝突後に 16 桁へ切り替え |
+| Web セッション | 30 日 |
+| CSRF 有効期間 | 24 時間（スライド更新） |
+| デバイス識別情報 | 90 日 |
+| デバイスセッション | 15 分（ハートビート更新、猶予 600s） |
+| プラットフォームごとのデバイス数 | 最大 3 |
+| ログインレート制限 | IP：15 分に 5 回。`username`：15 分に 3 回 |
+| Bootstrap レート制限 | 1 分に 10 回 |
+| アクセストークン有効期間 | 10 分から 3 日 |
+| V1 動的変換サイズパラメーター | `w/h` は 4096 以下 |
+| V2 アップロード形式 | 静止 jpg/jpeg/png/bmp/webp/avif |
 
 ---
 
@@ -457,9 +439,3 @@ V1 画像は安全なローカルパスを最初に使用します。ローカ�
 
 > `GIN_MODE=debug` では、エラーレスポンスに内部情報が含まれる場合があります。本番環境では
 > 必ず `release` を使用してください。
-
----
-
-*参照元：`cmd/server/main.go`、`internal/config/config.go`、
-`internal/{handler,service,middleware,model,worker}/*`、`Dockerfile`、
-`docker-compose*.yml`。*

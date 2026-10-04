@@ -14,7 +14,7 @@
 > defaults may change frequently. Review every changelog, back up MySQL and the image
 > volume, and pin an exact release tag or OCI index digest in production.
 
-[Documentation](https://summerain-1.gitbook.io/summerain/) | [V2.0.0 release notes](./docs/releases/v2.0.0.md) | [Docker Hub](https://hub.docker.com/r/jaykserks/summerain) | [GHCR](https://github.com/kserksi/summeRain/pkgs/container/summerain)
+[Documentation](https://summerain-1.gitbook.io/summerain/) | [Releases](https://github.com/kserksi/summeRain/releases) | [Docker Hub](https://hub.docker.com/r/jaykserks/summerain) | [GHCR](https://github.com/kserksi/summeRain/pkgs/container/summerain)
 
 ## Overview
 
@@ -66,10 +66,10 @@ made V1 vulnerable to hot-resource bursts.
 ### Upload Behavior
 
 - Static JPEG, PNG, BMP, WebP, and AVIF input is supported.
-- Animated images and GIF uploads are not supported in V2.0.0.
-- Source files are limited to 15 MiB and 50 megapixels.
-- Browser processing concurrency is 1 and upload-pipeline concurrency is 2.
-- Part uploads start at concurrency 2 and may adapt to 3 on capable clients.
+- Animated images and GIF uploads are not supported.
+- Source size, pixel, and concurrency limits follow the server-side recipe and
+  configuration; the defaults are listed in
+  [Limits and Thresholds](./docs/USAGE.md#7-limits-and-thresholds).
 - Upload sessions are resumable and idempotent, with durable status polling and
   a ten-minute client polling deadline after which status can be resumed.
 - The high-capacity browser path uses `wasm-vips`; a bounded Canvas/Pica path is
@@ -102,8 +102,8 @@ made V1 vulnerable to hot-resource bursts.
   ten minutes to three days.
 - User and administrator roles, session management, audit logs, and a durable
   delayed account-deletion workflow.
-- Optional reCAPTCHA v3 and Cloudflare Turnstile integration. GeeTest v4 is
-  available only when cross-origin isolation is explicitly disabled.
+- Optional reCAPTCHA v3, Cloudflare Turnstile, and GeeTest v4 CAPTCHA
+  integration.
 - Immediate public/private origin-alias transitions with durable CDN purge work.
 
 ### Web and Operations
@@ -130,7 +130,9 @@ made V1 vulnerable to hot-resource bursts.
 
 Exact CI, service, and browser-processing versions are recorded in
 [`requirements.lock`](./requirements.lock). Go and npm dependency graphs are
-locked by `backend/go.sum` and `frontend/package-lock.json`.
+locked by `backend/go.sum` and `frontend/package-lock.json`. Licenses and
+attribution for every adopted library and service are listed in
+[Third-Party Software](./docs/THIRD-PARTY.md).
 
 ## Quick Start for WSL
 
@@ -225,7 +227,7 @@ docker compose --env-file backend/.env \
 Example stable image:
 
 ```text
-jaykserks/summerain:2.0.0
+jaykserks/summerain:<version>
 ```
 
 Published registries:
@@ -234,34 +236,26 @@ Published registries:
 - GHCR: `ghcr.io/kserksi/summerain`
 
 Use the OCI multi-platform index digest when pinning by digest across
-architectures. Do not reuse an architecture-specific child-manifest digest on
-both `amd64` and `arm64` hosts.
+architectures.
 
 See [Deployment and Usage](./docs/USAGE.md) for the complete environment,
 nginx/CDN, health-check, upgrade, and rollback reference.
 
 ## Release Channels
 
-- Regular pushes to `dev` publish `dev` and `dev-sha-<12-character-commit>`.
-- A development release such as `2.0.1` publishes `dev-v2.0.1`, `dev-2.0.1`,
-  `dev`, and the development commit tag. Pull it explicitly with
-  `docker pull jaykserks/summerain:dev`.
-- Regular pushes to `main` publish `main` and `main-sha-<12-character-commit>`.
-- A stable release such as `2.1.0` publishes `v2.1.0`, `2.1.0`, `2.1`, `2`,
-  `latest`, `main`, and the stable commit tag. The default Compose image follows
-  `latest`, which is written only from the stable branch.
-- Exact semantic-version tags are immutable. Moving aliases remain movable.
-- Release reruns reconcile Docker Hub and GHCR by verified manifest digest and
-  stop if exact tags conflict.
-- The root README is synchronized to Docker Hub after a successful publication.
+Pushes to `dev` publish development images under `dev` and
+`dev-sha-<12-character-commit>`. Pushes to `main` publish stable tags, and only
+a stable release moves `latest` and `main`. Exact semantic-version tags are
+immutable, and release reruns reconcile Docker Hub and GHCR without overwriting
+them.
 
-The full release contract is documented in
+The full tag contract, including digest-pinning guidance, is documented in
 [Release and Tag Management](./docs/RELEASING.md).
 
 ## Resource Profile
 
-The default Compose profile is designed for a 3-core, 4 GiB host shared with
-other services.
+The default Compose profile applies per-service CPU and memory limits so the
+stack can share a host with other workloads.
 
 | Service | CPU limit | Memory limit |
 |---|---:|---:|
@@ -270,11 +264,10 @@ other services.
 | Redis | 0.15 CPU | 192 MiB |
 | imgproxy | 0.70 CPU | 512 MiB |
 
-The backend defaults to eight global and four per-user concurrent part uploads.
-MySQL and Redis pools are bounded. New V2 sessions are rejected at the default
-80% disk soft limit, and new parts/publish outputs are rejected at the 90% hard
-limit. Reduce imgproxy and watermark workers from two to one when the host is
-under sustained contention.
+Upload concurrency, connection pools, and disk-pressure thresholds are listed
+in [Limits and Thresholds](./docs/USAGE.md#7-limits-and-thresholds), and their
+configuration is described in
+[Configuration Reference](./docs/USAGE.md#36-v2-upload-and-publication).
 
 These limits are a conservative starting point, not a universal capacity
 guarantee. Disk latency, database latency, watermark complexity, and colocated
@@ -287,7 +280,7 @@ summeRain/
 |-- backend/
 |   |-- cmd/server/                 application entry point
 |   |-- internal/                   handlers, services, repositories, workers
-|   |-- migrations/                 versioned SQL migrations
+|   |-- migrations/                 schema migration snapshots and reference
 |   `-- web/                        generated frontend build output
 |-- frontend/
 |   |-- src/features/               domain-oriented application features
@@ -302,12 +295,7 @@ summeRain/
 `-- SUMMARY.md                      GitBook navigation
 ```
 
-Backend requests follow this boundary:
-
-```text
-request -> middleware -> handler -> service -> repository -> MySQL / Redis
-                                      `-> filesystem / R2 / imgproxy
-```
+Backend requests follow a single boundary: `request -> middleware -> handler -> service -> repository -> MySQL / Redis`, with the service layer reaching the filesystem, R2/S3, and imgproxy.
 
 ## Documentation
 
@@ -319,10 +307,14 @@ in [`SUMMARY.md`](./SUMMARY.md). The primary references are:
 - [Deployment and Usage](./docs/USAGE.md)
 - [API Reference](./docs/API.md)
 - [Release and Tag Management](./docs/RELEASING.md)
-- [Frontend Architecture](./docs/design/frontend-architecture/README.md)
+- [Third-Party Software](./docs/THIRD-PARTY.md)
+- [Frontend Architecture (archived design records)](./docs/design/frontend-architecture/README.md)
 - [Schema Migrations](./backend/migrations/README.md)
 - [Contributing](./CONTRIBUTING.md)
 - [Security Policy](./SECURITY.md)
+
+This documentation describes the latest stable release. Unreleased changes live
+on the `dev` branch and appear in the release notes when published.
 
 English is the authoritative documentation language. Reviewable Simplified
 Chinese and Japanese translations mirror the same page paths under
@@ -335,7 +327,7 @@ GitBook editor.
 
 ## Known Limitations
 
-- V2.0.0 accepts static images only; animated-image support is planned.
+- V2 accepts static images only; animated-image support is planned.
 - V2 persists fixed WebP variants and does not expose arbitrary dynamic resize
   combinations.
 - V2 does not retain the original encoded source bytes; `master` is a
@@ -343,8 +335,8 @@ GitBook editor.
 - Existing V1 images are not automatically converted or assigned V2 variants.
 - Historical R2 migration is intentionally delegated to a separate migration
   tool and is not performed by the main server.
-- Disabling cross-origin isolation enables GeeTest v4 but removes the
-  high-capacity wasm-vips browser path.
+- GeeTest v4 is mutually exclusive with the default cross-origin isolation mode;
+  see [CAPTCHA configuration](./docs/USAGE.md#38-captcha-pluggable-and-optional).
 
 ## Contributing and Security
 

@@ -1,8 +1,7 @@
 # summeRain Deployment and Usage Guide
 
-> This guide is derived from the `backend/` source and deployment configuration.
-> It covers **deployment, configuration, operations, and everyday use**. See
-> [`API.md`](./API.md) for the complete API contract.
+> This guide covers **deployment, configuration, operations, and everyday
+> use**. See [`API.md`](./API.md) for the complete API contract.
 
 ---
 
@@ -23,8 +22,9 @@
 
 summeRain is a self-hosted image hosting and photo album service.
 
-- **Backend:** Go 1.26 + Gin + GORM (MySQL) + Redis; imgproxy serves V1
-  compatibility paths and applies V2 publication watermarks.
+- **Backend:** Go 1.24+ (CI and container builds use Go 1.26.5) + Gin + GORM
+  (MySQL) + Redis; imgproxy serves V1 compatibility paths and applies V2
+  publication watermarks.
 - **Frontend:** React + Vite. The Go service hosts the compiled assets from the
   same origin.
 - **Core capabilities:** registration and login, image upload and management,
@@ -48,25 +48,8 @@ summeRain is a self-hosted image hosting and photo album service.
 
 ### 2.1 Local Development
 
-```bash
-# Terminal 1: start pinned MySQL / Redis / imgproxy versions through Compose only
-./scripts/dev-wsl.sh deps-up
-./scripts/dev-wsl.sh backend
-
-# Terminal 2: run npm ci in frontend/ before the first launch
-./scripts/dev-wsl.sh frontend
-```
-
-- The backend listens on `127.0.0.1:18080` by default. Its health endpoint is
-  `GET http://127.0.0.1:18080/health` -> `{"status":"ok"}`.
-- The frontend listens on `https://127.0.0.1:5173` by default and proxies
-  `/api/` and `/i/` to the backend from the same origin.
-- The first startup automatically runs checksummed database migrations and
-  compatibility model migrations.
-
-> Browsers reject `__Host-` cookies on local `http://localhost` because they
-> require HTTPS and a same-origin context. Use a self-signed certificate or a
-> same-origin proxy for local integration work.
+See [Quick Start for WSL](../README.md#quick-start-for-wsl) in the root README
+for starting MySQL, Redis, imgproxy, the backend, and the frontend.
 
 ### 2.2 Production Deployment (GitHub Actions Image)
 
@@ -93,8 +76,8 @@ In production, the fronting nginx instance reverse proxies to
 
 ## 3. Configuration Reference (Environment Variables)
 
-Source: `internal/config/config.go`. Values that have a **default** do not need
-to be set explicitly.
+Values that have a **default** do not need to be set explicitly. Every
+environment variable is read once at startup; a change requires a restart.
 
 ### 3.1 Service
 
@@ -104,12 +87,12 @@ to be set explicitly.
 | `GIN_MODE` | `debug` | `debug` / `release`; use `release` in production |
 | `COOKIE_SECRET` | `change-me-in-production` | Reserved. Current sessions use opaque random strings and are not signed, but a strong value is still recommended |
 | `CROSS_ORIGIN_ISOLATION` | `true` | Sends COOP/COEP and enables the wasm-vips large-image path. If disabled, images above the browser-native safety threshold cannot be processed |
-| `GOMEMLIMIT` | `512MiB` (Compose) | Keeps the Go heap target inside the 640 MiB container limit, reserving capacity for stacks, native memory, and the runtime |
+| `GOMEMLIMIT` | `512MiB` (Compose) | Keeps the Go heap target inside the 640 MiB container limit; injected by the Compose profile, not read by the application |
 
 When `CROSS_ORIGIN_ISOLATION=true`, third-party scripts, fonts, and images must
 explicitly permit embedding through CORS or `Cross-Origin-Resource-Policy`.
-Otherwise, the browser blocks them under COEP. The 50MP upload target depends on
-the isolated wasm-vips path enabled by this mode.
+Otherwise, the browser blocks them under COEP. See Section 3.8 for the CAPTCHA
+interaction.
 
 ### 3.2 Database (MySQL)
 
@@ -169,7 +152,7 @@ rate-limit or replay-protection state and preventing a container OOM.
 | `V2_SESSION_TTL` | `30m` | Lifetime of an unfinished upload session |
 | `V2_GLOBAL_UPLOAD_CONCURRENCY` | `8` | Global concurrent part-receive limit for one backend instance |
 | `V2_PER_USER_UPLOAD_CONCURRENCY` | `4` | Concurrent part-receive limit for one user |
-| `V2_WATERMARK_CONCURRENCY` | `2` | Publication/watermark worker count; the upper bound for a shared 3-core, 4 GB host |
+| `V2_WATERMARK_CONCURRENCY` | `2` | Publication/watermark worker count |
 | `V2_JOB_POLL_INTERVAL` | `1s` | Publication-job polling interval |
 | `V2_JOB_LEASE` | `2m` | Publication-job lease; workers renew it and commit with a fencing token |
 | `CLIENT_UPLOAD_PIPELINE_CONCURRENCY` | `2` | Advisory browser upload-pipeline concurrency returned by `/api/v1/uploads/recipe` |
@@ -185,13 +168,13 @@ embeds the same default. Changing the recipe requires a restart and a
 `recipe_version` bump, and the recipe is never exposed through the
 administrator API.
 
-The browser upload pipeline has concurrency 2, while image decoding and encoding
-remain serial. The active server-side session limit is 4, leaving backend
-capacity for other tabs and recovery requests. Server publication and imgproxy
-each default to 2 workers, allowing equal watermark snapshots to run in
-parallel. If other components on the same host experience sustained CPU or
-memory pressure, reduce both concurrency values to 1. Intermediate
-`publish_source` and session staging files are deleted after publication.
+The advisory client hints returned by `/api/v1/uploads/recipe` let the browser
+size its own pipeline; decoding and encoding remain serial, and the effective
+concurrency is the smallest of the server hint, the device capability, and the
+browser cap. The server still validates every request independently.
+Intermediate `publish_source` and session staging files are deleted after
+publication. When the host is under sustained CPU or memory pressure, reduce
+`V2_WATERMARK_CONCURRENCY` and `IMGPROXY_WORKERS` to 1.
 
 ### 3.7 CDN and Durable Outbox
 
@@ -233,7 +216,7 @@ with the `captcha_provider` key.
 > the server rejects startup or an administrative switch to that provider. Use
 > `none`, `recaptcha`, or `turnstile`. GeeTest becomes available only after
 > explicitly disabling cross-origin isolation, which removes the isolated
-> wasm-vips path required for V2 processing of 50MP images.
+> wasm-vips path required for V2 processing of 50 MP images.
 
 ---
 
@@ -241,11 +224,10 @@ with the `captcha_provider` key.
 
 ### 4.1 Request Path
 
-```text
-User --HTTPS--> Cloudflare --> nginx(:443) --HTTP--> backend(:8080, 127.0.0.1)
-                                      \- TLS termination / rate limiting / real-IP forwarding
-backend --> MySQL / Redis / imgproxy (Docker private network)
-```
+Production traffic enters through Cloudflare, terminates TLS at nginx, and
+reaches the backend on `127.0.0.1:8080`. The backend uses MySQL, Redis, and
+imgproxy over the Docker private network. The full topology diagram is in the
+[root README](../README.md#overview).
 
 ### 4.2 Critical nginx Configuration (Production)
 
@@ -254,7 +236,11 @@ backend --> MySQL / Redis / imgproxy (Docker private network)
 - `proxy_set_header X-Forwarded-For $remote_addr;` **overwrites** rather than
   appends, preventing XFF spoofing.
 - `location = /metrics { return 404; }` limits exposure of Prometheus metrics.
-- `client_max_body_size 20m;` matches the per-request upload-size limit.
+- `client_max_body_size 64m;` admits the largest single upload request, a V2
+  part bounded by the recipe's `max_part_bytes` (64 MiB by default). A V1
+  multipart batch may exceed this value; raise the limit when V1 batch uploads
+  are used, while the backend still enforces 10 MiB per file and at most 20
+  files per request.
 - Security headers: `HSTS` / `X-Content-Type-Options` / `X-Frame-Options` /
   `Content-Security-Policy`.
 
@@ -292,12 +278,12 @@ All four services should communicate only over the private network:
 | Worker | Interval | Responsibility |
 |---|---|---|
 | `heartbeat` | 5 minutes | Marks device sessions with timed-out heartbeats as expired |
-| `view_flusher` | 60 seconds | Flushes Redis `views:*` counters to the database |
+| `view-flusher` | 60 seconds | Flushes Redis `views:*` counters to the database |
 | `cleanup` | 1 hour | Removes expired sessions/CSRF/access tokens, failed upload records, and orphaned temporary files |
-| `v2_publish` | Continuous; default concurrency 2 | Produces final published images from `publish_source` and applies watermarks |
-| `v2_cleanup` | Continuous and incremental | Reclaims expired sessions, staging directories, and orphaned V2 files |
+| `v2-publish` | Continuous; default concurrency 2 | Produces final published images from `publish_source` and applies watermarks |
+| `v2-cleanup` | Continuous and incremental | Reclaims expired sessions, staging directories, and orphaned V2 files |
 | `outbox` | 2 seconds by default | Delivers CDN purge events and local/R2 physical-deletion events |
-| `user_deletion` | 5 minutes | Executes due account deletions in small, recoverable batches |
+| `user-deletion` | 5 minutes | Executes due account deletions in small, recoverable batches |
 
 Every worker has `recover`; a single panic does not stop the whole manager.
 
@@ -310,20 +296,19 @@ Every worker has `recover`; a single panic does not stop the whole manager.
 
 ```bash
 # Upgrade to a new exact version published by GitHub Actions
-# Edit backend/.env and set DOCKER_IMAGE to jaykserks/summerain:v2.0.1
+# Edit backend/.env and set DOCKER_IMAGE to jaykserks/summerain:<new-version>
 docker compose --env-file backend/.env -f backend/docker-compose.deploy.yml pull backend
 docker compose --env-file backend/.env -f backend/docker-compose.deploy.yml up -d --no-build backend
 
 # Roll back to the previous known-good immutable version
-# Edit backend/.env and restore DOCKER_IMAGE to jaykserks/summerain:v2.0.0
+# Edit backend/.env and restore DOCKER_IMAGE to jaykserks/summerain:<previous-version>
 docker compose --env-file backend/.env -f backend/docker-compose.deploy.yml pull backend
 docker compose --env-file backend/.env -f backend/docker-compose.deploy.yml up -d --no-build backend
 ```
 
 For digest-level pinning, set `DOCKER_IMAGE` to
 `jaykserks/summerain@sha256:<oci-index-digest>`. A multi-platform deployment
-must pin the OCI index / manifest-list digest. Do not reuse an `amd64`- or
-`arm64`-specific child manifest digest for another architecture.
+must pin the OCI index / manifest-list digest.
 
 > Before switching to the non-root image, run `chown -R 10001:10001` on the data
 > volume. A newly created named volume inherits ownership from `/data` in the
@@ -363,20 +348,18 @@ hold database-wide root privileges.
 
 ### 6.2 Uploads and Direct Links
 
-1. The Web client accepts static JPG/JPEG, PNG, BMP, WebP, and AVIF files up to
-   15 MiB and 50 MP. The initial V2 release rejects animated images.
-2. For each image, the browser creates `master` (original resolution, Q80),
-   `gallery` (400x400, Q60), `admin` (120x160, Q60), and `publish_source`
-   (longest edge 2048, Q80), then uploads the parts through
-   `/api/v1/uploads/*`.
+1. The Web client accepts static JPG/JPEG, PNG, BMP, WebP, and AVIF files
+   (limits in Section 7) and rejects animated images.
+2. For each image, the browser generates the fixed-recipe variants (`master`,
+   `gallery`, `admin`, and `publish_source`) and uploads the parts through
+   `/api/v1/uploads/*`; the exact geometry and quality come from the server
+   recipe.
 3. The backend promotes `master`, `gallery`, and `admin`. A background worker
    creates the optionally watermarked `publish` asset from `publish_source`,
-   then deletes `publish_source` and the session intermediates. Image Management
-   displays the 120x160 `admin` file at 60x80 with CSS, retaining 2x pixel
-   density.
-4. The V2 published direct link is `/i/<asset_link>.webp`; fixed variants are
-   `/i/<asset_link>/{master|gallery|admin|publish}.webp`. Query parameters do not
-   create additional V2 sizes.
+   then deletes `publish_source` and the session intermediates.
+4. Published files are served from `/i/<asset_link>.webp` with fixed variants
+   under `/i/<asset_link>/`; see the API reference for the exact routes. Query
+   parameters do not create additional V2 sizes.
 5. The Web client first reads the `v2_enabled` capability from
    `/api/v1/uploads/recipe`. Only when `V2_UPLOAD_ENABLED=false` does it skip
    client preprocessing and use V1-compatible multipart upload through
@@ -398,9 +381,9 @@ rollback for historical data.
 - Each image has `visibility` set to `public` or `private`.
 - A **private image** requires an access token supplied through query `?token=`,
   header `X-Image-Token`, or `Authorization: Bearer`.
-- Issue a token with `POST /api/v1/images/:id/tokens`. Its lifetime is 10 minutes
-  to 3 days. Plaintext is returned only to the owner/admin in the issuance
-  response and image details.
+- Issue a token with `POST /api/v1/images/:id/tokens`; its lifetime is bounded
+  and configurable (see Section 7). Plaintext is returned only to the
+  owner/admin in the issuance response and image details.
 - Switching from private to public **automatically revokes every token for that
   image**.
 
@@ -420,32 +403,33 @@ protection throughout the group:
 
 - List users and change their status. Setting `suspended` forces logout on every
   device.
-- View system statistics and change system configuration, including watermark
-  fields `watermark_enabled/text/position/opacity`.
+- View system statistics and change system configuration, including the
+  watermark keys `watermark_enabled`, `watermark_text`, `watermark_position`,
+  `watermark_opacity`, `watermark_size`, and `watermark_color`.
 
 ---
 
 ## 7. Limits and Thresholds
 
-| Item | Value | Source |
-|---|---|---|
-| V2 source-file limit | 15 MiB | `frontend/src/features/images/pages/Upload.tsx` |
-| V2 per-image pixel limit | 50 MP | `config.go` / `v2_upload_types.go` |
-| Fixed V2 access variants | `master`, 400x400 `gallery`, 120x160 `admin`, longest-edge-2048 `publish` | `v2_upload_types.go` |
-| V1 multipart limit | 10 MiB per file, no more than 20 files per request | `image_service.go` |
-| Default storage quota | 500 MiB (524288000 bytes) | `model.User` |
-| Quota warning threshold | 90% | `image_service.go` |
-| Image short link | V2 uses 12 hex characters; V1 defaults to 12 and falls back to 16 after repeated collisions | `generateUniqueLink` |
-| Web session | 30 days | `auth_service.go` |
-| CSRF lifetime | 24 hours, sliding renewal | `auth_service.go` |
-| Device identity | 90 days | `auth_service.go` |
-| Device session | 15 minutes, heartbeat renewal, 600s grace | `auth_service.go` / `model.Session` |
-| Devices per platform | No more than 3 | `auth_service.go` |
-| Login rate limit | IP: 5 attempts / 15 minutes; username: 3 attempts / 15 minutes | `auth_service.go` |
-| Bootstrap rate limit | 10 attempts / minute | `auth_service.go` |
-| Access-token lifetime | 10 minutes to 3 days | `image_service.go` |
-| V1 dynamic-transcode size parameters | `w/h` no greater than 4096 | `public_handler.go` |
-| V2 upload formats | Static jpg/jpeg/png/bmp/webp/avif | `sniff.ts` / `v2_upload_types.go` |
+| Item | Value |
+|---|---|
+| V2 source-file limit | 15 MiB |
+| V2 per-image pixel limit | 50 MP |
+| Fixed V2 access variants | `master`, `gallery`, `admin`, `publish` (fixed recipe; see the pipeline table in the root README) |
+| V1 multipart limit | 10 MiB per file, no more than 20 files per request |
+| Default storage quota | 500 MiB (524288000 bytes) |
+| Quota warning threshold | 90% |
+| Image short link | V2 uses 12 hex characters; V1 defaults to 12 and falls back to 16 after repeated collisions |
+| Web session | 30 days |
+| CSRF lifetime | 24 hours, sliding renewal |
+| Device identity | 90 days |
+| Device session | 15 minutes, heartbeat renewal, 600s grace |
+| Devices per platform | No more than 3 |
+| Login rate limit | IP: 5 attempts / 15 minutes; username: 3 attempts / 15 minutes |
+| Bootstrap rate limit | 10 attempts / minute |
+| Access-token lifetime | 10 minutes to 3 days |
+| V1 dynamic-transcode size parameters | `w/h` no greater than 4096 |
+| V2 upload formats | Static jpg/jpeg/png/bmp/webp/avif |
 
 ---
 
@@ -468,9 +452,3 @@ protection throughout the group:
 
 > With `GIN_MODE=debug`, error responses may expose internal details. Production
 > must use `release`.
-
----
-
-*Sources: `cmd/server/main.go`, `internal/config/config.go`,
-`internal/{handler,service,middleware,model,worker}/*`, `Dockerfile`, and
-`docker-compose*.yml`.*

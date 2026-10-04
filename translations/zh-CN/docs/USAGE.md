@@ -1,7 +1,6 @@
 # summeRain 部署与使用文档
 
-> 本文档基于 `backend/` 源码与部署配置生成，覆盖**部署、配置、运维与日常使用**。
-> 接口契约详见 [`API.md`](./API.md)。
+> 本文档覆盖**部署、配置、运维与日常使用**。接口契约详见 [`API.md`](./API.md)。
 
 ---
 
@@ -20,10 +19,10 @@
 
 ## 1. 项目概述
 
-summeRain 是一个自托管的图床和图片相册服务。
+summeRain 是一个自托管的图片托管与相册服务。
 
-- **后端：** Go 1.26 + Gin + GORM（MySQL）+ Redis；imgproxy 提供 V1 兼容路径和
-  V2 发布水印。
+- **后端：** Go 1.24+（CI 与容器构建使用 Go 1.26.5）+ Gin + GORM（MySQL）+ Redis；
+  imgproxy 提供 V1 兼容路径和 V2 发布水印。
 - **前端：** React + Vite（构建产物由 Go 服务同源托管）。
 - **核心能力：** 注册登录、图片上传与管理、公开/私有可见性、私密图片访问令牌、
   多端会话（Web Cookie + 设备 Token）、通知、后台管理、浏览量统计、缩略图和格式转换。
@@ -44,22 +43,8 @@ summeRain 是一个自托管的图床和图片相册服务。
 
 ### 2.1 本地开发
 
-```bash
-# 终端 1：仅通过 Compose 启动固定版本的 MySQL / Redis / imgproxy
-./scripts/dev-wsl.sh deps-up
-./scripts/dev-wsl.sh backend
-
-# 终端 2：首次运行前先在 frontend/ 执行 npm ci
-./scripts/dev-wsl.sh frontend
-```
-
-- 后端默认监听 `127.0.0.1:18080`，健康检查为
-  `GET http://127.0.0.1:18080/health` -> `{"status":"ok"}`。
-- 前端默认监听 `https://127.0.0.1:5173`，并将 `/api/` 与 `/i/` 同源代理至后端。
-- 首次启动会自动执行带校验和的数据库迁移和兼容模型迁移。
-
-> 在本地 `http://localhost` 下，浏览器会拒绝设置 `__Host-` 前缀 Cookie（要求 HTTPS
-> 和同源）。本地联调建议使用自签名证书或同源代理。
+本地开发环境（MySQL、Redis、imgproxy、后端与前端）的启动方式见根 README 的
+[WSL 快速开始](../README.md)。
 
 ### 2.2 生产部署（GitHub Actions 镜像）
 
@@ -83,7 +68,7 @@ SemVer 标签或 OCI 多架构索引 digest。
 
 ## 3. 配置参考（环境变量）
 
-来源：`internal/config/config.go`。**带默认值**的项目可不显式设置。
+**带默认值**的项目可不显式设置。所有环境变量仅在启动时读取一次，修改后需要重启。
 
 ### 3.1 服务
 
@@ -93,11 +78,11 @@ SemVer 标签或 OCI 多架构索引 digest。
 | `GIN_MODE` | `debug` | `debug` / `release`（生产使用 `release`） |
 | `COOKIE_SECRET` | `change-me-in-production` | 预留（当前会话使用不透明随机串，未实际签名；仍建议设置强值） |
 | `CROSS_ORIGIN_ISOLATION` | `true` | 下发 COOP/COEP，启用 wasm-vips 大图路径；禁用后，超过浏览器原生安全阈值的大图无法处理 |
-| `GOMEMLIMIT` | `512MiB`（Compose） | 将 Go 堆目标限制在 640 MiB 容器内，为栈、原生内存和运行时预留空间 |
+| `GOMEMLIMIT` | `512MiB`（Compose） | 将 Go 堆目标限制在 640 MiB 容器内；由 Compose 配置注入，应用本身不读取该变量 |
 
 `CROSS_ORIGIN_ISOLATION=true` 时，第三方脚本、字体和图片必须通过 CORS 或
-`Cross-Origin-Resource-Policy` 明确允许嵌入，否则浏览器会按 COEP 拦截。50MP 上传目标
-依赖此隔离模式提供的 wasm-vips 路径。
+`Cross-Origin-Resource-Policy` 明确允许嵌入，否则浏览器会按 COEP 拦截。与 CAPTCHA
+的交互见 3.8 节。
 
 ### 3.2 数据库（MySQL）
 
@@ -156,7 +141,7 @@ Compose 将 Redis 数据上限设为 `128mb`（容器上限 `192m`）并使用 `
 | `V2_SESSION_TTL` | `30m` | 未完成上传会话的有效期 |
 | `V2_GLOBAL_UPLOAD_CONCURRENCY` | `8` | 单个后端实例同时接收部件的全局上限 |
 | `V2_PER_USER_UPLOAD_CONCURRENCY` | `4` | 单个用户同时接收部件的上限 |
-| `V2_WATERMARK_CONCURRENCY` | `2` | 发布/水印 Worker 数；3 核 4 GB 共享主机的上限 |
+| `V2_WATERMARK_CONCURRENCY` | `2` | 发布/水印 Worker 数 |
 | `V2_JOB_POLL_INTERVAL` | `1s` | 发布任务轮询间隔 |
 | `V2_JOB_LEASE` | `2m` | 发布任务租约；Worker 会续租，并使用 fencing token 提交 |
 | `CLIENT_UPLOAD_PIPELINE_CONCURRENCY` | `2` | `/api/v1/uploads/recipe` 下发的浏览器上传流水线并发提示 |
@@ -169,10 +154,10 @@ Compose 将 Redis 数据上限设为 `128mb`（容器上限 `192m`）并使用 `
 `/app/config/image-recipe.json`，二进制文件也内置了同一份默认配方。修改配方需要重启并提升
 `recipe_version`，配方永远不会通过管理员 API 暴露。
 
-浏览器上传流水线并发为 2，但图片解码与编码串行执行；活跃服务端会话限制为 4，为其他
-标签页和恢复请求预留后端容量。服务端发布与 imgproxy 默认均为 2 个 Worker，相同水印
-快照可并行处理。如果同机其他组件持续出现 CPU 或内存压力，应将两个并发值一并降为 1。
-中间 `publish_source` 和会话暂存文件会在发布完成后删除。
+`/api/v1/uploads/recipe` 下发的客户端提示用于让浏览器自行决定流水线规模；解码与编码
+串行执行，实际并发取服务器提示、设备能力与浏览器上限的最小值。服务端仍会独立校验每个
+请求。中间 `publish_source` 和会话暂存文件会在发布完成后删除。主机持续出现 CPU 或内存
+压力时，将 `V2_WATERMARK_CONCURRENCY` 与 `IMGPROXY_WORKERS` 降为 1。
 
 ### 3.7 CDN 与持久化 Outbox
 
@@ -218,18 +203,15 @@ Compose 将 Redis 数据上限设为 `128mb`（容器上限 `192m`）并使用 `
 
 ### 4.1 请求链路
 
-```text
-用户 --HTTPS--> Cloudflare --> nginx(:443) --HTTP--> backend(:8080, 127.0.0.1)
-                                      \- TLS 终止 / 限速 / 真实 IP 透传
-backend --> MySQL / Redis / imgproxy（Docker 内网）
-```
+生产流量经 Cloudflare 进入，由 nginx 终止 TLS 后转发到 `127.0.0.1:8080` 的后端；
+后端通过 Docker 内网访问 MySQL、Redis 与 imgproxy。完整拓扑图见根 README。
 
 ### 4.2 nginx 关键配置（生产）
 
 - `set_real_ip_from <Cloudflare 段>; real_ip_header CF-Connecting-IP;`：还原真实客户端 IP。
 - `proxy_set_header X-Forwarded-For $remote_addr;`：**覆盖**而不是追加，防止 XFF 伪造。
 - `location = /metrics { return 404; }`：收敛 Prometheus 指标暴露面。
-- `client_max_body_size 20m;`：与单次上传体积上限匹配。
+- `client_max_body_size 64m;`：容纳单次上传的最大请求体，即受配方 `max_part_bytes`（默认 64 MiB）约束的 V2 部件。V1 multipart 批量请求可能超过该值；使用 V1 批量上传时应上调此限制，后端仍会强制单文件 10 MiB、单请求最多 20 个文件。
 - 安全头：`HSTS` / `X-Content-Type-Options` / `X-Frame-Options` /
   `Content-Security-Policy`。
 
@@ -266,12 +248,12 @@ backend --> MySQL / Redis / imgproxy（Docker 内网）
 | Worker | 周期 | 职责 |
 |---|---|---|
 | `heartbeat` | 5 分钟 | 将心跳超时的设备会话标记为过期 |
-| `view_flusher` | 60 秒 | 将 Redis `views:*` 计数写入数据库 |
+| `view-flusher` | 60 秒 | 将 Redis `views:*` 计数写入数据库 |
 | `cleanup` | 1 小时 | 清理过期会话/CSRF/访问令牌/失败上传记录/孤儿临时文件 |
-| `v2_publish` | 持续运行，默认并发 2 | 从 `publish_source` 生成最终发布图片并应用水印 |
-| `v2_cleanup` | 持续增量 | 回收过期会话、暂存目录和孤儿 V2 文件 |
+| `v2-publish` | 持续运行，默认并发 2 | 从 `publish_source` 生成最终发布图片并应用水印 |
+| `v2-cleanup` | 持续增量 | 回收过期会话、暂存目录和孤儿 V2 文件 |
 | `outbox` | 默认 2 秒 | 投递 CDN purge 与本地/R2 物理删除事件 |
-| `user_deletion` | 5 分钟 | 以可恢复的小批次执行到期账号删除 |
+| `user-deletion` | 5 分钟 | 以可恢复的小批次执行到期账号删除 |
 
 所有 Worker 都带有 `recover`，单次 panic 不会影响整体。
 
@@ -284,20 +266,19 @@ backend --> MySQL / Redis / imgproxy（Docker 内网）
 
 ```bash
 # 升级到 GitHub Actions 已发布的新精确版本
-# 编辑 backend/.env，将 DOCKER_IMAGE 改为 jaykserks/summerain:v2.0.1
+# 编辑 backend/.env，将 DOCKER_IMAGE 设为 jaykserks/summerain:<new-version>
 docker compose --env-file backend/.env -f backend/docker-compose.deploy.yml pull backend
 docker compose --env-file backend/.env -f backend/docker-compose.deploy.yml up -d --no-build backend
 
 # 回滚到上一个已知正常的不可变版本
-# 编辑 backend/.env，将 DOCKER_IMAGE 改回 jaykserks/summerain:v2.0.0
+# 编辑 backend/.env，将 DOCKER_IMAGE 改回 jaykserks/summerain:<previous-version>
 docker compose --env-file backend/.env -f backend/docker-compose.deploy.yml pull backend
 docker compose --env-file backend/.env -f backend/docker-compose.deploy.yml up -d --no-build backend
 ```
 
 需要 digest 级固定时，可将 `DOCKER_IMAGE` 写为
 `jaykserks/summerain@sha256:<oci-index-digest>`。多架构部署应固定 OCI index /
-manifest-list digest；不要将在 `amd64` 或 `arm64` 中专用的 child manifest digest
-复用到另一架构。
+manifest-list digest。
 
 > 切换至非 root 镜像时，需要先对数据卷执行 `chown -R 10001:10001`（命名卷首次创建
 > 时会继承镜像内 `/data` 的所有者）。
@@ -333,17 +314,14 @@ FLUSH PRIVILEGES;
 
 ### 6.2 上传与外链
 
-1. Web 接受不超过 15 MiB、50 MP 的静态 JPG/JPEG、PNG、BMP、WebP、AVIF；V2 首发版
-   拒绝动图。
-2. 浏览器为每张图片生成 `master`（原分辨率、Q80）、`gallery`（400x400、Q60）、
-   `admin`（120x160、Q60）和 `publish_source`（最长边 2048、Q80），然后通过
-   `/api/v1/uploads/*` 分部件上传。
-3. 后端固化 `master`、`gallery`、`admin`，后台从 `publish_source` 生成可带水印的
-   `publish`，随后删除 `publish_source` 和会话中间文件。Image Management 使用 CSS
-   将 120x160 的 `admin` 文件显示为 60x80，同时保留 2x 像素密度。
-4. V2 发布直链为 `/i/<asset_link>.webp`，固定变体为
-   `/i/<asset_link>/{master|gallery|admin|publish}.webp`；查询参数不会生成额外的
-   V2 尺寸。
+1. Web 接受静态 JPG/JPEG、PNG、BMP、WebP、AVIF（上限见第 7 节），并拒绝动图。
+2. 浏览器为每张图片生成固定配方变体（`master`、`gallery`、`admin` 和
+   `publish_source`），然后通过 `/api/v1/uploads/*` 分部件上传；具体几何尺寸与质量
+   取自服务端配方。
+3. 后端固化 `master`、`gallery`、`admin`；后台从 `publish_source` 生成可带水印的
+   `publish`，随后删除 `publish_source` 和会话中间文件。
+4. 发布文件通过 `/i/<asset_link>.webp` 提供，固定变体位于 `/i/<asset_link>/` 下；
+   具体路由见 API 参考。查询参数不会生成额外的 V2 尺寸。
 5. Web 先读取 `/api/v1/uploads/recipe` 的 `v2_enabled` 能力位；只有
    `V2_UPLOAD_ENABLED=false` 时，才跳过客户端预处理，并通过
    `POST /api/v1/images/` 使用 V1 multipart 兼容上传。V1 任意尺寸等动态转码使用有界
@@ -360,8 +338,8 @@ FLUSH PRIVILEGES;
 - 每张图片的 `visibility` 为 `public` 或 `private`。
 - **私密图片**需要访问令牌：query `?token=`、请求头 `X-Image-Token` 或
   `Authorization: Bearer`。
-- 生成令牌：`POST /api/v1/images/:id/tokens`（有效期 10 分钟至 3 天；明文只在
-  owner/admin 的签发响应和图片详情中返回）。
+- 生成令牌：`POST /api/v1/images/:id/tokens`；有效期有界且可配置（见第 7 节）。明文只在
+  owner/admin 的签发响应和图片详情中返回。
 - 从私有切换为公开时，会**自动撤销该图片的所有令牌**。
 
 ### 6.4 多端
@@ -376,31 +354,32 @@ FLUSH PRIVILEGES;
 要求 `role=admin` 且 `platform=web`，整组接口均要求 CSRF：
 
 - 用户列表和状态修改（设置为 `suspended` 会强制所有设备下线）。
-- 系统统计与系统配置（例如水印 `watermark_enabled/text/position/opacity`）。
+- 系统统计与系统配置（水印键 `watermark_enabled`、`watermark_text`、
+  `watermark_position`、`watermark_opacity`、`watermark_size`、`watermark_color`）。
 
 ---
 
 ## 7. 限制与阈值速查
 
-| 项目 | 值 | 来源 |
-|---|---|---|
-| V2 源文件上限 | 15 MiB | `frontend/src/features/images/pages/Upload.tsx` |
-| V2 单图像素上限 | 50 MP | `config.go` / `v2_upload_types.go` |
-| V2 固定访问变体 | `master`、400x400 `gallery`、120x160 `admin`、最长边 2048 `publish` | `v2_upload_types.go` |
-| V1 multipart 上限 | 单文件 10 MiB、单请求不超过 20 个文件 | `image_service.go` |
-| 默认存储配额 | 500 MiB（524288000 bytes） | `model.User` |
-| 配额预警阈值 | 90% | `image_service.go` |
-| 图片短链 | V2 为 12 位 hex；V1 默认 12 位，连续冲突后回退为 16 位 | `generateUniqueLink` |
-| Web 会话 | 30 天 | `auth_service.go` |
-| CSRF 有效期 | 24 小时（滑动续期） | `auth_service.go` |
-| 设备 identity | 90 天 | `auth_service.go` |
-| 设备 session | 15 分钟（心跳续期，宽限 600s） | `auth_service.go` / `model.Session` |
-| 每平台设备数 | 不超过 3 | `auth_service.go` |
-| 登录限流 | IP 5 次/15 分钟；用户名 3 次/15 分钟 | `auth_service.go` |
-| Bootstrap 限流 | 10 次/分钟 | `auth_service.go` |
-| 访问令牌有效期 | 10 分钟至 3 天 | `image_service.go` |
-| V1 动态转码尺寸参数 | `w/h` 不超过 4096 | `public_handler.go` |
-| V2 上传格式 | 静态 jpg/jpeg/png/bmp/webp/avif | `sniff.ts` / `v2_upload_types.go` |
+| 项目 | 值 |
+|---|---|
+| V2 源文件上限 | 15 MiB |
+| V2 单图像素上限 | 50 MP |
+| V2 固定访问变体 | `master`、`gallery`、`admin`、`publish`（固定配方；见根 README 管线表） |
+| V1 multipart 上限 | 单文件 10 MiB、单请求不超过 20 个文件 |
+| 默认存储配额 | 500 MiB（524288000 bytes） |
+| 配额预警阈值 | 90% |
+| 图片短链 | V2 为 12 位 hex；V1 默认 12 位，连续冲突后回退为 16 位 |
+| Web 会话 | 30 天 |
+| CSRF 有效期 | 24 小时（滑动续期） |
+| 设备 identity | 90 天 |
+| 设备 session | 15 分钟（心跳续期，宽限 600s） |
+| 每平台设备数 | 不超过 3 |
+| 登录限流 | IP 5 次/15 分钟；用户名 3 次/15 分钟 |
+| Bootstrap 限流 | 10 次/分钟 |
+| 访问令牌有效期 | 10 分钟至 3 天 |
+| V1 动态转码尺寸参数 | `w/h` 不超过 4096 |
+| V2 上传格式 | 静态 jpg/jpeg/png/bmp/webp/avif |
 
 ---
 
@@ -417,9 +396,3 @@ FLUSH PRIVILEGES;
 - **传输：** Cloudflare Full (Strict) + nginx HSTS。
 
 > 如果 `GIN_MODE=debug`，错误响应可能回显内部细节；生产环境必须使用 `release`。
-
----
-
-*文档依据：`cmd/server/main.go`、`internal/config/config.go`、
-`internal/{handler,service,middleware,model,worker}/*`、`Dockerfile`、
-`docker-compose*.yml`。*

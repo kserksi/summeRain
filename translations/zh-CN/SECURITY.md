@@ -4,7 +4,7 @@
 
 如果你发现安全漏洞，**请勿公开提交 Issue**。
 
-请通过 [GitHub Security Advisories](https://github.com/kserksi/summerain/security/advisories/new) 私下报告。我们会尽快确认报告并评估其影响。
+请通过 [GitHub Security Advisories](https://github.com/kserksi/summeRain/security/advisories/new) 私下报告。我们会尽快确认报告并评估其影响。
 
 请尽量提供以下信息：
 
@@ -22,7 +22,7 @@
 
 ## 支持的版本
 
-仅 `main` 分支上的最新发布版本接收安全修复。旧版本不单独维护安全补丁。
+仅从 `main` 发布的最新稳定版本接收安全修复。`dev` 分支的开发构建属于预览版本，不支持生产使用。旧版本不单独维护安全补丁。
 
 ## 部署安全
 

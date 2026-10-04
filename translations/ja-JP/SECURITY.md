@@ -4,7 +4,7 @@
 
 セキュリティ上の脆弱性を発見した場合は、**公開 Issue を作成しないでください**。
 
-[GitHub Security Advisories](https://github.com/kserksi/summerain/security/advisories/new) から非公開で報告してください。受領後、可能な限り速やかに報告を確認し、影響を評価します。
+[GitHub Security Advisories](https://github.com/kserksi/summeRain/security/advisories/new) から非公開で報告してください。受領後、可能な限り速やかに報告を確認し、影響を評価します。
 
 可能な範囲で次の情報を含めてください。
 
@@ -22,7 +22,7 @@
 
 ## サポート対象バージョン
 
-セキュリティ修正の対象は、`main` ブランチ上の最新リリースのみです。旧バージョン向けの個別パッチは提供しません。
+セキュリティ修正の対象は、`main` から公開された最新の安定版リリースのみです。`dev` ブランチの開発ビルドはプレビューであり、本番利用はサポートされません。旧バージョン向けの個別パッチは提供しません。
 
 ## デプロイ時のセキュリティ
 

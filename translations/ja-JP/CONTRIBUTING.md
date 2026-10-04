@@ -41,7 +41,7 @@ npm run build                  # 出力先：../backend/web/
 
 ### Go バックエンド
 
-- [Effective Go](https://go.dev/doc/effective_go)、`gofmt`、`go vet` に従ってください。
+- [Google Go Style Guide](https://google.github.io/styleguide/go/guide)（Decisions と Best Practices を含む）に従い、Effective Go を基礎とします。`gofmt` と `go vet` は必ず通してください。
 - 新機能には `_test.go` ファイルのテストを含めてください。
 - import は、標準ライブラリ、サードパーティパッケージ、`github.com/kserksi/summerain/...` 配下のプロジェクトパッケージの順に並べてください。
 - 各ソースファイルに著作権ヘッダー `// Copyright 2026 The summeRain Authors` を残してください。
@@ -59,14 +59,16 @@ go test ./...
 
 - 既存の React 19、TanStack Query、shadcn/ui スタックを使用してください。
 - 新機能には Vitest のテストを含めてください。
-- 既存の ESLint 設定に従ってください。
+- 既存の ESLint と Prettier の設定に従ってください。`console.*` と `debugger` は lint で拒否されます。
+- アーカイブ済みの[フロントエンドコーディング規約](docs/design/frontend-architecture/08-coding-standards.md)は、現在も使用しているパターンの参照先です。
 
 コミット前に次のチェックを実行します。
 
 ```bash
 cd frontend
+npx prettier --check .
 npm run lint
-npm run build
+npx tsc --noEmit
 npx vitest run
 ```
 
@@ -121,6 +123,20 @@ GitBook ドキュメント検証を実行してください。
 bash scripts/update-translation-source-hashes.sh
 bash scripts/verify-gitbook-docs.sh
 ```
+
+### ドキュメントの保守
+
+- 英語ページは簡潔に、読者の作業を中心に保ち、各事実は一度だけ記載します。しきい値は
+  `docs/USAGE.md` の第 7 節、環境変数は第 3 節、開発コマンドはルート README、
+  リリースチャネルの規則は `docs/RELEASING.md` に置きます。値を繰り返さず、これらの
+  正規の場所へリンクしてください。
+- `docs/design/` 配下のページはアーカイブ済みの設計記録です。追跡のため原文のまま保持し、
+  絵文字禁止の規則は適用しません。
+- 採用したライブラリとサービスの名称、作者または組織、ライセンス、リンクを
+  `docs/THIRD-PARTY.md` に記載し、依存関係の変更時に同期してください。
+- 翻訳ページでは既定の製品表現を使用し、outbox、advisory lock、fencing token、nonce
+  などの技術用語は初出時に英語のまま記載します。製品カテゴリの表記は各言語の用語規約に従い、
+  日本語では「画像ホスティング」で統一してください。
 
 ## 行動規範
 

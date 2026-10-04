@@ -9,7 +9,7 @@
 
 > **早期リリースに関する注意：** V2 はまだ早期リリースです。アップロードプロトコル、ブラウザー処理パイプライン、スキーマ、互換動作、運用上の既定値は頻繁に変更される可能性があります。更新ごとに変更履歴を確認し、MySQL と画像ボリュームをバックアップし、本番環境では正確なリリースタグまたは OCI インデックスダイジェストを固定してください。
 
-[オンラインドキュメント](https://summerain-1.gitbook.io/summerain/ja/) | [V2.0.0 リリースノート](./docs/releases/v2.0.0.md) | [Docker Hub](https://hub.docker.com/r/jaykserks/summerain) | [GHCR](https://github.com/kserksi/summeRain/pkgs/container/summerain)
+[オンラインドキュメント](https://summerain-1.gitbook.io/summerain/ja/) | [リリース](https://github.com/kserksi/summeRain/releases) | [Docker Hub](https://hub.docker.com/r/jaykserks/summerain) | [GHCR](https://github.com/kserksi/summeRain/pkgs/container/summerain)
 
 ## 概要
 
@@ -50,10 +50,8 @@ V2 は、負荷の高いデコード、リサイズ、形式変換、圧縮を�
 ### アップロード動作
 
 - 静止画の JPEG、PNG、BMP、WebP、AVIF 入力に対応します。
-- V2.0.0 はアニメーション画像と GIF アップロードに対応しません。
-- 元ファイルの上限は 15 MiB、50 MP です。
-- ブラウザー処理の同時実行数は 1、アップロードパイプラインは 2 です。
-- パートアップロードは同時実行数 2 で開始し、能力のあるクライアントでは 3 まで適応できます。
+- アニメーション画像と GIF アップロードには対応しません。
+- ソースのサイズ、ピクセル、同時実行数の上限はサーバー側レシピと設定に従います。既定値は[しきい値一覧](./docs/USAGE.md)を参照してください。
 - アップロードセッションは再開可能かつ冪等で、状態ポーリングは永続化されます。クライアントのポーリング期限は 10 分で、その後も状態確認を再開できます。
 - 高容量のブラウザー経路は `wasm-vips` を使用します。必要なブラウザー分離機能またはメモリ能力がない場合は、上限付き Canvas/Pica 経路を使用します。
 - 既存 V1 画像は元のリンクから引き続き読み取れ、上限付き動的変換も維持されます。
@@ -76,7 +74,7 @@ V2 は、負荷の高いデコード、リサイズ、形式変換、圧縮を�
 - Android および Windows クライアント向け Bearer token bootstrap とセッション。
 - 非公開画像ごとに 1 つの有効な共有トークン。有効期間は 10 分～3 日で設定可能。
 - ユーザーと管理者の役割、セッション管理、監査ログ、永続的な遅延アカウント削除ワークフロー。
-- reCAPTCHA v3 と Cloudflare Turnstile の任意統合。GeeTest v4 はクロスオリジン分離を明示的に無効にした場合だけ利用可能。
+- reCAPTCHA v3、Cloudflare Turnstile、GeeTest v4 の CAPTCHA を任意で統合できます。
 - 公開/非公開オリジンエイリアスの即時切り替えと、永続 CDN purge 処理。
 
 ### Web と運用
@@ -99,7 +97,7 @@ V2 は、負荷の高いデコード、リサイズ、形式変換、圧縮を�
 | ストレージ | V2 ローカルファイルシステム。V1 系統情報向け Cloudflare R2 および path-style 互換 S3 エンドポイント |
 | テスト | Go testing、Vitest、Testing Library、MSW |
 
-CI、サービス、ブラウザー処理の正確なバージョンは [`requirements.lock`](https://github.com/kserksi/summeRain/blob/main/requirements.lock) に記録されています。Go と npm の依存関係グラフは `backend/go.sum` と `frontend/package-lock.json` でロックされています。
+CI、サービス、ブラウザー処理の正確なバージョンは [`requirements.lock`](https://github.com/kserksi/summeRain/blob/main/requirements.lock) に記録されています。Go と npm の依存関係グラフは `backend/go.sum` と `frontend/package-lock.json` でロックされています。採用したライブラリとサービスのライセンスと謝辞は[サードパーティソフトウェア](./docs/THIRD-PARTY.md)に記載しています。
 
 ## WSL クイックスタート
 
@@ -183,7 +181,7 @@ docker compose --env-file backend/.env \
 安定版イメージの例：
 
 ```text
-jaykserks/summerain:2.0.0
+jaykserks/summerain:<version>
 ```
 
 公開先レジストリ：
@@ -191,25 +189,19 @@ jaykserks/summerain:2.0.0
 - Docker Hub：`jaykserks/summerain`
 - GHCR：`ghcr.io/kserksi/summerain`
 
-複数アーキテクチャでダイジェストを固定する場合は OCI マルチプラットフォームインデックスダイジェストを使用してください。特定アーキテクチャ専用の子 manifest ダイジェストを `amd64` と `arm64` の両ホストで再利用しないでください。
+複数アーキテクチャでダイジェストを固定する場合は OCI マルチプラットフォームインデックスダイジェストを使用してください。
 
 環境、nginx/CDN、ヘルスチェック、アップグレード、ロールバックの完全なリファレンスは[デプロイと利用方法](./docs/USAGE.md)を参照してください。
 
 ## リリースチャンネル
 
-- `dev` への通常の push は `dev` と `dev-sha-<12-character-commit>` を公開します。
-- `2.0.1` のような開発版は `dev-v2.0.1`、`dev-2.0.1`、`dev`、開発 commit タグを公開します。`docker pull jaykserks/summerain:dev` で明示的に取得します。
-- `main` への通常の push は `main` と `main-sha-<12-character-commit>` を公開します。
-- `2.1.0` のような安定版は `v2.1.0`、`2.1.0`、`2.1`、`2`、`latest`、`main`、安定版 commit タグを公開します。既定の Compose イメージは、安定ブランチだけが更新する `latest` に従います。
-- 正確なセマンティックバージョンタグは不変です。移動可能なエイリアスは引き続き移動できます。
-- リリースの再実行では検証済み manifest ダイジェストを使って Docker Hub と GHCR を調整し、正確なタグが競合する場合は停止します。
-- 公開成功後、ルート README を Docker Hub に同期します。
+`dev` への push は `dev` と `dev-sha-<12-character-commit>` の開発イメージを公開します。`main` への push は安定版タグを公開し、`latest` と `main` を移動するのは安定版リリースだけです。正確なセマンティックバージョンタグは不変であり、リリースの再実行は既存タグを上書きせずに Docker Hub と GHCR を調整します。
 
-完全なリリース契約は[リリースとタグ管理](./docs/RELEASING.md)を参照してください。
+ダイジェスト固定の指針を含む完全なタグ契約は[リリースとタグ管理](./docs/RELEASING.md)を参照してください。
 
 ## リソースプロファイル
 
-既定の Compose プロファイルは、他のサービスと共有する 3 コア、4 GiB のホストを想定しています。
+既定の Compose プロファイルは、サービスごとに CPU とメモリの上限を設定し、他のワークロードとホストを共有できるようにします。
 
 | サービス | CPU 上限 | メモリ上限 |
 |---|---:|---:|
@@ -218,7 +210,7 @@ jaykserks/summerain:2.0.0
 | Redis | 0.15 CPU | 192 MiB |
 | imgproxy | 0.70 CPU | 512 MiB |
 
-バックエンドは、パートアップロードを全体で 8、ユーザーごとに 4 まで同時実行します。MySQL と Redis のプールには上限があります。既定のディスク使用率 80% のソフト上限では新しい V2 セッションを拒否し、90% のハード上限では新しいパートと公開出力を拒否します。ホストで継続的な競合が起きる場合は、imgproxy と透かし worker を 2 から 1 に減らしてください。
+アップロードの同時実行数、接続プール、ディスク負荷しきい値は[しきい値一覧](./docs/USAGE.md)に、設定方法は[設定リファレンス](./docs/USAGE.md)に記載しています。
 
 これらの制限は保守的な出発点であり、あらゆる環境の容量を保証するものではありません。ディスク遅延、データベース遅延、透かしの複雑さ、同居するワークロードがスループットに影響します。
 
@@ -229,7 +221,7 @@ summeRain/
 |-- backend/
 |   |-- cmd/server/                 アプリケーションのエントリポイント
 |   |-- internal/                   handler、service、repository、worker
-|   |-- migrations/                 バージョン付き SQL マイグレーション
+|   |-- migrations/                 スキーマスナップショットとマイグレーションのリファレンス
 |   `-- web/                        生成されたフロントエンドビルド出力
 |-- frontend/
 |   |-- src/features/               ドメイン指向のアプリケーション機能
@@ -244,12 +236,7 @@ summeRain/
 `-- SUMMARY.md                      GitBook ナビゲーション
 ```
 
-バックエンドリクエストは次の境界に従います。
-
-```text
-request -> middleware -> handler -> service -> repository -> MySQL / Redis
-                                      `-> filesystem / R2 / imgproxy
-```
+バックエンドリクエストは単一の境界に従います：`request -> middleware -> handler -> service -> repository -> MySQL / Redis`。ファイルシステム、R2/S3、imgproxy へのアクセスは service レイヤーが行います。
 
 ## ドキュメント
 
@@ -260,10 +247,13 @@ Git で追跡されるすべてのプロジェクトドキュメントは、[`SU
 - [デプロイと利用方法](./docs/USAGE.md)
 - [API リファレンス](./docs/API.md)
 - [リリースとタグ管理](./docs/RELEASING.md)
-- [フロントエンドアーキテクチャ](./docs/design/frontend-architecture/README.md)
+- [サードパーティソフトウェア](./docs/THIRD-PARTY.md)
+- [フロントエンドアーキテクチャ（アーカイブ済み設計記録）](./docs/design/frontend-architecture/README.md)
 - [スキーママイグレーション](./backend/migrations/README.md)
 - [コントリビューションガイド](./CONTRIBUTING.md)
 - [セキュリティポリシー](./SECURITY.md)
+
+このドキュメントは最新の安定版リリースを説明します。未リリースの変更は `dev` ブランチにあり、公開時にリリースノートへ記載されます。
 
 英語が正式なドキュメント言語です。レビュー可能な簡体字中国語版と日本語版は、`translations/zh-CN` と `translations/ja-JP` の下で同じページパスをミラーし、GitBook によって同一ドキュメントサイトの言語バリアントとして公開されます。
 
@@ -271,12 +261,12 @@ Git で追跡されるすべてのプロジェクトドキュメントは、[`SU
 
 ## 既知の制限
 
-- V2.0.0 が受け付けるのは静止画像だけです。アニメーション画像への対応は今後の予定です。
+- V2 が受け付けるのは静止画像だけです。アニメーション画像への対応は今後の予定です。
 - V2 は固定 WebP バリアントを永続化し、任意の動的リサイズ組み合わせは公開しません。
 - V2 は元のエンコード済みソースバイトを保持しません。`master` はフル解像度、品質 80 の WebP です。
 - 既存 V1 画像は自動変換されず、V2 バリアントも割り当てられません。
 - 過去の R2 移行は独立した移行ツールへ意図的に分離され、メインサービスでは実行しません。
-- クロスオリジン分離を無効にすると GeeTest v4 を利用できますが、高容量の wasm-vips ブラウザー経路は使えなくなります。
+- GeeTest v4 は既定のクロスオリジン分離モードと排他的です。詳細は [CAPTCHA 設定](./docs/USAGE.md)を参照してください。
 
 ## コントリビューションとセキュリティ
 

@@ -43,7 +43,9 @@ npm run build                  # Output: ../backend/web/
 
 ### Go Backend
 
-- Follow [Effective Go](https://go.dev/doc/effective_go), `gofmt`, and `go vet`.
+- Follow the [Google Go Style Guide](https://google.github.io/styleguide/go/guide)
+  (including its Decisions and Best Practices companions), with Effective Go as
+  the foundation. `gofmt` and `go vet` must pass.
 - Include tests for new functionality in `_test.go` files.
 - Order imports as follows: standard library, third-party packages, then project
   packages under `github.com/kserksi/summerain/...`.
@@ -63,14 +65,19 @@ go test ./...
 
 - Use the existing React 19, TanStack Query, and shadcn/ui stack.
 - Include Vitest coverage for new functionality.
-- Follow the existing ESLint configuration.
+- Follow the existing ESLint and Prettier configuration; `console.*` and
+  `debugger` statements are rejected by lint.
+- The archived
+  [frontend coding standards](docs/design/frontend-architecture/08-coding-standards.md)
+  remain the reference for the patterns still in use.
 
 Run these checks before committing:
 
 ```bash
 cd frontend
+npx prettier --check .
 npm run lint
-npm run build
+npx tsc --noEmit
 npx vitest run
 ```
 
@@ -128,6 +135,22 @@ documentation verifier.
 bash scripts/update-translation-source-hashes.sh
 bash scripts/verify-gitbook-docs.sh
 ```
+
+### Documentation Maintenance
+
+- Keep English pages concise and reader-task-centered, and state each fact
+  once. Thresholds live in `docs/USAGE.md` Section 7, environment variables in
+  Section 3, development commands in the root README, and release-channel rules
+  in `docs/RELEASING.md`; link to those owners instead of repeating values.
+- Pages under `docs/design/` are archived design records. They are retained as
+  written for traceability and are exempt from the no-emoji rule.
+- Credit adopted libraries and services with name, author or organization,
+  license, and link in `docs/THIRD-PARTY.md`, and keep that page in sync when a
+  dependency changes.
+- In translated pages, use the established product wording and keep technical
+  terms such as outbox, advisory lock, fencing token, and nonce in English on
+  first use. Follow each locale's terminology convention for the product
+  category.
 
 ## Code of Conduct
 

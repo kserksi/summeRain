@@ -1,11 +1,10 @@
 # summeRain 后端 API 文档
 
-> 本文档基于 `backend/` 源码（Go + Gin + GORM/MySQL + Redis + imgproxy）逐文件核对生成，作为前后端对接契约。
+> 本文档是前后端之间的对接契约（Go + Gin + GORM/MySQL + Redis + imgproxy）。
 >
 > - **基础 URL**：`/api/v1`
 > - **默认端口**：`8080`（`SERVER_PORT`）
 > - **图片直链**：`GET /i/:link`（不在 `/api/v1` 下）
-> - **校对基线**：`v2.0.0`；早期 V2 版本可能频繁调整，以对应版本源码和发布说明为最终依据
 
 ---
 
@@ -68,20 +67,20 @@
 
 系统支持两种鉴权方式：
 
-### 2.1 Web 端 —— Cookie 鉴权（前端对接用此方式）
+### 2.1 Web 端：Cookie 鉴权
 
 登录成功后服务端设置两个 Cookie：
 
 | Cookie | 用途 | HttpOnly | 有效期 |
 |---|---|---|---|
-| `__Host-session_token` | 会话凭证 | ✅ 是 | 30 天（2592000 秒） |
-| `__Host-csrf_token` | CSRF 防护 | ❌ 否（前端可读） | Cookie Max-Age 30 天；服务端记录 24 小时 |
+| `__Host-session_token` | 会话凭证 | 是 | 30 天（2592000 秒） |
+| `__Host-csrf_token` | CSRF 防护 | 否（前端可读） | Cookie Max-Age 30 天；服务端记录 24 小时 |
 
 - Cookie 为 `__Host-` 前缀，要求 **HTTPS + 同站**，`SameSite=Strict`、`Secure`。
 - 前端只需 `credentials: 'include'` 发请求即可，浏览器自动带 cookie。
 - CSRF 服务端记录在有效写操作后续期；过期时可通过 `POST /api/v1/auth/csrf/refresh` 恢复，前端仅对显式幂等请求自动刷新并重放。
 
-### 2.2 CSRF 保护（关键）
+### 2.2 CSRF 保护
 
 **所有写操作（POST/PUT/PATCH/DELETE）在使用 Cookie 鉴权时，必须携带请求头：**
 
@@ -96,7 +95,7 @@ X-CSRF-Token: <__Host-csrf_token cookie 的值>
 
 > 前端实现：从 `__Host-csrf_token` cookie 读取值，所有非 GET 请求加 `X-CSRF-Token` 头。
 
-### 2.3 设备端 —— Bearer Token 鉴权（客户端用，Web 不涉及）
+### 2.3 设备端：Bearer Token 鉴权
 
 `Authorization: Bearer <session_token>`，并配合 `X-Platform: android|windows`、`X-Client-Version` 头。涉及 device-login / bootstrap / heartbeat 等流程，Web 端对接可忽略。
 
@@ -167,7 +166,7 @@ X-CSRF-Token: <__Host-csrf_token cookie 的值>
 
 ### 3.3 当前用户
 
-`GET /api/v1/auth/me` 🔒
+`GET /api/v1/auth/me`（需登录）
 
 **成功 200**
 ```json
@@ -185,17 +184,19 @@ X-CSRF-Token: <__Host-csrf_token cookie 的值>
 
 ### 3.4 登出
 
-`POST /api/v1/auth/logout` 🔒 CSRF
+`POST /api/v1/auth/logout`（需登录与 CSRF）
 
 清除两个 Cookie，服务端删除会话。返回 `{"code":0,"data":null}`。
 
 ### 3.5 恢复 CSRF Token
 
-`POST /api/v1/auth/csrf/refresh` 🔒
+`POST /api/v1/auth/csrf/refresh`（需登录）
 
 该接口用于长时间上传期间恢复过期的 CSRF token，不要求旧 `X-CSRF-Token`，但必须是同源 Web 请求；服务端校验 `Origin`，并在浏览器提供时校验 `Sec-Fetch-Site: same-origin`。成功后重新设置 `__Host-csrf_token`。只有具备幂等语义的请求可以在刷新后自动重放。
 
-### 3.6 设备端接口（Web 对接可忽略）
+### 3.6 设备端接口
+
+Web 端对接可忽略这些接口。
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
@@ -212,7 +213,7 @@ X-CSRF-Token: <__Host-csrf_token cookie 的值>
 
 ## 4. 图片 Images
 
-> 所有接口 🔒 需登录。图片归属用户：`GET /images/:id` 校验 `image.user_id == 当前用户`，否则 `4031 无权访问`。
+> 所有接口均需登录。图片归属用户：`GET /images/:id` 校验 `image.user_id == 当前用户`，否则 `4031 无权访问`。
 
 ### 4.1 图片列表（游标分页）
 
@@ -269,12 +270,12 @@ X-CSRF-Token: <__Host-csrf_token cookie 的值>
 
 V2 默认启用。浏览器接受静态 JPG/JPEG、PNG、BMP、WebP、AVIF，拒绝动图，并在客户端生成四份 WebP：`master`（原分辨率，Q80）、`gallery`（400x400 cover，Q60）、`admin`（120x160 cover，Q60，在 Image Management 中以 CSS 60x80 显示，提供 2x 像素密度）和 `publish_source`（最长边 2048，Q80）。服务端流式接收、校验完整 WebP 容器，并仅在后台为最终 `publish` 产物应用水印。
 
-1. `GET /api/v1/uploads/recipe` 🔒：获取当前配方、部件上限、像素上限和会话 TTL。较新版本还会返回客户端提示字段（`max_source_bytes`、`client_pipeline_concurrency`、`client_active_session_concurrency`、`client_max_native_concurrency` 与 `supported_source_mime_types`）；旧客户端会忽略这些额外键，服务端仍独立校验每次请求。响应中的 `v2_enabled` 是新建上传的能力开关；为 `false` 时 Web 客户端不执行本地预处理，改走 V1 multipart。
-2. `POST /api/v1/uploads/` 🔒 CSRF：创建会话。必须发送最长 64 字符的 `Idempotency-Key`；同一 key 只能重放完全相同的清单。
-3. `PUT /api/v1/uploads/:uploadID/parts/:kind` 🔒 CSRF：按响应的 `put_url` 上传 `image/webp` 原始请求体；`Content-Length`、SHA-256、尺寸和完整 RIFF 容器必须与清单一致。
-4. `POST /api/v1/uploads/:uploadID/complete` 🔒 CSRF：原子固化 `master`、`gallery`、`admin`，并创建从 `publish_source` 生成 `publish` 的持久化发布任务。
-5. `POST /api/v1/uploads/status` 🔒 CSRF：批量查询 1-100 个 `upload_ids`；缺失或无权 ID 返回统一 404，不返回部分结果。
-6. `GET /api/v1/uploads/:uploadID` 🔒：查询单个状态。`DELETE` 同一路径可取消尚未进入处理阶段的会话。
+1. `GET /api/v1/uploads/recipe`（需登录）：获取当前配方、部件上限、像素上限和会话 TTL。较新版本还会返回客户端提示字段（`max_source_bytes`、`client_pipeline_concurrency`、`client_active_session_concurrency`、`client_max_native_concurrency` 与 `supported_source_mime_types`）；旧客户端会忽略这些额外键，服务端仍独立校验每次请求。响应中的 `v2_enabled` 是新建上传的能力开关；为 `false` 时 Web 客户端不执行本地预处理，改走 V1 multipart。
+2. `POST /api/v1/uploads/`（需登录与 CSRF）：创建会话。必须发送最长 64 字符的 `Idempotency-Key`；同一 key 只能重放完全相同的清单。
+3. `PUT /api/v1/uploads/:uploadID/parts/:kind`（需登录与 CSRF）：按响应的 `put_url` 上传 `image/webp` 原始请求体；`Content-Length`、SHA-256、尺寸和完整 RIFF 容器必须与清单一致。
+4. `POST /api/v1/uploads/:uploadID/complete`（需登录与 CSRF）：原子固化 `master`、`gallery`、`admin`，并创建从 `publish_source` 生成 `publish` 的持久化发布任务。
+5. `POST /api/v1/uploads/status`（需登录与 CSRF）：批量查询 1-100 个 `upload_ids`；缺失或无权 ID 返回统一 404，不返回部分结果。
+6. `GET /api/v1/uploads/:uploadID`（需登录）：查询单个状态。`DELETE` 同一路径可取消尚未进入处理阶段的会话。
 
 **配方响应示例**
 
@@ -337,7 +338,7 @@ V2 默认启用。浏览器接受静态 JPG/JPEG、PNG、BMP、WebP、AVIF，拒
 
 ### 4.3 图片详情
 
-`GET /api/v1/images/:id` 🔒（owner 或 admin）
+`GET /api/v1/images/:id`（需登录；owner 或 admin）
 
 返回单个 `Image`（同列表项结构）。**私密图**且请求者为 owner/admin 时，响应额外附带当前统一令牌：
 
@@ -351,7 +352,7 @@ V2 默认启用。浏览器接受静态 JPG/JPEG、PNG、BMP、WebP、AVIF，拒
 
 ### 4.4 删除图片
 
-`DELETE /api/v1/images/:id` 🔒 CSRF
+`DELETE /api/v1/images/:id`（需登录与 CSRF）
 
 **成功 200**（`DeleteResult`）
 ```json
@@ -365,7 +366,7 @@ V2 默认启用。浏览器接受静态 JPG/JPEG、PNG、BMP、WebP、AVIF，拒
 
 ### 4.5 切换可见性
 
-`PATCH /api/v1/images/:id/visibility` 🔒 CSRF
+`PATCH /api/v1/images/:id/visibility`（需登录与 CSRF）
 
 **请求体**：`{ "visibility": "public" }`（必须 `public` 或 `private`）
 
@@ -384,13 +385,13 @@ V2 默认启用。浏览器接受静态 JPG/JPEG、PNG、BMP、WebP、AVIF，拒
 
 ---
 
-## 5. 私密图片访问令牌（统一令牌模型）
+## 5. 私密图片访问令牌
 
 每张私密图**至多一把统一令牌**；令牌字符**不可变**，吊销后须 owner/admin 再次手动申请（在此之前对第三方永久不可分享）。
 
 ### 5.1 签发 / 重签令牌
 
-`POST /api/v1/images/:id/tokens` 🔒 CSRF（owner / admin）
+`POST /api/v1/images/:id/tokens`（需登录与 CSRF）（owner / admin）
 
 **请求体**：`{ "ttl_ms": 3600000 }`（可选；缺省取系统配置 `private_token_ttl_default_ms`，clamp 到 `[600000, 259200000]` ms，即 10 分钟 ~ 3 天）
 
@@ -408,17 +409,17 @@ V2 默认启用。浏览器接受静态 JPG/JPEG、PNG、BMP、WebP、AVIF，拒
 
 ### 5.2 撤销令牌
 
-`DELETE /api/v1/images/:id/tokens` 🔒 CSRF（owner / admin）→ `{ "image_id": 7, "revoked": true }`
+`DELETE /api/v1/images/:id/tokens`（需登录与 CSRF）（owner / admin）→ `{ "image_id": 7, "revoked": true }`
 
 > `revoked=false` 表示原本就没有活跃令牌。撤销后该图对第三方永久不可分享，直至重新签发。
 
-### 5.3 当前令牌（随详情返回）
+### 5.3 当前令牌
 
 无单独列表接口；owner/admin 调 `GET /api/v1/images/:id` 时，私密图响应附带 `access_token` 与 `token_expires_at`（无活跃令牌则不带）。详见 [4.3](#43-图片详情)。
 
 ### 5.4 上传队列状态
 
-`GET /api/v1/upload/queue/:id` 🔒 —— 查询异步上传队列记录（`upload_queue`）。
+`GET /api/v1/upload/queue/:id`（需登录）：查询异步上传队列记录（`upload_queue`）。
 
 ---
 
@@ -426,7 +427,7 @@ V2 默认启用。浏览器接受静态 JPG/JPEG、PNG、BMP、WebP、AVIF，拒
 
 ### 6.1 个人资料
 
-`GET /api/v1/user/profile` 🔒
+`GET /api/v1/user/profile`（需登录）
 
 **成功 200**（`UserProfile`，比 `model.User` 多算 `storage_percent`）
 ```json
@@ -445,7 +446,7 @@ V2 默认启用。浏览器接受静态 JPG/JPEG、PNG、BMP、WebP、AVIF，拒
 
 ### 6.2 修改密码
 
-`PATCH /api/v1/user/password` 🔒 CSRF
+`PATCH /api/v1/user/password`（需登录与 CSRF）
 
 **请求体**：`{ "old_password": "旧密码", "new_password": "新密码至少8位" }`
 
@@ -455,7 +456,7 @@ V2 默认启用。浏览器接受静态 JPG/JPEG、PNG、BMP、WebP、AVIF，拒
 
 ## 7. 通知 Notifications
 
-> 🔒 全部需登录；写操作需 CSRF。`model/notification.go`。
+> 全部接口需登录；写操作需 CSRF。`model/notification.go`。
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
@@ -471,7 +472,7 @@ V2 默认启用。浏览器接受静态 JPG/JPEG、PNG、BMP、WebP、AVIF，拒
 
 ## 8. 后台 Admin
 
-> 🔒 需登录 **且** `platform == "web"` **且** `role == "admin"`（三重校验，`RequireAdmin`）。整个 admin 路由组都挂了 CSRF。
+> 需登录 **且** `platform == "web"` **且** `role == "admin"`（三重校验，`RequireAdmin`）。整个 admin 路由组都挂了 CSRF。
 
 ### 8.1 用户列表（分页）
 
@@ -679,9 +680,9 @@ V2 默认启用。浏览器接受静态 JPG/JPEG、PNG、BMP、WebP、AVIF，拒
 | 4093 | 409 | 图片仍在处理或清理中 |
 | 4094 | 409 | R2 存储目标仍被历史文件或待清理对象引用，禁止切换 |
 | 4095 | 409 | 用户当前状态不允许请求的状态迁移 |
+| 4260 | 426 | 客户端版本过低 |
 | 4261 | 426 | 客户端图片配方版本不受支持 |
 | 4262 | 426 | 当前部署要求 V2 客户端预处理上传 |
-| 4260 | 426 | 客户端版本过低 |
 | 4291 | 429 | 上传并发或活跃会话已满 |
 | 5030 | 503 | 服务器存储压力过高 |
 | 5031 | 503 | V2 上传暂未启用 |
@@ -697,26 +698,9 @@ V2 默认启用。浏览器接受静态 JPG/JPEG、PNG、BMP、WebP、AVIF，拒
 3. **响应判断**：以 `body.code === 0` 判定成功，否则取 `message` 提示；401 跳登录。
 4. **`__Host-` cookie 限制**：必须 HTTPS + 同源部署，本地开发（http://localhost）下浏览器可能拒绝设置，需用代理同源或自签证书。
 
-### 11.2 与现有前端 mock 的字段映射
-
-| 前端 mock 字段 | 后端字段 | 备注 |
-|---|---|---|
-| `userId` | `user_id` | snake_case |
-| `uploadedAt` | `created_at` | ISO8601 字符串 |
-| `views` | `view_count` | |
-| `size` | `file_size` | |
-| `isPublic: boolean` | `visibility: "public"\|"private"` | 布尔 → 字符串 |
-| `id` (string) | `id` (uint64) | 数字 |
-| `url`/`thumb` | `/i/<unique_link>` | 需前端拼接直链 |
-| 状态 `banned` | `suspended` | 后端无 banned |
-
-### 11.3 后端未覆盖的前端功能（需协调）
+### 11.2 后端未覆盖的前端功能
 
 - **公开图库 / 发现页**：后端无公开图片列表接口，`images` 列表仅按用户返回。需新增 `GET /images/public` 或前端移除该功能。
 - **分类 / 标签**：`Image` 模型无 `category`/`tags` 字段。
 
 现有前端已对接管理员图片列表/删除、用户注销请求/取消，以及 `pending_deletion` / `deleting` 状态展示；这些不再属于能力缺口。
-
----
-
-*文档生成依据：`cmd/server/main.go`、`internal/handler/*`、`internal/service/*`、`internal/model/*`、`internal/middleware/{auth,csrf}.go`、`internal/pkg/{response,errcode}/*`。*

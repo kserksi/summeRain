@@ -1,6 +1,6 @@
 # summeRain
 
-> 一款自托管的图床与相册服务，具备资源感知的上传管线、固定图片变体、水印、私密分享，以及对现有 V1 图片的兼容能力。
+> 一款自托管的图片托管与相册服务，具备资源感知的上传管线、固定图片变体、水印、私密分享，以及对现有 V1 图片的兼容能力。
 
 [![CI 与 Docker](https://github.com/kserksi/summeRain/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/kserksi/summeRain/actions/workflows/ci.yml)
 [![发布版本](https://img.shields.io/github/v/release/kserksi/summeRain)](https://github.com/kserksi/summeRain/releases)
@@ -9,7 +9,7 @@
 
 > **早期版本提示：** V2 仍处于早期发布阶段。上传协议、浏览器处理管线、数据库结构、兼容行为和运维默认值可能频繁变化。每次升级前请阅读完整变更日志，备份 MySQL 与图片卷，并在生产环境固定精确发布标签或 OCI 索引摘要。
 
-[在线文档](https://summerain-1.gitbook.io/summerain/zh-cn/) | [V2.0.0 发布说明](./docs/releases/v2.0.0.md) | [Docker Hub](https://hub.docker.com/r/jaykserks/summerain) | [GHCR](https://github.com/kserksi/summeRain/pkgs/container/summerain)
+[在线文档](https://summerain-1.gitbook.io/summerain/zh-cn/) | [发布版本](https://github.com/kserksi/summeRain/releases) | [Docker Hub](https://hub.docker.com/r/jaykserks/summerain) | [GHCR](https://github.com/kserksi/summeRain/pkgs/container/summerain)
 
 ## 概览
 
@@ -50,10 +50,8 @@ V2 将高开销的解码、缩放、格式转换和压缩工作移至浏览器�
 ### 上传行为
 
 - 支持静态 JPEG、PNG、BMP、WebP 和 AVIF 输入。
-- V2.0.0 不支持动图与 GIF 上传。
-- 源文件上限为 15 MiB、50 MP。
-- 浏览器图片处理并发为 1，上传管线并发为 2。
-- 部件上传初始并发为 2，并可在能力充足的客户端自适应到 3。
+- 不支持动图与 GIF 上传。
+- 源文件大小、像素与并发上限由服务端配方与配置决定，默认值见[限制与阈值](./docs/USAGE.md)。
 - 上传会话支持断点续传和幂等操作，并持久化状态轮询；客户端轮询截止时间为 10 分钟，之后仍可恢复状态查询。
 - 高容量浏览器路径使用 `wasm-vips`；不具备所需浏览器隔离或内存能力时，使用有界的 Canvas/Pica 路径。
 - 现有 V1 图片仍可通过原短链读取，并保留有界动态转换能力。
@@ -76,7 +74,7 @@ V2 将高开销的解码、缩放、格式转换和压缩工作移至浏览器�
 - Android 与 Windows 客户端的 Bearer token bootstrap 与会话。
 - 每张私密图片只允许一个有效分享令牌，有效期可在 10 分钟到 3 天之间配置。
 - 用户与管理员角色、会话管理、审计日志，以及持久化的延迟账户注销流程。
-- 可选集成 reCAPTCHA v3 和 Cloudflare Turnstile。只有明确禁用跨源隔离时才能使用 GeeTest v4。
+- 可选集成 reCAPTCHA v3、Cloudflare Turnstile 和 GeeTest v4。
 - 公开/私密原站别名即时切换，并持久化 CDN purge 工作。
 
 ### Web 与运维
@@ -99,7 +97,7 @@ V2 将高开销的解码、缩放、格式转换和压缩工作移至浏览器�
 | 存储 | V2 本地文件系统；V1 沿袭数据支持 Cloudflare R2 与兼容 path-style 的 S3 端点 |
 | 测试 | Go testing、Vitest、Testing Library、MSW |
 
-CI、服务与浏览器处理组件的精确版本记录在 [`requirements.lock`](https://github.com/kserksi/summeRain/blob/main/requirements.lock) 中。Go 与 npm 依赖图分别由 `backend/go.sum` 和 `frontend/package-lock.json` 锁定。
+CI、服务与浏览器处理组件的精确版本记录在 [`requirements.lock`](https://github.com/kserksi/summeRain/blob/main/requirements.lock) 中。Go 与 npm 依赖图分别由 `backend/go.sum` 和 `frontend/package-lock.json` 锁定。所采用库与服务的许可证及署名见[第三方软件](./docs/THIRD-PARTY.md)。
 
 ## WSL 快速开始
 
@@ -183,7 +181,7 @@ docker compose --env-file backend/.env \
 稳定镜像示例：
 
 ```text
-jaykserks/summerain:2.0.0
+jaykserks/summerain:<version>
 ```
 
 已发布的镜像仓库：
@@ -191,25 +189,19 @@ jaykserks/summerain:2.0.0
 - Docker Hub：`jaykserks/summerain`
 - GHCR：`ghcr.io/kserksi/summerain`
 
-跨架构按摘要固定时，请使用 OCI 多平台索引摘要。不要在 `amd64` 与 `arm64` 主机上复用仅属于某一架构的子 manifest 摘要。
+跨架构按摘要固定时，请使用 OCI 多平台索引摘要。
 
 完整环境配置、nginx/CDN、健康检查、升级与回滚说明请参阅[部署与使用](./docs/USAGE.md)。
 
 ## 发布通道
 
-- 普通推送到 `dev` 会发布 `dev` 与 `dev-sha-<12-character-commit>`。
-- `2.0.1` 这样的开发版会发布 `dev-v2.0.1`、`dev-2.0.1`、`dev` 与开发 commit 标签；需使用 `docker pull jaykserks/summerain:dev` 显式拉取。
-- 普通推送到 `main` 会发布 `main` 与 `main-sha-<12-character-commit>`。
-- `2.1.0` 这样的稳定版会发布 `v2.1.0`、`2.1.0`、`2.1`、`2`、`latest`、`main` 与稳定 commit 标签。默认 Compose 镜像跟随只由稳定分支写入的 `latest`。
-- 精确语义版本标签不可变；移动别名仍可移动。
-- 重新运行发布流程时，会根据已验证的 manifest 摘要协调 Docker Hub 与 GHCR；精确标签发生冲突时停止。
-- 发布成功后，根目录 README 会同步到 Docker Hub。
+推送到 `dev` 会发布 `dev` 与 `dev-sha-<12-character-commit>` 开发镜像；推送到 `main` 会发布稳定标签，且只有稳定版才会移动 `latest` 与 `main`。精确语义版本标签不可变；重新运行发布流程会在不覆盖既有标签的前提下协调 Docker Hub 与 GHCR。
 
-完整发布契约见[发布与标签管理](./docs/RELEASING.md)。
+完整的标签契约（含摘要固定指引）见[发布与标签管理](./docs/RELEASING.md)。
 
 ## 资源配置
 
-默认 Compose 配置面向与其他服务共享的 3 核、4 GiB 主机。
+默认 Compose 配置为各服务设置 CPU 与内存上限，使整套服务可与其他工作负载共享主机。
 
 | 服务 | CPU 上限 | 内存上限 |
 |---|---:|---:|
@@ -218,7 +210,7 @@ jaykserks/summerain:2.0.0
 | Redis | 0.15 CPU | 192 MiB |
 | imgproxy | 0.70 CPU | 512 MiB |
 
-后端默认允许全局 8 个、每用户 4 个并发部件上传。MySQL 与 Redis 连接池均有上限。达到默认 80% 磁盘软限制时拒绝新建 V2 会话，达到 90% 硬限制时拒绝新部件或发布输出。在主机持续资源争用时，将 imgproxy 与水印 worker 从 2 个降为 1 个。
+上传并发、连接池与磁盘压力阈值见[限制与阈值](./docs/USAGE.md)，其配置说明见[配置参考](./docs/USAGE.md)。
 
 这些限制只是保守起点，并非通用容量保证。磁盘延迟、数据库延迟、水印复杂度与同机工作负载都会影响吞吐量。
 
@@ -229,7 +221,7 @@ summeRain/
 |-- backend/
 |   |-- cmd/server/                 应用入口
 |   |-- internal/                   handler、service、repository 与 worker
-|   |-- migrations/                 版本化 SQL 迁移
+|   |-- migrations/                 数据库结构快照与迁移参考
 |   `-- web/                        生成的前端构建产物
 |-- frontend/
 |   |-- src/features/               面向领域的应用特性
@@ -244,12 +236,7 @@ summeRain/
 `-- SUMMARY.md                      GitBook 导航
 ```
 
-后端请求遵循以下边界：
-
-```text
-request -> middleware -> handler -> service -> repository -> MySQL / Redis
-                                      `-> filesystem / R2 / imgproxy
-```
+后端请求遵循统一边界：`request -> middleware -> handler -> service -> repository -> MySQL / Redis`，由 service 层访问文件系统、R2/S3 与 imgproxy。
 
 ## 文档
 
@@ -260,10 +247,13 @@ request -> middleware -> handler -> service -> repository -> MySQL / Redis
 - [部署与使用](./docs/USAGE.md)
 - [API 参考](./docs/API.md)
 - [发布与标签管理](./docs/RELEASING.md)
-- [前端架构](./docs/design/frontend-architecture/README.md)
+- [第三方软件](./docs/THIRD-PARTY.md)
+- [前端架构（已归档设计记录）](./docs/design/frontend-architecture/README.md)
 - [数据库结构迁移](./backend/migrations/README.md)
 - [贡献指南](./CONTRIBUTING.md)
 - [安全策略](./SECURITY.md)
+
+本文档描述最近一次稳定发布；未发布改动位于 `dev` 分支，并在发布时写入发布说明。
 
 英文是文档的权威语言。可审查的简体中文与日文翻译在 `translations/zh-CN` 和 `translations/ja-JP` 下按相同页面路径镜像，并由 GitBook 作为同一文档站点的语言变体发布。
 
@@ -271,12 +261,12 @@ request -> middleware -> handler -> service -> repository -> MySQL / Redis
 
 ## 已知限制
 
-- V2.0.0 仅接受静态图片；动图支持列入后续计划。
+- V2 仅接受静态图片；动图支持列入后续计划。
 - V2 持久化固定 WebP 变体，不公开任意动态缩放组合。
 - V2 不保留原始编码源字节；`master` 是全分辨率、质量 80 的 WebP。
 - 现有 V1 图片不会自动转换或分配 V2 变体。
 - 历史 R2 迁移有意委托给独立迁移工具，不由主服务执行。
-- 禁用跨源隔离可启用 GeeTest v4，但会移除高容量 wasm-vips 浏览器路径。
+- GeeTest v4 与默认的跨源隔离模式互斥，详见 [CAPTCHA 配置](./docs/USAGE.md)。
 
 ## 贡献与安全
 
