@@ -57,6 +57,31 @@ count_kana_characters() {
   perl -CSD -ne '$n += () = /[\x{3040}-\x{30ff}\x{ff66}-\x{ff9f}]/g; END { print $n + 0 }' "$1"
 }
 
+count_emoji_characters() {
+  perl -CSD -ne '$n += () = /[\x{1F000}-\x{1FAFF}\x{2600}-\x{27BF}\x{2B00}-\x{2BFF}\x{FE0F}]/g; END { print $n + 0 }' "$1"
+}
+
+page_structure_signature() {
+  perl -CSD -ne '
+    if (/^```/) { $fences++; $in_fence = !$in_fence; next }
+    next if $in_fence;
+    if (/^(#{1,4})\s/) { $headings[length($1) - 1]++ }
+    $tables++ if /^\|/;
+    END {
+      printf "H:%d,%d,%d,%d T:%d F:%d\n",
+        $headings[0] + 0, $headings[1] + 0, $headings[2] + 0, $headings[3] + 0,
+        $tables + 0, $fences + 0;
+    }
+  ' "$1"
+}
+
+is_historical_page() {
+  case "$1" in
+    docs/design/*|docs/backend-changes-plan.md|docs/releases/*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 validate_config() {
   local locale_name="$1"
   local config="$2"
@@ -250,6 +275,14 @@ for path in "${canonical_paths[@]}"; do
   if (( $(count_cjk_characters "${repo_root}/${path}") > 0 )); then
     fail "canonical English page contains Chinese or Japanese text: $path"
   fi
+  if ! is_historical_page "$path"; then
+    if (( $(count_emoji_characters "${repo_root}/${path}") > 0 )); then
+      fail "canonical English page contains emoji: $path"
+    fi
+    if grep -q 'v2\.0\.0' "${repo_root}/${path}"; then
+      fail "canonical English page references the stale version v2.0.0: $path"
+    fi
+  fi
 done
 check_local_links "English" "$repo_root" "${canonical_paths[@]}"
 
@@ -283,6 +316,18 @@ for index in 1 2; do
       script_characters="$(count_kana_characters "${locale_root}/${path}")"
       (( script_characters >= minimum_locale_script_characters )) ||
         fail "Japanese page has too little kana (${script_characters} characters): $path"
+    fi
+    if ! is_historical_page "$path"; then
+      if (( $(count_emoji_characters "${locale_root}/${path}") > 0 )); then
+        fail "${locale_name} page contains emoji: $path"
+      fi
+      if grep -q 'v2\.0\.0' "${locale_root}/${path}"; then
+        fail "${locale_name} page references the stale version v2.0.0: $path"
+      fi
+    fi
+    if [[ "$(page_structure_signature "${repo_root}/${path}")" != \
+          "$(page_structure_signature "${locale_root}/${path}")" ]]; then
+      fail "${locale_name} page structure differs from its canonical English source: $path"
     fi
   done
 
