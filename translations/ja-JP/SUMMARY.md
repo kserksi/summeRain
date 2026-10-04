@@ -14,6 +14,7 @@
 * [リリースとタグ管理](docs/RELEASING.md)
 
 ## リリースノート
+* [V2.0.12](docs/releases/v2.0.12.md)
 * [V2.0.11](docs/releases/v2.0.11.md)
 * [V2.0.10](docs/releases/v2.0.10.md)
 * [V2.0.9](docs/releases/v2.0.9.md)
@@ -43,6 +44,10 @@
   * [09 - 決定事項と範囲](docs/design/frontend-architecture/09-decisions-and-scope.md)
   * [10 - ページ UI/UX 仕様](docs/design/frontend-architecture/10-pages-ui-ux.md)
   * [デザインシステム](docs/design/frontend-architecture/design-system/MASTER.md)
+
+## について
+
+* [サードパーティソフトウェア](docs/THIRD-PARTY.md)
 
 ## コミュニティ
 

@@ -14,6 +14,7 @@
 * [发布与标签管理](docs/RELEASING.md)
 
 ## 发布说明
+* [V2.0.12](docs/releases/v2.0.12.md)
 * [V2.0.11](docs/releases/v2.0.11.md)
 * [V2.0.10](docs/releases/v2.0.10.md)
 * [V2.0.9](docs/releases/v2.0.9.md)
@@ -43,6 +44,10 @@
   * [09 - 决策与范围](docs/design/frontend-architecture/09-decisions-and-scope.md)
   * [10 - 页面 UI/UX 规范](docs/design/frontend-architecture/10-pages-ui-ux.md)
   * [设计系统](docs/design/frontend-architecture/design-system/MASTER.md)
+
+## 关于
+
+* [第三方软件](docs/THIRD-PARTY.md)
 
 ## 社区
 

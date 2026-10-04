@@ -14,6 +14,7 @@
 * [Release and Tag Management](docs/RELEASING.md)
 
 ## Release Notes
+* [V2.0.12](docs/releases/v2.0.12.md)
 * [V2.0.11](docs/releases/v2.0.11.md)
 * [V2.0.10](docs/releases/v2.0.10.md)
 * [V2.0.9](docs/releases/v2.0.9.md)
@@ -43,6 +44,10 @@
   * [09 - Decisions and Scope](docs/design/frontend-architecture/09-decisions-and-scope.md)
   * [10 - Page UI/UX Specifications](docs/design/frontend-architecture/10-pages-ui-ux.md)
   * [Design System](docs/design/frontend-architecture/design-system/MASTER.md)
+
+## About
+
+* [Third-Party Software](docs/THIRD-PARTY.md)
 
 ## Community
 
