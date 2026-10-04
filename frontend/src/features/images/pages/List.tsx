@@ -132,14 +132,9 @@ export default function List() {
       else toast.warning(t('images.list.toast.deletePartial', { ok: succeeded, fail: failed }))
       setSelectedIds(new Set())
       setSelectMode(false)
-      const failedErr = results.find((r) => r.status === 'rejected')
-      if (failedErr && failedErr.status === 'rejected') {
-        console.error('delete error:', failedErr.reason)
-      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : t('layout.unknownError')
       toast.error(t('images.list.toast.deleteFailedWithMsg', { msg }))
-      console.error('batch delete error:', err)
     } finally {
       setIsDeleting(false)
       setDeleteOpen(false)

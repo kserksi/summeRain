@@ -20,5 +20,16 @@ export default defineConfig([
     languageOptions: {
       globals: globals.browser,
     },
+    rules: {
+      // AGENTS.md section 8: production frontend code must not write to the console.
+      'no-console': 'error',
+    },
+  },
+  {
+    // Tests spy on React's error logging and assert console-free behavior.
+    files: ['src/**/*.test.{ts,tsx}', 'src/test/**/*.{ts,tsx}'],
+    rules: {
+      'no-console': 'off',
+    },
   },
 ])
