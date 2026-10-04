@@ -69,7 +69,7 @@ func (h *V2UploadHandler) Init(c *gin.Context) {
 		return
 	}
 	var req service.V2InitUploadRequest
-	if appErr := bindBoundedV2JSON(c, &req, h.initJSONLimit(), "无效的 V2 上传清单"); appErr != nil {
+	if appErr := bindBoundedJSON(c, &req, h.initJSONLimit(), 3005, "无效的 V2 上传清单"); appErr != nil {
 		response.Error(c, appErr)
 		return
 	}
@@ -100,7 +100,7 @@ func (h *V2UploadHandler) BatchStatus(c *gin.Context) {
 		return
 	}
 	var req service.V2BatchStatusRequest
-	if appErr := bindBoundedV2JSON(c, &req, h.batchStatusJSONLimit(), "无效的批量状态查询"); appErr != nil {
+	if appErr := bindBoundedJSON(c, &req, h.batchStatusJSONLimit(), 3005, "无效的批量状态查询"); appErr != nil {
 		response.Error(c, appErr)
 		return
 	}
@@ -172,14 +172,14 @@ func uploadUser(c *gin.Context) (uint64, bool) {
 	return userID, true
 }
 
-func bindBoundedV2JSON(c *gin.Context, destination interface{}, maximum int64, invalidMessage string) *errcode.AppError {
+func bindBoundedJSON(c *gin.Context, destination interface{}, maximum int64, invalidCode int, invalidMessage string) *errcode.AppError {
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maximum)
 	if err := c.ShouldBindJSON(destination); err != nil {
 		var maximumError *http.MaxBytesError
 		if errors.As(err, &maximumError) {
 			return errcode.New(3002, "请求体过大", http.StatusRequestEntityTooLarge)
 		}
-		return errcode.New(3005, invalidMessage, http.StatusBadRequest)
+		return errcode.New(invalidCode, invalidMessage, http.StatusBadRequest)
 	}
 	return nil
 }

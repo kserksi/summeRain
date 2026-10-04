@@ -3,6 +3,7 @@
 
 import { Component, type ReactNode } from 'react'
 import i18n from '@/i18n'
+import { reportClientCrash } from '@/lib/crash-report'
 
 interface Props {
   children: ReactNode
@@ -30,7 +31,12 @@ export class ErrorBoundary extends Component<Props, State> {
       this.setState({ hasError: false, error: undefined })
       return
     }
-    console.error('ErrorBoundary:', error, info)
+    reportClientCrash({
+      kind: 'boundary',
+      message: error.message,
+      stack: error.stack,
+      componentStack: componentStackOf(info),
+    })
   }
 
   render() {
@@ -54,4 +60,12 @@ export class ErrorBoundary extends Component<Props, State> {
     }
     return this.props.children
   }
+}
+
+function componentStackOf(info: unknown): string | undefined {
+  if (info && typeof info === 'object' && 'componentStack' in info) {
+    const value = (info as { componentStack?: unknown }).componentStack
+    if (typeof value === 'string') return value
+  }
+  return undefined
 }

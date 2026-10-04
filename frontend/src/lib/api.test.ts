@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { api } from "./api";
+import { api, reportClientError } from "./api";
 import { ApiError } from "./errors";
 
 const mockResponse = (status: number, body: unknown) =>
@@ -164,5 +164,31 @@ describe("api wrapper", () => {
     );
 
     expect(refreshCalls).toBe(1);
+  });
+});
+
+describe("reportClientError", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+
+  it("posts a crash report without CSRF and keeps the request alive", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(mockResponse(200, { code: 0, message: "success" }));
+
+    await reportClientError({ kind: "boundary", message: "boom", path: "/upload" });
+
+    const [url, opts] = vi.mocked(fetch).mock.calls[0] as [string, RequestInit];
+    expect(url).toContain("/public/client-errors");
+    expect(opts.method).toBe("POST");
+    expect(opts.keepalive).toBe(true);
+    expect(opts.credentials).toBe("include");
+    expect(opts.headers).not.toHaveProperty("X-CSRF-Token");
+    expect(opts.body).toBe(JSON.stringify({ kind: "boundary", message: "boom", path: "/upload" }));
+  });
+
+  it("swallows transport failures", async () => {
+    vi.mocked(fetch).mockRejectedValueOnce(new TypeError("offline"));
+
+    await expect(reportClientError({ kind: "error", message: "x" })).resolves.toBeUndefined();
   });
 });

@@ -37,6 +37,8 @@ var (
 	ErrLoginRateLimited   = New(2008, "登录尝试过于频繁，请稍后重试", 429)
 	ErrRecaptchaFailed    = New(2009, "reCAPTCHA 校验失败，请重试", 403)
 	ErrBootstrapRateLimit = New(2090, "Bootstrap 请求过于频繁", 429)
+	// ErrClientErrorRateLimited bounds the public crash-report sink.
+	ErrClientErrorRateLimited = New(2091, "客户端错误上报过于频繁", 429)
 )
 
 // Auth/Permission errors (4000-4099)

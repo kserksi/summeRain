@@ -116,6 +116,23 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
   return execute(false);
 }
 
+// reportClientError delivers one bounded crash report. It is fire-and-forget:
+// it never throws, needs no CSRF token (the endpoint is public), and never
+// triggers the authentication redirect.
+export async function reportClientError(payload: unknown): Promise<void> {
+  try {
+    await fetch(`${API_BASE_URL}/public/client-errors`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      keepalive: true,
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    // Crash reporting must never surface a second failure.
+  }
+}
+
 export const api = {
   get: <T>(path: string, opts?: RequestOptions) => request<T>(path, { ...opts, method: "GET" }),
   post: <T>(path: string, body?: unknown, opts?: RequestOptions) =>

@@ -102,6 +102,7 @@ func main() {
 	adminSvc := service.NewAdminService(db, configRepo, notificationSvc, &cfg.Storage, rdb, imageRepo, imageFileRepo, imageSvc, cfg.Server.CrossOriginIsolation)
 	publicConfigSvc := service.NewPublicConfigService(configRepo, cfg.Captcha, rdb)
 	publicStatsSvc := service.NewPublicStatsService(db)
+	clientErrorSvc := service.NewClientErrorService()
 
 	signer := imgproxy.NewSigner(cfg.Imgproxy.Key, cfg.Imgproxy.Salt, cfg.Imgproxy.PublicURL)
 
@@ -116,6 +117,7 @@ func main() {
 	userHandler := handler.NewUserHandler(userSvc)
 	notificationHandler := handler.NewNotificationHandler(notificationSvc)
 	adminHandler := handler.NewAdminHandler(adminSvc)
+	clientErrorHandler := handler.NewClientErrorHandler(clientErrorSvc)
 
 	gin.SetMode(cfg.Server.Mode)
 	r := gin.New()
@@ -164,6 +166,7 @@ func main() {
 	api := r.Group("/api/v1")
 	api.GET("/public/config", publicHandler.GetConfig)
 	api.GET("/public/stats", publicHandler.GetStats)
+	api.POST("/public/client-errors", rateLimitMw.ClientErrorLimit(), clientErrorHandler.Report)
 
 	auth := api.Group("/auth")
 	{
