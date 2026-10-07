@@ -492,7 +492,7 @@ func TestCompleteRollbackRestoresStagingAndCleansPersistentParts(t *testing.T) {
 	svc := &V2UploadService{db: db, cfg: &config.Config{
 		Storage: config.StorageConfig{BasePath: root, StagingPath: stagingRoot},
 		ImageV2: config.ImageV2Config{Enabled: true},
-	}}
+	}, recipe: testV2Recipe()}
 	if _, appErr := svc.Complete(context.Background(), user.ID, uploadKey); appErr == nil {
 		t.Fatal("Complete unexpectedly succeeded")
 	}
