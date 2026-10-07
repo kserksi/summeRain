@@ -14,6 +14,7 @@
 * [リリースとタグ管理](docs/RELEASING.md)
 
 ## リリースノート
+* [V2.0.14](docs/releases/v2.0.14.md)
 * [V2.0.13](docs/releases/v2.0.13.md)
 * [V2.0.12](docs/releases/v2.0.12.md)
 * [V2.0.11](docs/releases/v2.0.11.md)
