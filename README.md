@@ -211,18 +211,26 @@ npx vitest run
 Application images are built by GitHub Actions. Production hosts should pull an
 exact published tag or OCI index digest and must use `--no-build`.
 
-```bash
-cp backend/.env.example backend/.env
-chmod 0600 backend/.env
-# Edit backend/.env and set an exact DOCKER_IMAGE, database password,
-# cookie secret, and imgproxy key/salt.
+Create a deployment directory with the Compose file, the environment file, and
+the image recipe:
 
-docker compose --env-file backend/.env \
-  -f backend/docker-compose.deploy.yml pull
-
-docker compose --env-file backend/.env \
-  -f backend/docker-compose.deploy.yml up -d --no-build
+```text
+/srv/summerain/
+|-- docker-compose.yml    copy of backend/docker-compose.deploy.yml
+|-- .env                  copy of backend/.env.example, mode 0600
+`-- config/
+    `-- image-recipe.json copy of backend/internal/config/image-recipe.json
 ```
+
+```bash
+docker compose --env-file .env pull
+docker compose --env-file .env up -d --no-build
+```
+
+Edit `.env` before starting: set an exact `DOCKER_IMAGE`, the database
+password, the cookie secret, and the imgproxy key/salt. The recipe file is
+mounted read-only over the recipe baked into the image; edit it and restart to
+change variants, limits, or accepted formats.
 
 Example stable image:
 
@@ -280,6 +288,7 @@ summeRain/
 |-- backend/
 |   |-- cmd/server/                 application entry point
 |   |-- internal/                   handlers, services, repositories, workers
+|   |-- config/                    deployment image recipe override
 |   |-- migrations/                 schema migration snapshots and reference
 |   `-- web/                        generated frontend build output
 |-- frontend/

@@ -51,22 +51,30 @@ summeRain はセルフホスト型の画像ホスティング・フォトアル�
 
 ### 2.2 本番デプロイ（GitHub Actions イメージ）
 
-```bash
-# GitHub Actions が公開した正確なバージョンを使用する。このファイルはコミットしない
-cp backend/.env.example backend/.env
-chmod 0600 backend/.env
-# backend/.env を編集し、少なくともイメージバージョン、データベースパスワード、
-# Cookie シークレット、imgproxy キーを置き換える
+Compose ファイル、環境ファイル、画像レシピを配置したデプロイディレクトリを用意します。
 
-docker compose --env-file backend/.env -f backend/docker-compose.deploy.yml pull
-docker compose --env-file backend/.env -f backend/docker-compose.deploy.yml up -d --no-build
+```text
+/srv/summerain/
+|-- docker-compose.yml    backend/docker-compose.deploy.yml のコピー
+|-- .env                  backend/.env.example のコピー、モード 0600
+`-- config/
+    `-- image-recipe.json backend/internal/config/image-recipe.json のコピー
+```
+
+```bash
+# .env を編集し、正確な DOCKER_IMAGE、データベースパスワード、Cookie secret、
+# imgproxy キーを設定する。レシピはイメージ内のレシピを読み取り専用で上書きするため、
+# 編集すればバリアント、上限、受け付ける形式を変更できる。
+docker compose --env-file .env pull
+docker compose --env-file .env up -d --no-build
 ```
 
 アプリケーションイメージをビルドし、Docker Hub / GHCR へ同期するのは GitHub Actions
 だけです。デプロイ先ホストではアプリケーションイメージをビルドしません。
 `backend/docker-compose.deploy.yml` は `DOCKER_IMAGE` がない場合に拒否します。
 本番環境では正確な SemVer タグまたは OCI マルチプラットフォームインデックス
-ダイジェストを使用してください。
+ダイジェストを使用してください。`config/image-recipe.json` がない場合、Compose は
+起動を拒否します。
 
 本番環境では前段 nginx が `127.0.0.1:8080` へリバースプロキシし、Cloudflare を
 介してポート 443 を公開します。セクション 4 を参照してください。
@@ -162,9 +170,10 @@ Compose は Redis のデータ上限を `128mb`、コンテナ上限を `192m` �
 画像レシピはサーバー側のポリシーであり、環境変数ではありません。バリアントの寸法、
 ピクセルとサイズの上限、受け付けるソース形式、そしてブラウザーが送信すべき
 `recipe_version` はすべて `IMAGE_RECIPE_FILE` から読み込まれます。コンテナは既定の
-レシピを `/app/config/image-recipe.json` に配置し、バイナリーも同じ既定を埋め込みます。
-レシピの変更には再起動と `recipe_version` の更新が必要で、レシピが管理者 API に
-公開されることはありません。
+レシピを `/app/config/image-recipe.json` に配置し、バイナリーも同じ既定を埋め込み、
+Compose はデプロイディレクトリの `config/image-recipe.json` を読み取り専用でその
+パスへ上書きします。レシピの変更には再起動と `recipe_version` の更新が必要で、
+レシピが管理者 API に公開されることはありません。
 
 `/api/v1/uploads/recipe` が返すクライアントヒントにより、ブラウザーはパイプラインの規模を
 自身で決定します。デコードとエンコードは直列で、実際の並行数はサーバーヒント、デバイス
@@ -249,9 +258,15 @@ Redis、imgproxy を利用します。完全な構成図はルート README を�
 | `redis` | 公開しない | プライベートネットワークのみ |
 | `imgproxy` | 公開しない | 画像ボリュームを読み取り専用でマウント |
 
-> 本番用シークレットは、Git で除外される `backend/.env` にモード 0600 で保存します。
-> デプロイコマンドには `--env-file backend/.env` も必ず渡し、Compose の変数展開と
+> 本番用シークレットは、デプロイディレクトリの `.env` にモード 0600 で保存します。
+> デプロイコマンドには `--env-file .env` も必ず渡し、Compose の変数展開と
 > バックエンドコンテナーが同じ設定を使用するようにしてください。
+
+バックエンドは `config/image-recipe.json` を読み取り専用でマウントします。
+`image_storage` 名前付きボリュームには永続化されたすべての画像ファイルが、
+`mysql_data` と `redis_data` にはデータベースが保存されます。アップグレード前に
+`mysql_data` と `image_storage` を、サイズの小さい `.env` と `config/` とあわせて
+バックアップしてください。
 
 ---
 
@@ -291,14 +306,14 @@ Redis、imgproxy を利用します。完全な構成図はルート README を�
 
 ```bash
 # GitHub Actions が公開した新しい正確なバージョンへアップグレード
-# backend/.env を編集し、DOCKER_IMAGE を jaykserks/summerain:<new-version> に設定
-docker compose --env-file backend/.env -f backend/docker-compose.deploy.yml pull backend
-docker compose --env-file backend/.env -f backend/docker-compose.deploy.yml up -d --no-build backend
+# .env を編集し、DOCKER_IMAGE を jaykserks/summerain:<new-version> に設定
+docker compose --env-file .env pull backend
+docker compose --env-file .env up -d --no-build backend
 
 # 直前の動作確認済み不変バージョンへロールバック
-# backend/.env を編集し、DOCKER_IMAGE を jaykserks/summerain:<previous-version> に戻す
-docker compose --env-file backend/.env -f backend/docker-compose.deploy.yml pull backend
-docker compose --env-file backend/.env -f backend/docker-compose.deploy.yml up -d --no-build backend
+# .env を編集し、DOCKER_IMAGE を jaykserks/summerain:<previous-version> に戻す
+docker compose --env-file .env pull backend
+docker compose --env-file .env up -d --no-build backend
 ```
 
 ダイジェスト単位で固定する場合は、`DOCKER_IMAGE` を

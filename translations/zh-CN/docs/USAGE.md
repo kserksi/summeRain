@@ -48,19 +48,26 @@ summeRain 是一个自托管的图片托管与相册服务。
 
 ### 2.2 生产部署（GitHub Actions 镜像）
 
-```bash
-# 使用 GitHub Actions 已发布的精确版本；不要提交此文件
-cp backend/.env.example backend/.env
-chmod 0600 backend/.env
-# 编辑 backend/.env，至少替换镜像版本、数据库密码、Cookie 与 imgproxy 密钥
+准备一个部署目录，放入 Compose 文件、环境变量文件与图片配方：
 
-docker compose --env-file backend/.env -f backend/docker-compose.deploy.yml pull
-docker compose --env-file backend/.env -f backend/docker-compose.deploy.yml up -d --no-build
+```text
+/srv/summerain/
+|-- docker-compose.yml    backend/docker-compose.deploy.yml 的副本
+|-- .env                  backend/.env.example 的副本，权限 0600
+`-- config/
+    `-- image-recipe.json backend/internal/config/image-recipe.json 的副本
+```
+
+```bash
+# 编辑 .env，设置精确的 DOCKER_IMAGE、数据库密码、Cookie secret 与 imgproxy 密钥。
+# 配方以只读方式覆盖镜像内置配方；编辑它可调整变体、阈值与接受的格式。
+docker compose --env-file .env pull
+docker compose --env-file .env up -d --no-build
 ```
 
 应用镜像只由 GitHub Actions 构建并同步到 Docker Hub / GHCR；部署机不构建应用镜像。
 `backend/docker-compose.deploy.yml` 会拒绝缺失的 `DOCKER_IMAGE`，生产环境应使用精确
-SemVer 标签或 OCI 多架构索引 digest。
+SemVer 标签或 OCI 多架构索引 digest。缺少 `config/image-recipe.json` 时 Compose 会拒绝启动。
 
 生产前置 nginx 反向代理至 `127.0.0.1:8080`，并经 Cloudflare 暴露 443（详见第 4 节）。
 
@@ -151,7 +158,8 @@ Compose 将 Redis 数据上限设为 `128mb`（容器上限 `192m`）并使用 `
 
 图片配方属于服务端策略，而不是环境变量：变体尺寸、像素与体积上限、可接受的源格式，以及
 浏览器必须发送的 `recipe_version` 都来自 `IMAGE_RECIPE_FILE`。容器会把默认配方写入
-`/app/config/image-recipe.json`，二进制文件也内置了同一份默认配方。修改配方需要重启并提升
+`/app/config/image-recipe.json`，二进制文件也内置了同一份默认配方，且 Compose 会将部署目录中的
+`config/image-recipe.json` 以只读方式覆盖到该路径。修改配方需要重启并提升
 `recipe_version`，配方永远不会通过管理员 API 暴露。
 
 `/api/v1/uploads/recipe` 下发的客户端提示用于让浏览器自行决定流水线规模；解码与编码
@@ -226,8 +234,12 @@ Compose 将 Redis 数据上限设为 `128mb`（容器上限 `192m`）并使用 `
 | `redis` | 不发布 | 内网 |
 | `imgproxy` | 不发布 | 以只读方式挂载图片卷 |
 
-> 生产密钥存放在 Git 忽略的 `backend/.env`（0600）中。部署命令必须同时传入
-> `--env-file backend/.env`，确保 Compose 插值和后端容器使用同一份配置。
+> 生产密钥存放在部署目录的 `.env`（0600）中。部署命令必须同时传入
+> `--env-file .env`，确保 Compose 插值和后端容器使用同一份配置。
+
+后端以只读方式挂载 `config/image-recipe.json`。`image_storage` 命名卷保存全部持久化图片
+文件，`mysql_data` 与 `redis_data` 卷分别保存数据库；升级前请备份 `mysql_data` 与
+`image_storage`，并将体积很小的 `.env` 与 `config/` 一并归档。
 
 ---
 
@@ -266,14 +278,14 @@ Compose 将 Redis 数据上限设为 `128mb`（容器上限 `192m`）并使用 `
 
 ```bash
 # 升级到 GitHub Actions 已发布的新精确版本
-# 编辑 backend/.env，将 DOCKER_IMAGE 设为 jaykserks/summerain:<new-version>
-docker compose --env-file backend/.env -f backend/docker-compose.deploy.yml pull backend
-docker compose --env-file backend/.env -f backend/docker-compose.deploy.yml up -d --no-build backend
+# 编辑 .env，将 DOCKER_IMAGE 设为 jaykserks/summerain:<new-version>
+docker compose --env-file .env pull backend
+docker compose --env-file .env up -d --no-build backend
 
 # 回滚到上一个已知正常的不可变版本
-# 编辑 backend/.env，将 DOCKER_IMAGE 改回 jaykserks/summerain:<previous-version>
-docker compose --env-file backend/.env -f backend/docker-compose.deploy.yml pull backend
-docker compose --env-file backend/.env -f backend/docker-compose.deploy.yml up -d --no-build backend
+# 编辑 .env，将 DOCKER_IMAGE 改回 jaykserks/summerain:<previous-version>
+docker compose --env-file .env pull backend
+docker compose --env-file .env up -d --no-build backend
 ```
 
 需要 digest 级固定时，可将 `DOCKER_IMAGE` 写为

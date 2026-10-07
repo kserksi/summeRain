@@ -53,21 +53,30 @@ for starting MySQL, Redis, imgproxy, the backend, and the frontend.
 
 ### 2.2 Production Deployment (GitHub Actions Image)
 
-```bash
-# Use an exact version published by GitHub Actions; do not commit this file
-cp backend/.env.example backend/.env
-chmod 0600 backend/.env
-# Edit backend/.env and replace at least the image version, database password,
-# Cookie secret, and imgproxy keys
+Prepare a deployment directory with the Compose file, the environment file, and
+the image recipe:
 
-docker compose --env-file backend/.env -f backend/docker-compose.deploy.yml pull
-docker compose --env-file backend/.env -f backend/docker-compose.deploy.yml up -d --no-build
+```text
+/srv/summerain/
+|-- docker-compose.yml    copy of backend/docker-compose.deploy.yml
+|-- .env                  copy of backend/.env.example, mode 0600
+`-- config/
+    `-- image-recipe.json copy of backend/internal/config/image-recipe.json
+```
+
+```bash
+# Edit .env and set an exact DOCKER_IMAGE, the database password, the Cookie
+# secret, and the imgproxy keys. The recipe is mounted read-only over the recipe
+# baked into the image; edit it to change variants, limits, or accepted formats.
+docker compose --env-file .env pull
+docker compose --env-file .env up -d --no-build
 ```
 
 Only GitHub Actions builds the application image and synchronizes it to Docker
 Hub / GHCR. The deployment host does not build the application image.
 `backend/docker-compose.deploy.yml` rejects a missing `DOCKER_IMAGE`. Production
-must use an exact SemVer tag or an OCI multi-platform index digest.
+must use an exact SemVer tag or an OCI multi-platform index digest. Compose
+refuses to start when `config/image-recipe.json` is missing.
 
 In production, the fronting nginx instance reverse proxies to
 `127.0.0.1:8080`, while Cloudflare exposes port 443. See Section 4.
@@ -163,10 +172,11 @@ rate-limit or replay-protection state and preventing a container OOM.
 The image recipe is server-side policy, not an environment variable: variant
 geometry, the pixel and byte limits, the accepted source formats, and the
 `recipe_version` the browser must send all come from `IMAGE_RECIPE_FILE`. The
-container bakes the default at `/app/config/image-recipe.json` and the binary
-embeds the same default. Changing the recipe requires a restart and a
-`recipe_version` bump, and the recipe is never exposed through the
-administrator API.
+container bakes the default at `/app/config/image-recipe.json`, the binary
+embeds the same default, and Compose mounts the deployment copy at
+`config/image-recipe.json` read-only over that path. Changing the recipe
+requires a restart and a `recipe_version` bump, and the recipe is never exposed
+through the administrator API.
 
 The advisory client hints returned by `/api/v1/uploads/recipe` let the browser
 size its own pipeline; decoding and encoding remain serial, and the effective
@@ -255,9 +265,14 @@ All four services should communicate only over the private network:
 | `redis` | Not published | Private network only |
 | `imgproxy` | Not published | Mounts the image volume read-only |
 
-> Store production secrets in the Git-ignored `backend/.env` with mode 0600.
-> Deployment commands must also pass `--env-file backend/.env`, ensuring that
-> Compose interpolation and the backend container use the same configuration.
+> Store production secrets in the deployment `.env` with mode 0600. Deployment
+> commands must also pass `--env-file .env`, ensuring that Compose interpolation
+> and the backend container use the same configuration.
+
+The backend mounts `config/image-recipe.json` read-only. The `image_storage`
+named volume holds every persisted image file, while `mysql_data` and
+`redis_data` hold the databases; back up `mysql_data` and `image_storage`
+before upgrades, together with the small `.env` and `config/` files.
 
 ---
 
@@ -296,14 +311,14 @@ Every worker has `recover`; a single panic does not stop the whole manager.
 
 ```bash
 # Upgrade to a new exact version published by GitHub Actions
-# Edit backend/.env and set DOCKER_IMAGE to jaykserks/summerain:<new-version>
-docker compose --env-file backend/.env -f backend/docker-compose.deploy.yml pull backend
-docker compose --env-file backend/.env -f backend/docker-compose.deploy.yml up -d --no-build backend
+# Edit .env and set DOCKER_IMAGE to jaykserks/summerain:<new-version>
+docker compose --env-file .env pull backend
+docker compose --env-file .env up -d --no-build backend
 
 # Roll back to the previous known-good immutable version
-# Edit backend/.env and restore DOCKER_IMAGE to jaykserks/summerain:<previous-version>
-docker compose --env-file backend/.env -f backend/docker-compose.deploy.yml pull backend
-docker compose --env-file backend/.env -f backend/docker-compose.deploy.yml up -d --no-build backend
+# Edit .env and restore DOCKER_IMAGE to jaykserks/summerain:<previous-version>
+docker compose --env-file .env pull backend
+docker compose --env-file .env up -d --no-build backend
 ```
 
 For digest-level pinning, set `DOCKER_IMAGE` to

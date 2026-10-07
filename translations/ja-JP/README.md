@@ -165,18 +165,22 @@ npx vitest run
 
 アプリケーションイメージは GitHub Actions でビルドされます。本番ホストは公開済みの正確なタグまたは OCI インデックスダイジェストを取得し、必ず `--no-build` を使用してください。
 
-```bash
-cp backend/.env.example backend/.env
-chmod 0600 backend/.env
-# backend/.env を編集し、正確な DOCKER_IMAGE、データベースパスワード、
-# Cookie secret、imgproxy key/salt を設定する。
+Compose ファイル、環境ファイル、画像レシピを配置したデプロイディレクトリを用意します。
 
-docker compose --env-file backend/.env \
-  -f backend/docker-compose.deploy.yml pull
-
-docker compose --env-file backend/.env \
-  -f backend/docker-compose.deploy.yml up -d --no-build
+```text
+/srv/summerain/
+|-- docker-compose.yml    backend/docker-compose.deploy.yml のコピー
+|-- .env                  backend/.env.example のコピー、モード 0600
+`-- config/
+    `-- image-recipe.json backend/internal/config/image-recipe.json のコピー
 ```
+
+```bash
+docker compose --env-file .env pull
+docker compose --env-file .env up -d --no-build
+```
+
+起動前に `.env` を編集し、正確な `DOCKER_IMAGE`、データベースパスワード、Cookie secret、imgproxy キーを設定します。レシピファイルはイメージに焼き込まれたレシピを読み取り専用で上書きします。編集して再起動すると、バリアント、上限、受け付ける形式を変更できます。
 
 安定版イメージの例：
 
@@ -221,6 +225,7 @@ summeRain/
 |-- backend/
 |   |-- cmd/server/                 アプリケーションのエントリポイント
 |   |-- internal/                   handler、service、repository、worker
+|   |-- config/                    デプロイ用画像レシピの上書きファイル
 |   |-- migrations/                 スキーマスナップショットとマイグレーションのリファレンス
 |   `-- web/                        生成されたフロントエンドビルド出力
 |-- frontend/

@@ -165,18 +165,22 @@ npx vitest run
 
 应用镜像由 GitHub Actions 构建。生产主机应拉取精确的已发布标签或 OCI 索引摘要，并且必须使用 `--no-build`。
 
-```bash
-cp backend/.env.example backend/.env
-chmod 0600 backend/.env
-# 编辑 backend/.env，设置精确的 DOCKER_IMAGE、数据库密码、
-# Cookie secret，以及 imgproxy key/salt。
+准备一个部署目录，放入 Compose 文件、环境变量文件与图片配方：
 
-docker compose --env-file backend/.env \
-  -f backend/docker-compose.deploy.yml pull
-
-docker compose --env-file backend/.env \
-  -f backend/docker-compose.deploy.yml up -d --no-build
+```text
+/srv/summerain/
+|-- docker-compose.yml    backend/docker-compose.deploy.yml 的副本
+|-- .env                  backend/.env.example 的副本，权限 0600
+`-- config/
+    `-- image-recipe.json backend/internal/config/image-recipe.json 的副本
 ```
+
+```bash
+docker compose --env-file .env pull
+docker compose --env-file .env up -d --no-build
+```
+
+启动前先编辑 `.env`：设置精确的 `DOCKER_IMAGE`、数据库密码、Cookie secret 与 imgproxy 密钥。配方文件以只读方式覆盖镜像内置的配方；编辑它并重启即可调整变体、阈值或支持的格式。
 
 稳定镜像示例：
 
@@ -221,6 +225,7 @@ summeRain/
 |-- backend/
 |   |-- cmd/server/                 应用入口
 |   |-- internal/                   handler、service、repository 与 worker
+|   |-- config/                    部署图片配方覆盖文件
 |   |-- migrations/                 数据库结构快照与迁移参考
 |   `-- web/                        生成的前端构建产物
 |-- frontend/
