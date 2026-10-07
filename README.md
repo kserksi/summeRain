@@ -358,6 +358,6 @@ for this repository.
 
 ## License
 
-Copyright 2026 The summeRain Authors
+Copyright 2026 kserksi
 
 Licensed under the [Apache License 2.0](https://github.com/kserksi/summeRain/blob/main/LICENSE).
