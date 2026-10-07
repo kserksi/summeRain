@@ -27,7 +27,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     authRequestGeneration += 1
     set({ user: null, isHydrating: false })
   },
-  // 初始启动：设 hydrating → AuthGuard 等待
+  // Initial startup: set hydrating so AuthGuard waits
   hydrate: async () => {
     const requestGeneration = ++authRequestGeneration
     set({ isHydrating: true })
@@ -44,7 +44,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       if (requestGeneration === authRequestGeneration) get().clear()
     }
   },
-  // 后续静默刷新（上传后/AdminGuard降级等）：不动 hydrating，不触发 AuthGuard 卸载
+  // Later silent refreshes (after uploads, AdminGuard demotion, etc.) keep hydrating untouched so AuthGuard does not unmount
   refreshUser: async () => {
     try {
       const requestGeneration = authRequestGeneration
@@ -69,7 +69,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       ) return
       get().setUser(u)
     } catch {
-      // 静默失败——不清除已有用户（避免误踢）
+      // Fail silently and keep the current user to avoid a spurious logout
     }
   },
 }))

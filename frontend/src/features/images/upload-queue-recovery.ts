@@ -1,6 +1,7 @@
 // Copyright 2026 The summeRain Authors
 // SPDX-License-Identifier: Apache-2.0
 
+import i18n from "@/i18n";
 import {
   reconcileV2UploadStatuses,
   resetV2UploadObservers,
@@ -334,7 +335,7 @@ export function planUploadRecovery(
     (session.status === "cleanup_pending" && session.image_id !== undefined)
   ) {
     if (!session.unique_link || !session.asset_link) {
-      return { action: "failed", message: "Completed upload is missing its image link" };
+      return { action: "failed", message: i18n.t("upload.recovery.missingLink") };
     }
     return {
       action: "completed",
@@ -356,10 +357,10 @@ export function planUploadRecovery(
     return { action: "resume" };
   }
   if (session.status === "cleanup_pending") {
-    return { action: "failed", message: "Upload cleanup is pending" };
+    return { action: "failed", message: i18n.t("upload.recovery.cleanupPending") };
   }
   if (session.status === "failed") {
-    return { action: "failed", message: "Server image processing failed" };
+    return { action: "failed", message: i18n.t("upload.recovery.processingFailed") };
   }
-  return { action: "failed", message: "Upload session was cancelled" };
+  return { action: "failed", message: i18n.t("upload.recovery.cancelled") };
 }

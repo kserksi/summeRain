@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import i18n from '@/i18n'
 import { queryClient } from '@/lib/query-client'
-import { ApiError } from '@/lib/errors'
+import { apiErrorMessage } from '@/lib/errors'
 import { ROUTES } from '@/config/constants'
 import { useAuthStore } from '@/store/auth-store'
 import { stopActiveUploadWork } from '@/features/images/upload-queue-recovery'
@@ -21,18 +21,7 @@ import type { LoginData, RegisterData } from './api'
 
 export function useErrorMessage() {
   const { t } = useTranslation()
-  return useCallback(
-    (err: unknown): string => {
-      if (err instanceof ApiError) {
-        const key = `errors.${err.code}`
-        const msg = t(key)
-        if (msg && msg !== key) return msg
-        return err.message
-      }
-      return t('common.error')
-    },
-    [t],
-  )
+  return useCallback((err: unknown): string => apiErrorMessage(err, t('common.error')), [t])
 }
 
 export function useLogin() {

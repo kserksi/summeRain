@@ -35,10 +35,10 @@ describe("api wrapper", () => {
   });
 
   it("throws ApiError on code!=0", async () => {
-    vi.mocked(fetch).mockResolvedValueOnce(mockResponse(200, { code: 2001, message: "凭证错误" }));
+    vi.mocked(fetch).mockResolvedValueOnce(mockResponse(200, { code: 2001, message: "Invalid credentials" }));
     const err = (await api.get("/test").catch((e: unknown) => e)) as ApiError;
     expect(err).toBeInstanceOf(ApiError);
-    expect(err.message).toBe("凭证错误");
+    expect(err.message).toBe("Invalid credentials");
     expect(err.code).toBe(2001);
   });
 
@@ -68,14 +68,14 @@ describe("api wrapper", () => {
   });
 
   it("does NOT redirect on 401 when skipAuthRedirect=true", async () => {
-    vi.mocked(fetch).mockResolvedValueOnce(mockResponse(401, { code: 4010, message: "未认证" }));
+    vi.mocked(fetch).mockResolvedValueOnce(mockResponse(401, { code: 4010, message: "Unauthenticated" }));
     await api.get("/test", { skipAuthRedirect: true }).catch(() => {});
     expect(window.location.assign).not.toHaveBeenCalled();
   });
 
   it("ApiError preserves code", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(
-      mockResponse(200, { code: 4030, message: "账户已被禁用" }),
+      mockResponse(200, { code: 4030, message: "Account disabled" }),
     );
     try {
       await api.get("/test", { skipAuthRedirect: true });

@@ -50,7 +50,7 @@
     --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-/* 浅色（摩卡） */
+/* Light theme (mocha) */
 :root {
     --background: #F1E7DA;
     --foreground: #33261B;
@@ -86,7 +86,7 @@
     --sidebar-ring: #6F4E37;
 }
 
-/* 深色（浓缩） */
+/* Dark theme (espresso) */
 .dark {
     --background: #16100D;
     --foreground: #F2E7D6;
@@ -133,7 +133,7 @@
     }
 }
 
-/* 主题切换：VT 圆形扩散 */
+/* Theme switch: circular reveal through the View Transition API */
 :root { --cx: 50%; --cy: 50%; }
 ::view-transition-old(root) { animation: none; z-index: 1; }
 ::view-transition-new(root) { animation: vtReveal .55s ease-out; z-index: 2; }

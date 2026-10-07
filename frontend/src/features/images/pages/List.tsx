@@ -30,6 +30,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { PAGINATION } from '@/config/constants'
 import { api } from '@/lib/api'
+import { apiErrorMessage } from '@/lib/errors'
 import { useAuthStore } from '@/store/auth-store'
 
 import { ImageCard } from '../components/ImageCard'
@@ -133,8 +134,8 @@ export default function List() {
       setSelectedIds(new Set())
       setSelectMode(false)
     } catch (err) {
-      const msg = err instanceof Error ? err.message : t('layout.unknownError')
-      toast.error(t('images.list.toast.deleteFailedWithMsg', { msg }))
+      const fallback = t('images.list.toast.deleteFailedWithMsg', { msg: t('layout.unknownError') })
+      toast.error(apiErrorMessage(err, fallback))
     } finally {
       setIsDeleting(false)
       setDeleteOpen(false)

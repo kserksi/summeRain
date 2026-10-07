@@ -30,6 +30,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { apiErrorMessage } from "@/lib/errors";
 import { useCopy } from "@/lib/use-copy";
 import { useAuthStore } from "@/store/auth-store";
 
@@ -532,9 +533,7 @@ export default function Upload() {
           },
           t,
         )
-      : error instanceof Error
-        ? error.message
-        : t("upload.toast.uploadAllFailed");
+      : apiErrorMessage(error, t("upload.toast.uploadAllFailed"));
     const disposition = v2UploadRetryDisposition(error);
     const retryMode: RetryMode =
       phase === "poll" && uploadId

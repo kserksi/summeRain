@@ -8,6 +8,7 @@ import {
   IconTrash,
 } from '@tabler/icons-react'
 import { toast } from 'sonner'
+import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 
 import i18n from '@/i18n'
@@ -45,6 +46,33 @@ function timeAgo(iso: string): string {
   return i18n.t('notification.time.daysAgo', { count: Math.floor(hr / 24) })
 }
 
+type NotificationMetadata = { percent?: number; quota?: string }
+
+function parseNotificationMetadata(raw?: string): NotificationMetadata {
+  if (!raw) return {}
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    return parsed && typeof parsed === 'object' ? (parsed as NotificationMetadata) : {}
+  } catch {
+    return {}
+  }
+}
+
+function localizedNotification(
+  notification: Notification,
+  t: TFunction,
+): { title: string; message: string } {
+  const metadata = parseNotificationMetadata(notification.metadata)
+  const prefix = `notification.types.${notification.type.replace(/\./g, '_')}`
+  const vars = { percent: metadata.percent ?? '', quota: metadata.quota ?? '' }
+  const title = t(`${prefix}.title`, { ...vars, defaultValue: '' })
+  const message = t(`${prefix}.message`, { ...vars, defaultValue: '' })
+  return {
+    title: title || notification.title,
+    message: message || notification.message,
+  }
+}
+
 type NotificationRowProps = {
   notification: Notification
   onMarkRead: (id: number) => void
@@ -61,6 +89,7 @@ function NotificationRow({
   deletePending,
 }: NotificationRowProps) {
   const { t } = useTranslation()
+  const { title, message } = localizedNotification(notification, t)
   return (
     <DropdownMenuItem
       onSelect={(e) => e.preventDefault()}
@@ -74,11 +103,11 @@ function NotificationRow({
               notification.is_read ? 'font-normal' : 'font-semibold',
             )}
           >
-            {notification.title}
+            {title}
           </p>
-          {notification.message ? (
+          {message ? (
             <p className="line-clamp-2 text-xs text-muted-foreground">
-              {notification.message}
+              {message}
             </p>
           ) : null}
           <p className="mt-0.5 text-xs text-muted-foreground">

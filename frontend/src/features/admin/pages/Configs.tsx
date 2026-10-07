@@ -190,7 +190,8 @@ export default function Configs() {
     if (!hasChanges) return
     updateConfigs.mutate(changedItems, {
       onSuccess: () => {
-        // 不立即 setEdits({}) —— 等 query refetch 后 server 自然追上 form，changedItems 归零
+        // Do not call setEdits({}) immediately; after the query refetches, the server state
+        // catches up with the form and changedItems resets.
       },
     })
   }
@@ -238,9 +239,9 @@ export default function Configs() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="en-US">English</SelectItem>
-                    <SelectItem value="zh-CN">中文</SelectItem>
-                    <SelectItem value="ja-JP">日本語</SelectItem>
+                    <SelectItem value="en-US">{t('admin.configs.languageEn')}</SelectItem>
+                    <SelectItem value="zh-CN">{t('admin.configs.languageZh')}</SelectItem>
+                    <SelectItem value="ja-JP">{t('admin.configs.languageJa')}</SelectItem>
                   </SelectContent>
                 </Select>
               )}

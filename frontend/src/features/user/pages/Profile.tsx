@@ -33,7 +33,7 @@ import { Separator } from '@/components/ui/separator'
 import { Progress } from '@/components/ui/progress'
 import { Skeleton } from '@/components/ui/skeleton'
 import { USER_ROLES, USER_STATUS } from '@/config/constants'
-import { ApiError } from '@/lib/errors'
+import { apiErrorMessage } from '@/lib/errors'
 import type { UserProfile } from '@/lib/types'
 import { useProfile, useChangePassword } from '../hooks'
 import { updateAvatar } from '../api'
@@ -205,7 +205,7 @@ function PasswordCard() {
         new_password: values.new_password,
       })
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : t('profile.password.changeFailed'))
+      toast.error(apiErrorMessage(err, t('profile.password.changeFailed')))
       reset({ ...values, old_password: '' })
     }
   }

@@ -82,8 +82,8 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
         signal,
       });
     } catch {
-      // 网络错误统一映射为 networkError,避免暴露原始 fetch 错误
-      // TODO: 区分 timeout 与 offline 两种场景
+      // Map network failures to networkError so raw fetch errors are not exposed
+      // TODO: distinguish timeout from offline
       throw new ApiError(0, i18n.t("api.networkError"));
     }
 
@@ -142,8 +142,8 @@ export const api = {
   del: <T>(path: string, opts?: RequestOptions) => request<T>(path, { ...opts, method: "DELETE" }),
   upload: async <T>(path: string, formData: FormData, opts?: RequestOptions): Promise<T> => {
     const csrf = getCsrfToken();
-    // 注意: upload 不要全局设 Content-Type,浏览器会自动加 boundary
-    // (手写 multipart/form-data 会缺少 boundary 参数,导致后端解析失败)
+    // Note: do not set Content-Type globally for uploads; the browser adds the boundary automatically
+    // (a hand-written multipart/form-data header lacks the boundary and breaks server parsing)
     const headers: Record<string, string> = {};
     if (csrf) headers["X-CSRF-Token"] = csrf;
     if (opts?.headers) Object.assign(headers, opts.headers);

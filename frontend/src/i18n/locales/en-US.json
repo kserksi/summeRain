@@ -27,24 +27,47 @@
     "notifications": "Notifications"
   },
   "errors": {
+    "1003": "Image processing failed. Large 4K+ images may require more imgproxy memory.",
+    "1004": "The verification service is temporarily unavailable",
     "2001": "Incorrect username or password",
     "2008": "Too many requests. Try again later.",
     "2009": "Verification failed. Try again.",
+    "2091": "Too many client error reports",
     "3000": "Invalid request parameters",
     "3002": "File exceeds the size limit",
     "3003": "Unsupported file type",
     "3004": "Too many files",
+    "3005": "Invalid V2 upload manifest or part parameter",
+    "3007": "Upload part verification failed",
+    "3008": "Upload part dimensions do not match",
+    "3010": "Image dimensions exceed the limit",
     "4010": "You are not signed in or your session has expired",
     "4011": "Your session has expired. Sign in again.",
     "4012": "Storage quota reached",
     "4029": "Too many requests",
     "4030": "This account has been suspended",
+    "4032": "Admin endpoints are restricted to Web clients",
+    "4033": "identity_token cannot be used for API access",
+    "4034": "Registration is restricted to Web clients",
     "4035": "CSRF token is missing",
     "4036": "CSRF token is invalid",
     "4037": "The private image token is invalid or has expired",
+    "4038": "Image writes are disabled during the deletion lock period",
+    "4039": "Batch-download allowance exhausted",
     "4042": "The private image token has been revoked",
-    "1004": "The verification service is temporarily unavailable",
-    "1003": "Image processing failed. Large 4K+ images may require more imgproxy memory."
+    "4043": "Upload session missing or expired",
+    "4090": "Duplicate request detected (nonce replay)",
+    "4091": "Upload session state conflict",
+    "4092": "Upload parts incomplete",
+    "4093": "Image still processing or cleaning up",
+    "4094": "Storage target cannot be changed right now",
+    "4095": "Current state does not allow this operation",
+    "4260": "Client version too old",
+    "4261": "Client image recipe version unsupported",
+    "4262": "This deployment requires V2 client-preprocessed uploads",
+    "4291": "Upload capacity exhausted; please try again later",
+    "5030": "Server storage pressure too high; please try again later",
+    "5031": "V2 upload temporarily disabled"
   },
   "layout": {
     "errorTitle": "This page encountered an error",
@@ -100,6 +123,12 @@
       "IMAGE_WEBP_ENCODE_UNAVAILABLE": "This browser cannot encode WebP images.",
       "IMAGE_PROCESSING_TIMEOUT": "Local image processing timed out. Try again.",
       "IMAGE_PROCESSING_FAILED": "Local image processing failed."
+    },
+    "recovery": {
+      "missingLink": "Completed upload is missing its image link",
+      "cleanupPending": "Upload cleanup is pending",
+      "processingFailed": "Server image processing failed",
+      "cancelled": "Upload session was cancelled"
     },
     "toast": {
       "uploadSuccess": "Uploaded {{count}} images",
@@ -410,6 +439,9 @@
       "siteLanguageTitle": "Site language",
       "siteLanguageDesc": "Set the default interface language for every visitor",
       "siteLanguageLabel": "Interface language",
+      "languageEn": "English",
+      "languageZh": "中文",
+      "languageJa": "日本語",
       "captchaTitle": "Human verification",
       "captchaDesc": "Configure the CAPTCHA provider used during registration and sign-in",
       "providerLabel": "Verification provider",
@@ -556,6 +588,32 @@
       "deleteFailed": "Could not delete the notification",
       "allCleared": "All notifications cleared",
       "clearFailed": "Could not clear notifications"
+    },
+    "types": {
+      "auth_password_changed": {
+        "title": "Password changed",
+        "message": "Your password was changed. All sessions were terminated."
+      },
+      "admin_user_disabled": {
+        "title": "Account disabled",
+        "message": "Your account was disabled by an administrator."
+      },
+      "admin_deletion_requested": {
+        "title": "Account deletion requested",
+        "message": "Your account was marked for deletion by an administrator. All data will be permanently deleted after 24 hours. Download anything you need during this period."
+      },
+      "admin_deletion_cancelled": {
+        "title": "Deletion cancelled",
+        "message": "Your account deletion request was cancelled by an administrator. Your account is active again."
+      },
+      "admin_quota_updated": {
+        "title": "Storage quota updated",
+        "message": "An administrator set your storage quota to {{quota}}."
+      },
+      "image_quota_warning": {
+        "title": "Storage almost full",
+        "message": "Current usage is {{percent}}%."
+      }
     }
   },
   "api": {
