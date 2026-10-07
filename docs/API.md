@@ -43,7 +43,7 @@ Application API endpoints return the following `response.Response` envelope:
 | Field | Description |
 |---|---|
 | `code` | `0` indicates success; any other value is an application error code. See [Section 10](#10-error-code-reference). |
-| `message` | Human-readable message |
+| `message` | Human-readable English fallback. Clients should map `code` to localized text and use this message only when a code is unmapped |
 | `data` | Application data; present on success and omitted on errors unless the error includes additional data |
 | `request_id` | Request trace ID, **returned only in error responses** |
 
@@ -745,6 +745,10 @@ state.
 
 ## 10. Error Code Reference
 
+The `message` field is English; the frontend maps `code` to localized text for
+every user-visible surface and falls back to the message when a code is
+unmapped.
+
 | code | HTTP | Meaning |
 |---|---|---|
 | 1000 | 500 | Internal server error |
@@ -806,7 +810,7 @@ state.
 
 1. **Credentials:** set `credentials: 'include'` on every request so the browser sends cookies automatically.
 2. **CSRF:** read the `__Host-csrf_token` cookie and add `X-CSRF-Token` to every non-GET request.
-3. **Response handling:** treat `body.code === 0` as success; otherwise display `message`. Redirect 401 responses to login.
+3. **Response handling:** treat `body.code === 0` as success; otherwise resolve the message through the client's `code`-to-locale map and fall back to `body.message`. Redirect 401 responses to login.
 4. **`__Host-` cookie constraints:** HTTPS and same-origin deployment are mandatory. A browser may reject these cookies on local `http://localhost`; use a same-origin proxy or a self-signed certificate.
 
 ### 11.2 Frontend Features Not Covered by the Backend
