@@ -54,6 +54,11 @@ services:
       - "127.0.0.1:${SUMMERAIN_DEV_IMGPROXY_PORT:-18081}:8080"
     volumes:
       - ../.dev-data:/data:ro
+    # The development data directory is owned by the host user (uid/gid 1000 by
+    # default). Adding that group lets imgproxy read originals for V1 dynamic
+    # transforms without world-readable permissions.
+    group_add:
+      - "${SUMMERAIN_DEV_GID:-1000}"
     healthcheck:
       test: ["CMD", "imgproxy", "health"]
       interval: 5s
