@@ -31,7 +31,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 
 	var input service.RegisterInput
 	if err := c.ShouldBindJSON(&input); err != nil {
-		response.Error(c, errcode.New(3000, "请求参数无效", 400))
+		response.Error(c, errcode.New(3000, "invalid request parameters", 400))
 		return
 	}
 
@@ -51,7 +51,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 func (h *AuthHandler) Login(c *gin.Context) {
 	var input service.LoginInput
 	if err := c.ShouldBindJSON(&input); err != nil {
-		response.Error(c, errcode.New(3000, "请求参数无效", 400))
+		response.Error(c, errcode.New(3000, "invalid request parameters", 400))
 		return
 	}
 
@@ -78,7 +78,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 func (h *AuthHandler) Logout(c *gin.Context) {
 	sessionID := middleware.GetSessionID(c)
 	if sessionID == 0 {
-		response.Error(c, errcode.New(4010, "未认证", 401))
+		response.Error(c, errcode.New(4010, "unauthenticated", 401))
 		return
 	}
 
@@ -122,7 +122,7 @@ func setCSRFTokenCookie(c *gin.Context, csrfToken string) {
 func (h *AuthHandler) Me(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 	if userID == 0 {
-		response.Error(c, errcode.New(4010, "未认证", 401))
+		response.Error(c, errcode.New(4010, "unauthenticated", 401))
 		return
 	}
 
@@ -138,7 +138,7 @@ func (h *AuthHandler) Me(c *gin.Context) {
 func (h *AuthHandler) DeviceLogin(c *gin.Context) {
 	var input service.DeviceLoginInput
 	if err := c.ShouldBindJSON(&input); err != nil {
-		response.Error(c, errcode.New(3000, "请求参数无效", 400))
+		response.Error(c, errcode.New(3000, "invalid request parameters", 400))
 		return
 	}
 
@@ -178,7 +178,7 @@ func (h *AuthHandler) DeviceLogin(c *gin.Context) {
 func (h *AuthHandler) DeviceBootstrap(c *gin.Context) {
 	var input service.DeviceBootstrapInput
 	if err := c.ShouldBindJSON(&input); err != nil {
-		response.Error(c, errcode.New(3000, "请求参数无效", 400))
+		response.Error(c, errcode.New(3000, "invalid request parameters", 400))
 		return
 	}
 
@@ -223,7 +223,7 @@ func (h *AuthHandler) DeviceShutdown(c *gin.Context) {
 		response.Error(c, appErr)
 		return
 	}
-	response.Success(c, gin.H{"message": "会话已终止"})
+	response.Success(c, gin.H{"message": "session terminated"})
 }
 
 func (h *AuthHandler) ListDeviceIdentities(c *gin.Context) {
@@ -239,7 +239,7 @@ func (h *AuthHandler) ListDeviceIdentities(c *gin.Context) {
 func (h *AuthHandler) RevokeIdentity(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		response.Error(c, errcode.New(3000, "无效的 ID", 400))
+		response.Error(c, errcode.New(3000, "invalid ID", 400))
 		return
 	}
 
@@ -265,7 +265,7 @@ func (h *AuthHandler) ListSessions(c *gin.Context) {
 func (h *AuthHandler) RevokeSession(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		response.Error(c, errcode.New(3000, "无效的 ID", 400))
+		response.Error(c, errcode.New(3000, "invalid ID", 400))
 		return
 	}
 

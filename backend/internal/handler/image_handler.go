@@ -30,11 +30,11 @@ func (h *ImageHandler) Upload(c *gin.Context) {
 		return
 	}
 	if c.GetBool("pendingDeletion") {
-		response.Error(c, errcode.New(4038, "账号已进入注销锁定期，无法上传", 403))
+		response.Error(c, errcode.New(4038, "image writes are forbidden during the account-deletion lock period", 403))
 		return
 	}
 
-	// fix: 之前直接用 c.Request.MultipartForm 偶发拿不到文件,改成 c.MultipartForm() 后稳定
+	// fix: c.Request.MultipartForm intermittently failed to expose files; c.MultipartForm() stabilizes it
 	form, err := c.MultipartForm()
 	if err != nil {
 		response.Error(c, errcode.ErrInternal)
@@ -43,7 +43,7 @@ func (h *ImageHandler) Upload(c *gin.Context) {
 
 	files := form.File["images"]
 	if len(files) == 0 {
-		response.Error(c, errcode.New(3001, "未提供图片文件", 400))
+		response.Error(c, errcode.New(3001, "no image file provided", 400))
 		return
 	}
 
@@ -66,7 +66,7 @@ func (h *ImageHandler) List(c *gin.Context) {
 	}
 
 	cursor := c.Query("cursor")
-	// limit 没传就用默认 20,这里 _ 掉 err 是因为 atoi 失败 fallback 0,后面 service 会兜底
+	// Default page size is 20; the error is ignored because a failed atoi falls back to 0 and the service applies its own fallback
 	limitStr := c.DefaultQuery("limit", "20")
 	limit, _ := strconv.Atoi(limitStr)
 	sort := c.DefaultQuery("sort", "-created_at")
@@ -96,7 +96,7 @@ func (h *ImageHandler) Get(c *gin.Context) {
 
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		response.Error(c, errcode.New(3000, "无效的图片 ID", 400))
+		response.Error(c, errcode.New(3000, "invalid image ID", 400))
 		return
 	}
 
@@ -108,7 +108,7 @@ func (h *ImageHandler) Get(c *gin.Context) {
 
 	isAdmin := middleware.GetRole(c) == "admin"
 	if image.UserID != userID && !isAdmin {
-		response.Error(c, errcode.New(4031, "无权访问此图片", 403))
+		response.Error(c, errcode.New(4031, "access to this image is forbidden", 403))
 		return
 	}
 
@@ -137,13 +137,13 @@ func (h *ImageHandler) Delete(c *gin.Context) {
 		return
 	}
 	if c.GetBool("pendingDeletion") {
-		response.Error(c, errcode.New(4038, "账号已进入注销锁定期，无法删除", 403))
+		response.Error(c, errcode.New(4038, "image deletion is forbidden during the account-deletion lock period", 403))
 		return
 	}
 
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		response.Error(c, errcode.New(3000, "无效的图片 ID", 400))
+		response.Error(c, errcode.New(3000, "invalid image ID", 400))
 		return
 	}
 
@@ -163,13 +163,13 @@ func (h *ImageHandler) ToggleVisibility(c *gin.Context) {
 		return
 	}
 	if c.GetBool("pendingDeletion") {
-		response.Error(c, errcode.New(4038, "账号已进入注销锁定期，无法修改", 403))
+		response.Error(c, errcode.New(4038, "image modification is forbidden during the account-deletion lock period", 403))
 		return
 	}
 
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		response.Error(c, errcode.New(3000, "无效的图片 ID", 400))
+		response.Error(c, errcode.New(3000, "invalid image ID", 400))
 		return
 	}
 
@@ -177,12 +177,12 @@ func (h *ImageHandler) ToggleVisibility(c *gin.Context) {
 		Visibility string `json:"visibility" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Error(c, errcode.New(3000, "visibility 字段必需", 400))
+		response.Error(c, errcode.New(3000, "visibility is required", 400))
 		return
 	}
 
 	if req.Visibility != "public" && req.Visibility != "private" {
-		response.Error(c, errcode.New(3000, "visibility 必须为 public 或 private", 400))
+		response.Error(c, errcode.New(3000, "visibility must be public or private", 400))
 		return
 	}
 
@@ -204,14 +204,14 @@ func (h *ImageHandler) IssueToken(c *gin.Context) {
 
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		response.Error(c, errcode.New(3000, "无效的图片 ID", 400))
+		response.Error(c, errcode.New(3000, "invalid image ID", 400))
 		return
 	}
 
 	var req struct {
 		TTLms int64 `json:"ttl_ms"`
 	}
-	// 没传 body 也行,后面 service 会用默认 TTL,_ 掉 err 是故意的
+	// An empty body is allowed; the service applies the default TTL, so the error is ignored intentionally
 	_ = c.ShouldBindJSON(&req)
 
 	isAdmin := middleware.GetRole(c) == "admin"
@@ -233,7 +233,7 @@ func (h *ImageHandler) RevokeToken(c *gin.Context) {
 
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		response.Error(c, errcode.New(3000, "无效的图片 ID", 400))
+		response.Error(c, errcode.New(3000, "invalid image ID", 400))
 		return
 	}
 
@@ -256,7 +256,7 @@ func (h *ImageHandler) GetUploadQueue(c *gin.Context) {
 
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		response.Error(c, errcode.New(3000, "无效的队列 ID", 400))
+		response.Error(c, errcode.New(3000, "invalid queue ID", 400))
 		return
 	}
 
@@ -267,7 +267,7 @@ func (h *ImageHandler) GetUploadQueue(c *gin.Context) {
 	}
 
 	if queue.UserID != userID {
-		response.Error(c, errcode.New(4031, "无权访问此记录", 403))
+		response.Error(c, errcode.New(4031, "access to this record is forbidden", 403))
 		return
 	}
 
@@ -281,7 +281,7 @@ func (h *ImageHandler) BatchDownload(c *gin.Context) {
 		return
 	}
 	if !c.GetBool("pendingDeletion") {
-		response.Error(c, errcode.New(4030, "仅注销锁定期用户可使用批量下载", 403))
+		response.Error(c, errcode.New(4030, "batch download is available only during the account-deletion lock period", 403))
 		return
 	}
 

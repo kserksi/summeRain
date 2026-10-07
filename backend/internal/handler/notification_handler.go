@@ -41,7 +41,7 @@ func (h *NotificationHandler) MarkRead(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		response.Error(c, errcode.New(3001, "无效的通知ID", 400))
+		response.Error(c, errcode.New(3001, "invalid notification ID", 400))
 		return
 	}
 
@@ -65,7 +65,7 @@ func (h *NotificationHandler) Delete(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		response.Error(c, errcode.New(3001, "无效的通知ID", 400))
+		response.Error(c, errcode.New(3001, "invalid notification ID", 400))
 		return
 	}
 

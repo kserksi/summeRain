@@ -18,7 +18,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// deviceIDRegex received from client,只允许字母数字和 _ -
+// deviceIDRegex matches device IDs received from clients; letters, digits, underscore, and hyphen only
 var deviceIDRegex = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
 
 type AuthService struct {
@@ -76,8 +76,8 @@ func NewAuthService(userRepo authUserRepository, sessionRepo authSessionReposito
 	}
 }
 
-// isCaptchaEnabled captcha 开关优先级: db config > 默认.
-// 当 db config 里 captcha_provider == "none" 时强制关闭,覆盖环境变量配置.
+// isCaptchaEnabled resolves the CAPTCHA switch: database config overrides the default.
+// When captcha_provider == "none" in the database config, CAPTCHA is forced off and environment settings are ignored.
 func (s *AuthService) isCaptchaEnabled() bool {
 	if s.captcha == nil {
 		return false
@@ -162,10 +162,10 @@ func (s *AuthService) Register(ctx context.Context, input *RegisterInput, remote
 		}
 	}
 	if _, err := s.userRepo.FindByUsername(input.Username); err == nil {
-		return nil, errcode.New(3001, "用户名已存在", 409)
+		return nil, errcode.New(3001, "username already exists", 409)
 	}
 	if _, err := s.userRepo.FindByEmail(input.Email); err == nil {
-		return nil, errcode.New(3001, "邮箱已被注册", 409)
+		return nil, errcode.New(3001, "email already registered", 409)
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
@@ -202,7 +202,7 @@ func (s *AuthService) Login(ctx context.Context, input *LoginInput, ip string, u
 		return nil, errcode.ErrInvalidCredentials
 	}
 	if !model.UserStatusAllowsAuthentication(user.Status) {
-		return nil, errcode.New(4030, "账户已被禁用", 403)
+		return nil, errcode.New(4030, "account disabled", 403)
 	}
 
 	sessionPlain, sessionHash, err := token.Generate(32)
@@ -260,7 +260,7 @@ func (s *AuthService) Logout(sessionID uint64) *errcode.AppError {
 
 func (s *AuthService) RefreshCSRFToken(sessionID uint64, currentToken string) (string, *errcode.AppError) {
 	if sessionID == 0 {
-		return "", errcode.New(4010, "未认证", 401)
+		return "", errcode.New(4010, "unauthenticated", 401)
 	}
 
 	replacementPlain, replacementHash, err := token.Generate(32)
@@ -290,14 +290,14 @@ func (s *AuthService) RefreshCSRFToken(sessionID uint64, currentToken string) (s
 func (s *AuthService) GetMe(userID uint64) (*model.User, *errcode.AppError) {
 	user, err := s.userRepo.FindByID(userID)
 	if err != nil {
-		return nil, errcode.New(4040, "用户不存在", 404)
+		return nil, errcode.New(4040, "user not found", 404)
 	}
 	return user, nil
 }
 
 func (s *AuthService) DeviceLogin(input *DeviceLoginInput, platform string, ip string, userAgent string) (*DeviceLoginResponse, *errcode.AppError) {
 	if !deviceIDRegex.MatchString(input.DeviceID) {
-		return nil, errcode.New(3001, "device_id 格式无效", 400)
+		return nil, errcode.New(3001, "invalid device_id format", 400)
 	}
 
 	user, err := s.userRepo.FindByUsername(input.Username)
@@ -313,7 +313,7 @@ func (s *AuthService) DeviceLogin(input *DeviceLoginInput, platform string, ip s
 		return nil, errcode.ErrInvalidCredentials
 	}
 	if !model.UserStatusAllowsAuthentication(user.Status) {
-		return nil, errcode.New(4030, "账户已被禁用", 403)
+		return nil, errcode.New(4030, "account disabled", 403)
 	}
 
 	count, err := s.sessionRepo.CountIdentitiesByPlatform(user.ID, platform)
@@ -337,7 +337,7 @@ func (s *AuthService) DeviceLogin(input *DeviceLoginInput, platform string, ip s
 			map[string]interface{}{
 				"platform":         platform,
 				"existing_devices": devices,
-				"hint":             "请先在已有设备中撤销一台，或通过 Web 端管理。",
+				"hint":             "Revoke an existing device first, or manage devices from the Web client.",
 			},
 		)
 	}
@@ -403,13 +403,13 @@ func (s *AuthService) DeviceLogin(input *DeviceLoginInput, platform string, ip s
 			Username: user.Username,
 			Role:     user.Role,
 		},
-		Warning: "请安全保存 identity_token。session_token 为临时令牌。",
+		Warning: "Store the identity_token securely. The session_token is temporary.",
 	}, nil
 }
 
 func (s *AuthService) DeviceBootstrap(identityTokenPlain string, input *DeviceBootstrapInput, platform string, ip string) (*DeviceBootstrapResponse, *errcode.AppError) {
 	if _, err := hex.DecodeString(input.Nonce); err != nil {
-		return nil, errcode.New(3000, "nonce 必须为 hex 编码", 400)
+		return nil, errcode.New(3000, "nonce must be hex-encoded", 400)
 	}
 
 	identityHash := token.SHA256(identityTokenPlain)
@@ -425,15 +425,15 @@ func (s *AuthService) DeviceBootstrap(identityTokenPlain string, input *DeviceBo
 
 	user, err := s.userRepo.FindByID(identity.UserID)
 	if err != nil || user == nil || !model.UserStatusAllowsAuthentication(user.Status) {
-		return nil, errcode.New(4030, "账户已被禁用", 403)
+		return nil, errcode.New(4030, "account disabled", 403)
 	}
 
 	if identity.DeviceID != input.DeviceID {
-		return nil, errcode.New(4030, "设备标识不匹配", 403)
+		return nil, errcode.New(4030, "device identity mismatch", 403)
 	}
 
 	if identity.Platform != platform {
-		return nil, errcode.New(4030, "平台不匹配", 403)
+		return nil, errcode.New(4030, "platform mismatch", 403)
 	}
 
 	nonceHash := token.SHA256(input.Nonce)
@@ -498,7 +498,7 @@ func (s *AuthService) DeviceHeartbeat(sessionID uint64) *errcode.AppError {
 func (s *AuthService) DeviceShutdown(sessionID uint64, userID uint64, ip string) *errcode.AppError {
 	session, err := s.sessionRepo.FindByID(sessionID)
 	if err != nil || session.UserID != userID || session.TokenType != "session" {
-		return errcode.New(4040, "会话不存在", 404)
+		return errcode.New(4040, "session not found", 404)
 	}
 	if err := s.sessionRepo.Delete(sessionID); err != nil {
 		return errcode.ErrDatabase
@@ -522,7 +522,7 @@ func (s *AuthService) ListDeviceIdentities(userID uint64) ([]model.Session, *err
 func (s *AuthService) RevokeIdentity(id uint64, userID uint64, ip string) *errcode.AppError {
 	identity, err := s.sessionRepo.FindByID(id)
 	if err != nil || identity.UserID != userID || identity.TokenType != "identity" {
-		return errcode.New(4040, "身份令牌不存在", 404)
+		return errcode.New(4040, "identity token not found", 404)
 	}
 	s.sessionRepo.DeleteByIdentityTokenID(id)
 	if err := s.sessionRepo.Delete(id); err != nil {
@@ -548,7 +548,7 @@ func (s *AuthService) ListSessions(userID uint64) ([]model.Session, *errcode.App
 func (s *AuthService) RevokeSession(id uint64, userID uint64, ip string) *errcode.AppError {
 	session, err := s.sessionRepo.FindByID(id)
 	if err != nil || session.UserID != userID || session.TokenType != "session" {
-		return errcode.New(4040, "会话不存在", 404)
+		return errcode.New(4040, "session not found", 404)
 	}
 	if err := s.sessionRepo.Delete(id); err != nil {
 		return errcode.ErrDatabase

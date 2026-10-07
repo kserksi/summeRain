@@ -39,7 +39,7 @@ type changePasswordReq struct {
 func (h *UserHandler) ChangePassword(c *gin.Context) {
 	var req changePasswordReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Error(c, errcode.New(3001, "参数验证失败", 400))
+		response.Error(c, errcode.New(3001, "parameter validation failed", 400))
 		return
 	}
 
@@ -61,17 +61,17 @@ type updateAvatarReq struct {
 func (h *UserHandler) UpdateAvatar(c *gin.Context) {
 	var req updateAvatarReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Error(c, errcode.New(3001, "参数验证失败", 400))
+		response.Error(c, errcode.New(3001, "parameter validation failed", 400))
 		return
 	}
 
 	if req.AvatarURL != "" && !strings.HasPrefix(req.AvatarURL, "data:image/") {
-		response.Error(c, errcode.New(3000, "头像必须是图片数据", 400))
+		response.Error(c, errcode.New(3000, "avatar must be image data", 400))
 		return
 	}
 
 	if len(req.AvatarURL) > 200*1024 {
-		response.Error(c, errcode.New(3002, "头像文件过大", 400))
+		response.Error(c, errcode.New(3002, "avatar file too large", 400))
 		return
 	}
 

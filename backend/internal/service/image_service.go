@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -181,7 +182,7 @@ type UploadResponse struct {
 }
 
 func (s *ImageService) Upload(userID uint64, files []*multipart.FileHeader, visibility string) (*UploadResponse, *errcode.AppError) {
-	// 20 个上限是拍脑袋定的,够用了,真要改扔到 config 里
+	// The 20-file cap is a deliberate constant; move it into config if it ever needs to change
 	if len(files) > 20 {
 		return nil, errcode.ErrFileCountExceeded
 	}
@@ -226,7 +227,7 @@ func (s *ImageService) Upload(userID uint64, files []*multipart.FileHeader, visi
 	}
 
 	if successSize > 0 {
-		// TODO: 此处 Updates 的 err 未处理,配额可能短暂不准;前端会重新拉 profile 自愈.
+		// TODO: the Updates error is not handled here, so the quota may briefly lag; the frontend refetches the profile to recover.
 		s.db.Model(&model.User{}).Where("id = ?", userID).
 			Updates(map[string]interface{}{
 				"storage_used": gorm.Expr("storage_used + ?", successSize),
@@ -243,7 +244,8 @@ func (s *ImageService) Upload(userID uint64, files []*multipart.FileHeader, visi
 
 	usagePercent := float64(user.StorageUsed) / float64(user.StorageQuota) * 100
 	if usagePercent >= 90 && usagePercent < 100 {
-		s.notificationSvc.Create(userID, "image.quota_warning", "存储空间即将用完", fmt.Sprintf("当前使用率 %.0f%%", usagePercent))
+		s.notificationSvc.CreateWithMetadata(userID, "image.quota_warning", "Storage almost full",
+			fmt.Sprintf("Current usage is %.0f%%.", usagePercent), map[string]any{"percent": int(math.Round(usagePercent))})
 	}
 
 	resp := &UploadResponse{
@@ -292,7 +294,7 @@ func (s *ImageService) processFile(userID uint64, fh *multipart.FileHeader, visi
 
 	detectedMIME := http.DetectContentType(content)
 	if !allowedImageMIME(detectedMIME) {
-		result.Error = "文件内容与扩展名不匹配"
+		result.Error = "file content does not match its extension"
 		result.ErrorCode = errcode.ErrUnsupportedType.Code
 		return result
 	}
@@ -846,7 +848,7 @@ func allowedImageMIME(mimeType string) bool {
 func (s *ImageService) GetByID(id uint64) (*model.Image, *errcode.AppError) {
 	image, err := s.imageRepo.FindByID(id)
 	if err != nil {
-		return nil, errcode.New(4041, "图片不存在", 404)
+		return nil, errcode.New(4041, "image not found", 404)
 	}
 	return image, nil
 }
@@ -854,7 +856,7 @@ func (s *ImageService) GetByID(id uint64) (*model.Image, *errcode.AppError) {
 func (s *ImageService) GetImageFile(imageFileID uint64) (*model.ImageFile, *errcode.AppError) {
 	file, err := s.imageFileRepo.FindByID(imageFileID)
 	if err != nil {
-		return nil, errcode.New(4041, "图片文件不存在", 404)
+		return nil, errcode.New(4041, "image file not found", 404)
 	}
 	return file, nil
 }
@@ -1018,13 +1020,13 @@ func (s *ImageService) deleteImage(userID uint64, imageID uint64, isAdmin bool) 
 
 	if txErr != nil {
 		if errors.Is(txErr, errImageStillProcessing) {
-			return nil, errcode.New(4093, "图片仍在处理或清理中，请稍后重试", http.StatusConflict)
+			return nil, errcode.New(4093, "image is still processing or being cleaned up; please try again later", http.StatusConflict)
 		}
 		if errors.Is(txErr, errImageForbidden) {
-			return nil, errcode.New(4031, "无权操作此图片", 403)
+			return nil, errcode.New(4031, "you are not allowed to modify this image", 403)
 		}
 		if txErr == gorm.ErrRecordNotFound {
-			return nil, errcode.New(4041, "图片不存在", 404)
+			return nil, errcode.New(4041, "image not found", 404)
 		}
 		return nil, errcode.ErrDatabase
 	}
@@ -1148,10 +1150,10 @@ func (s *ImageService) ToggleVisibility(userID uint64, imageID uint64, visibilit
 		}).Error
 	})
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, errcode.New(4041, "图片不存在", 404)
+		return nil, errcode.New(4041, "image not found", 404)
 	}
 	if errors.Is(err, errImageForbidden) {
-		return nil, errcode.New(4031, "无权操作此图片", 403)
+		return nil, errcode.New(4031, "you are not allowed to modify this image", 403)
 	}
 	if err != nil {
 		return nil, errcode.ErrDatabase
@@ -1164,7 +1166,7 @@ func (s *ImageService) ToggleVisibility(userID uint64, imageID uint64, visibilit
 		AssetLink:     assetLink,
 	}
 	if tokensRevoked > 0 {
-		result.Warning = "private → public 切换已撤销此图片的全部访问令牌"
+		result.Warning = "Switching from private to public revoked every access token for this image"
 	}
 	return result, nil
 }
@@ -1250,10 +1252,10 @@ func (s *ImageService) IssueAccessToken(userID, imageID uint64, isAdmin bool, tt
 	}
 	if replaceErr := s.tokenRepo.ReplaceActiveForImage(userID, imageID, isAdmin, accessToken, now); replaceErr != nil {
 		if errors.Is(replaceErr, repository.ErrAccessTokenImageNotFound) {
-			return nil, errcode.New(4041, "图片不存在", 404)
+			return nil, errcode.New(4041, "image not found", 404)
 		}
 		if errors.Is(replaceErr, repository.ErrAccessTokenForbidden) {
-			return nil, errcode.New(4031, "无权操作此图片", 403)
+			return nil, errcode.New(4031, "you are not allowed to modify this image", 403)
 		}
 		return nil, errcode.ErrDatabase
 	}
@@ -1262,7 +1264,7 @@ func (s *ImageService) IssueAccessToken(userID, imageID uint64, isAdmin bool, tt
 		TokenID:   accessToken.ID,
 		Token:     plaintext,
 		ExpiresAt: expiresAt,
-		Warning:   "请立即保存此令牌。令牌字符不可变，吊销后需重新申请。",
+		Warning:   "Save this token now. Its value is immutable, and a revoked token must be reissued.",
 	}, nil
 }
 
@@ -1276,10 +1278,10 @@ type RevokeAccessTokenResult struct {
 func (s *ImageService) RevokeAccessToken(userID, imageID uint64, isAdmin bool) (*RevokeAccessTokenResult, *errcode.AppError) {
 	image, err := s.imageRepo.FindByID(imageID)
 	if err != nil {
-		return nil, errcode.New(4041, "图片不存在", 404)
+		return nil, errcode.New(4041, "image not found", 404)
 	}
 	if image.UserID != userID && !isAdmin {
-		return nil, errcode.New(4031, "无权操作此图片", 403)
+		return nil, errcode.New(4031, "you are not allowed to modify this image", 403)
 	}
 
 	rows, err := s.tokenRepo.RevokeActiveByImageID(imageID, time.Now())
@@ -1294,10 +1296,10 @@ func (s *ImageService) RevokeAccessToken(userID, imageID uint64, isAdmin bool) (
 func (s *ImageService) ActiveAccessToken(userID, imageID uint64, isAdmin bool) (*model.ImageAccessToken, *errcode.AppError) {
 	image, err := s.imageRepo.FindByID(imageID)
 	if err != nil {
-		return nil, errcode.New(4041, "图片不存在", 404)
+		return nil, errcode.New(4041, "image not found", 404)
 	}
 	if image.UserID != userID && !isAdmin {
-		return nil, errcode.New(4031, "无权操作此图片", 403)
+		return nil, errcode.New(4031, "you are not allowed to modify this image", 403)
 	}
 	t, err := s.tokenRepo.FindActiveByImageID(imageID)
 	if err != nil {
@@ -1325,10 +1327,10 @@ func (s *ImageService) ValidateAccessToken(imageID uint64, presentedToken string
 func (s *ImageService) GetByUniqueLink(link string) (*model.Image, *errcode.AppError) {
 	image, err := s.imageRepo.FindByUniqueLink(link)
 	if err != nil {
-		return nil, errcode.New(4041, "图片不存在", 404)
+		return nil, errcode.New(4041, "image not found", 404)
 	}
 	if image.PipelineVersion >= model.ImagePipelineVersionV2 && (image.OriginAlias == nil || *image.OriginAlias != link) {
-		return nil, errcode.New(4041, "图片不存在", 404)
+		return nil, errcode.New(4041, "image not found", 404)
 	}
 	return image, nil
 }
@@ -1337,7 +1339,7 @@ func (s *ImageService) GetActiveVariant(imageID uint64, kind string) (*model.Ima
 	var variant model.ImageVariant
 	if err := s.db.Where("image_id = ? AND kind = ? AND status = ? AND is_active = ?", imageID, kind, model.ImageVariantStatusReady, true).
 		Order("revision DESC").First(&variant).Error; err != nil {
-		return nil, errcode.New(4041, "图片变体尚未就绪", 404)
+		return nil, errcode.New(4041, "image variant is not ready yet", 404)
 	}
 	return &variant, nil
 }
@@ -1345,7 +1347,7 @@ func (s *ImageService) GetActiveVariant(imageID uint64, kind string) (*model.Ima
 func (s *ImageService) GetUploadQueue(id uint64) (*model.UploadQueue, *errcode.AppError) {
 	queue, err := s.uploadQueueRepo.FindByID(id)
 	if err != nil {
-		return nil, errcode.New(4041, "上传记录不存在", 404)
+		return nil, errcode.New(4041, "upload record not found", 404)
 	}
 	return queue, nil
 }
@@ -1358,7 +1360,7 @@ func (s *ImageService) IncrementView(imageID uint64) {
 func (s *ImageService) GetImageFileByHash(hashPrefix string) (*model.ImageFile, *errcode.AppError) {
 	var imageFile model.ImageFile
 	if err := s.db.Where("file_hash LIKE ?", hashPrefix+"%").First(&imageFile).Error; err != nil {
-		return nil, errcode.New(4041, "图片不存在", 404)
+		return nil, errcode.New(4041, "image not found", 404)
 	}
 	return &imageFile, nil
 }
@@ -1366,7 +1368,7 @@ func (s *ImageService) GetImageFileByHash(hashPrefix string) (*model.ImageFile, 
 func (s *ImageService) GetByImageFileID(fileID uint64) (*model.Image, *errcode.AppError) {
 	var image model.Image
 	if err := s.db.Where("image_file_id = ?", fileID).First(&image).Error; err != nil {
-		return nil, errcode.New(4041, "图片不存在", 404)
+		return nil, errcode.New(4041, "image not found", 404)
 	}
 	return &image, nil
 }
@@ -1409,7 +1411,7 @@ func (s *ImageService) BatchDownloadOriginals(ctx context.Context, userID uint64
 		return errcode.ErrDatabase
 	}
 	if user.BatchDownloadCount >= MaxBatchDownloads {
-		return errcode.New(4039, "批量下载次数已用尽", 403)
+		return errcode.New(4039, "batch download allowance exhausted", 403)
 	}
 
 	images, err := s.imageRepo.FindOriginalPathsByUserID(userID)
@@ -1417,7 +1419,7 @@ func (s *ImageService) BatchDownloadOriginals(ctx context.Context, userID uint64
 		return errcode.ErrDatabase
 	}
 	if len(images) == 0 {
-		return errcode.New(4041, "没有可下载的图片", 404)
+		return errcode.New(4041, "no images available for download", 404)
 	}
 
 	// Reserve one of the limited downloads atomically. This prevents concurrent
@@ -1429,7 +1431,7 @@ func (s *ImageService) BatchDownloadOriginals(ctx context.Context, userID uint64
 		return errcode.ErrDatabase
 	}
 	if reserved.RowsAffected == 0 {
-		return errcode.New(4039, "批量下载次数已用尽", 403)
+		return errcode.New(4039, "batch download allowance exhausted", 403)
 	}
 	committed := false
 	defer func() {

@@ -57,7 +57,7 @@ func TestUpdateConfigsRejectsR2TargetDriftWithUnclassifiedV1Images(t *testing.T)
 		{Key: "r2_endpoint", Value: "https://new-target-" + suffix + ".example"},
 		{Key: "r2_bucket", Value: "new-bucket"},
 	})
-	if appErr == nil || appErr.Code != 4094 || !strings.Contains(appErr.Message, "未分类") {
+	if appErr == nil || appErr.Code != 4094 || !strings.Contains(appErr.Message, "unclassified") {
 		t.Fatalf("UpdateConfigs() error = %#v, want unclassified-history conflict", appErr)
 	}
 }

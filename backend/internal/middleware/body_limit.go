@@ -24,7 +24,7 @@ func LimitJSONBody(maximum int64) gin.HandlerFunc {
 			return
 		}
 		if c.Request.ContentLength > maximum {
-			response.Error(c, errcode.New(3002, "请求体过大", http.StatusRequestEntityTooLarge))
+			response.Error(c, errcode.New(3002, "request body too large", http.StatusRequestEntityTooLarge))
 			c.Abort()
 			return
 		}

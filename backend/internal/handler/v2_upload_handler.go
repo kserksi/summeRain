@@ -69,7 +69,7 @@ func (h *V2UploadHandler) Init(c *gin.Context) {
 		return
 	}
 	var req service.V2InitUploadRequest
-	if appErr := bindBoundedJSON(c, &req, h.initJSONLimit(), 3005, "无效的 V2 上传清单"); appErr != nil {
+	if appErr := bindBoundedJSON(c, &req, h.initJSONLimit(), 3005, "invalid V2 upload manifest"); appErr != nil {
 		response.Error(c, appErr)
 		return
 	}
@@ -100,7 +100,7 @@ func (h *V2UploadHandler) BatchStatus(c *gin.Context) {
 		return
 	}
 	var req service.V2BatchStatusRequest
-	if appErr := bindBoundedJSON(c, &req, h.batchStatusJSONLimit(), 3005, "无效的批量状态查询"); appErr != nil {
+	if appErr := bindBoundedJSON(c, &req, h.batchStatusJSONLimit(), 3005, "invalid batch status request"); appErr != nil {
 		response.Error(c, appErr)
 		return
 	}
@@ -166,7 +166,7 @@ func uploadUser(c *gin.Context) (uint64, bool) {
 		return 0, false
 	}
 	if c.GetBool("pendingDeletion") {
-		response.Error(c, errcode.New(4038, "账号已进入注销锁定期，无法上传", http.StatusForbidden))
+		response.Error(c, errcode.New(4038, "image writes are forbidden during the account-deletion lock period", http.StatusForbidden))
 		return 0, false
 	}
 	return userID, true
@@ -177,7 +177,7 @@ func bindBoundedJSON(c *gin.Context, destination interface{}, maximum int64, inv
 	if err := c.ShouldBindJSON(destination); err != nil {
 		var maximumError *http.MaxBytesError
 		if errors.As(err, &maximumError) {
-			return errcode.New(3002, "请求体过大", http.StatusRequestEntityTooLarge)
+			return errcode.New(3002, "request body too large", http.StatusRequestEntityTooLarge)
 		}
 		return errcode.New(invalidCode, invalidMessage, http.StatusBadRequest)
 	}

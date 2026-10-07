@@ -25,7 +25,7 @@ func TestClientErrorServiceWritesOneBoundedLine(t *testing.T) {
 
 	appErr := svc.Report(ClientErrorReport{
 		Kind:           "Boundary",
-		Message:        "  " + strings.Repeat("崩", 400) + "  ",
+		Message:        "  " + strings.Repeat("→", 400) + "  ",
 		Stack:          strings.Repeat("s", 5000),
 		ComponentStack: "at Upload",
 		Source:         "app.js:10:5",
@@ -51,7 +51,7 @@ func TestClientErrorServiceWritesOneBoundedLine(t *testing.T) {
 			t.Fatalf("log line %q is missing %q", line, fragment)
 		}
 	}
-	if strings.Contains(line, strings.Repeat("崩", clientErrorMessageBytes/3+1)) {
+	if strings.Contains(line, strings.Repeat("→", clientErrorMessageBytes/3+1)) {
 		t.Fatalf("message was not truncated to %d bytes: %q", clientErrorMessageBytes, line)
 	}
 	if strings.Contains(line, strings.Repeat("s", clientErrorStackBytes+1)) {
@@ -85,7 +85,7 @@ func TestClientErrorServiceRejectsUnusableReports(t *testing.T) {
 }
 
 func TestTruncateUTF8KeepsRuneBoundaries(t *testing.T) {
-	value := strings.Repeat("a", 299) + "崩"
+	value := strings.Repeat("a", 299) + "→"
 	if got := truncateUTF8(value, 300); got != strings.Repeat("a", 299) {
 		t.Fatalf("truncateUTF8() = %q, want the 299 ASCII prefix", got)
 	}

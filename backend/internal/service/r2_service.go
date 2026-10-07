@@ -355,7 +355,7 @@ func TestR2Connection(endpoint, accessKey, secretKey, bucket string) error {
 		awsconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKey, secretKey, "")),
 	)
 	if err != nil {
-		return fmt.Errorf("加载配置失败: %w", err)
+		return fmt.Errorf("failed to load configuration: %w", err)
 	}
 
 	client := s3.NewFromConfig(cfg, func(o *s3.Options) {
@@ -367,7 +367,7 @@ func TestR2Connection(endpoint, accessKey, secretKey, bucket string) error {
 		Bucket: &bucket,
 	})
 	if err != nil {
-		return fmt.Errorf("连接测试失败: %w", err)
+		return fmt.Errorf("connection test failed: %w", err)
 	}
 
 	return nil

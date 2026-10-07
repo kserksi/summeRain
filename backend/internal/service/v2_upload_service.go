@@ -129,18 +129,18 @@ func (s *V2UploadService) Recipe() V2RecipeResponse {
 
 func (s *V2UploadService) Init(ctx context.Context, userID uint64, idempotencyKey string, req *V2InitUploadRequest) (*V2UploadResponse, *errcode.AppError) {
 	if !s.cfg.ImageV2.Enabled {
-		return nil, errcode.New(5031, "V2 上传暂未启用", 503)
+		return nil, errcode.New(5031, "V2 upload is temporarily disabled", 503)
 	}
 	if appErr := validateV2Manifest(req, s.recipe); appErr != nil {
 		return nil, appErr
 	}
 	idempotencyKey = strings.TrimSpace(idempotencyKey)
 	if idempotencyKey == "" || len(idempotencyKey) > 64 {
-		return nil, errcode.New(3005, "Idempotency-Key 必须包含 1 到 64 个字符", 400)
+		return nil, errcode.New(3005, "Idempotency-Key must contain 1 to 64 characters", 400)
 	}
 	manifestJSON, err := json.Marshal(req)
 	if err != nil {
-		return nil, errcode.New(3005, "无效的上传清单", 400)
+		return nil, errcode.New(3005, "invalid upload manifest", 400)
 	}
 	manifestSum := sha256.Sum256(manifestJSON)
 	manifestHash := hex.EncodeToString(manifestSum[:])
@@ -354,14 +354,14 @@ func (s *V2UploadService) PutPart(ctx context.Context, userID uint64, uploadKey,
 	}
 	part := findV2Part(session.Parts, kind)
 	if part == nil {
-		return nil, errcode.New(3005, "未知的上传部件", 404)
+		return nil, errcode.New(3005, "unknown upload part", 404)
 	}
 	if part.Status == model.UploadPartStatusReceived || part.Status == model.UploadPartStatusFinalized {
 		resp := v2PartResponse(uploadKey, *part)
 		return &resp, nil
 	}
 	if contentLength >= 0 && contentLength != part.ExpectedSize {
-		return nil, errcode.New(3002, "上传部件大小与清单不一致", 413)
+		return nil, errcode.New(3002, "upload part size does not match the manifest", 413)
 	}
 	mediaType, _, err := mime.ParseMediaType(contentType)
 	if err != nil || mediaType != "image/webp" {
@@ -412,19 +412,19 @@ func (s *V2UploadService) PutPart(ctx context.Context, userID uint64, uploadKey,
 
 	written, actualHash, info, streamErr := streamV2WebPPart(file, body, part.ExpectedSize)
 	if errors.Is(streamErr, errV2PartStream) {
-		return nil, errcode.New(3006, "上传流读取失败", 400)
+		return nil, errcode.New(3006, "failed to read the upload stream", 400)
 	}
 	if errors.Is(streamErr, errV2PartSize) {
-		return nil, errcode.New(3002, "上传部件大小与清单不一致", 413)
+		return nil, errcode.New(3002, "upload part size does not match the manifest", 413)
 	}
 	if streamErr != nil || info.Animated {
 		return nil, errcode.ErrUnsupportedType
 	}
 	if actualHash != part.ExpectedHash {
-		return nil, errcode.New(3007, "上传部件哈希校验失败", 422)
+		return nil, errcode.New(3007, "upload part SHA-256 verification failed", 422)
 	}
 	if info.Width != part.ExpectedWidth || info.Height != part.ExpectedHeight {
-		return nil, errcode.New(3008, "上传部件尺寸与清单不一致", 422)
+		return nil, errcode.New(3008, "upload part dimensions do not match the manifest", 422)
 	}
 	if err := file.Sync(); err != nil {
 		return nil, errcode.ErrInternal

@@ -261,11 +261,11 @@ func main() {
 				Bucket    string `json:"bucket"`
 			}
 			if err := c.ShouldBindJSON(&req); err != nil {
-				response.Error(c, errcode.New(1001, "参数错误", 400))
+				response.Error(c, errcode.New(1001, "invalid parameters", 400))
 				return
 			}
 			if req.Endpoint == "" || req.AccessKey == "" || req.SecretKey == "" || req.Bucket == "" {
-				response.Error(c, errcode.New(1001, "请填写完整 R2 配置", 400))
+				response.Error(c, errcode.New(1001, "R2 configuration is incomplete", 400))
 				return
 			}
 			if err := service.TestR2Connection(req.Endpoint, req.AccessKey, req.SecretKey, req.Bucket); err != nil {
@@ -276,7 +276,7 @@ func main() {
 		})
 	}
 
-	// TODO: 后续上了 cdn 这块静态服务可以挪到 nginx,Go 这边只管 API
+	// TODO: once a CDN is in front, static serving can move to nginx and Go can focus on the API
 	webRoot, err := filepath.Abs("./web")
 	if err != nil {
 		log.Fatalf("failed to resolve web root: %v", err)
@@ -308,7 +308,7 @@ func main() {
 	}()
 
 	if configs, err := configRepo.FindAll(); err == nil {
-		// 启动时重新生成水印 SVG,不然改了配置要重启 imgproxy 才生效,体验很差
+		// Regenerate the watermark SVG at startup; otherwise a config change needs an imgproxy restart to take effect
 		cfgMap := make(map[string]string)
 		for _, c := range configs {
 			cfgMap[c.ConfigKey] = c.ConfigValue

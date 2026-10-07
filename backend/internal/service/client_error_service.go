@@ -58,11 +58,11 @@ func NewClientErrorService() *ClientErrorService {
 func (s *ClientErrorService) Report(report ClientErrorReport, meta ClientErrorMeta) *errcode.AppError {
 	kind := strings.ToLower(strings.TrimSpace(report.Kind))
 	if _, ok := clientErrorKinds[kind]; !ok {
-		return errcode.New(3000, "无效的客户端错误类型", 400)
+		return errcode.New(3000, "invalid client error kind", 400)
 	}
 	message := truncateUTF8(strings.TrimSpace(report.Message), clientErrorMessageBytes)
 	if message == "" {
-		return errcode.New(3000, "客户端错误信息不能为空", 400)
+		return errcode.New(3000, "client error message must not be empty", 400)
 	}
 
 	log.Printf(

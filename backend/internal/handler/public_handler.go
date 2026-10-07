@@ -268,7 +268,7 @@ func (h *PublicHandler) ServeImage(c *gin.Context) {
 		storedFile, err := openStorageFile(h.storageCfg.BasePath, imageFile.OriginalPath)
 		if err != nil {
 			if errors.Is(err, os.ErrNotExist) {
-				response.Error(c, errcode.New(4041, "文件不存在", 404))
+				response.Error(c, errcode.New(4041, "file not found", 404))
 			} else {
 				response.Error(c, errcode.ErrInternal)
 			}
@@ -383,7 +383,7 @@ func (h *PublicHandler) ServeImage(c *gin.Context) {
 		sourceFile, openErr := openStorageFile(h.storageCfg.BasePath, imageFile.OriginalPath)
 		if openErr != nil {
 			if errors.Is(openErr, os.ErrNotExist) {
-				response.Error(c, errcode.New(4041, "文件不存在", 404))
+				response.Error(c, errcode.New(4041, "file not found", 404))
 			} else {
 				response.Error(c, errcode.ErrInternal)
 			}
@@ -414,7 +414,7 @@ func (h *PublicHandler) ServeImage(c *gin.Context) {
 		}
 		if errors.Is(err, errDynamicImageQueueFull) {
 			c.Header("Retry-After", "2")
-			response.Error(c, errcode.New(1003, "图片处理服务繁忙，请稍后重试", http.StatusServiceUnavailable))
+			response.Error(c, errcode.New(1003, "image processing service is busy; please try again later", http.StatusServiceUnavailable))
 			return
 		}
 		response.Error(c, errcode.ErrImgproxy)
@@ -432,7 +432,7 @@ func (h *PublicHandler) failV1StorageTarget(c *gin.Context, imageFile *model.Ima
 		imageFileID = imageFile.ID
 	}
 	log.Printf("[v1-storage] image_file=%d target unavailable: %v", imageFileID, cause)
-	response.Error(c, errcode.New(1003, "对象存储暂不可用", http.StatusServiceUnavailable))
+	response.Error(c, errcode.New(1003, "object storage temporarily unavailable", http.StatusServiceUnavailable))
 }
 
 func (h *PublicHandler) serveV1RemoteObject(c *gin.Context, imageFile *model.ImageFile, target service.V1StorageTarget, key, contentType string, redirectPublic bool) bool {
@@ -473,14 +473,14 @@ func (h *PublicHandler) ServeVariant(c *gin.Context) {
 		return
 	}
 	if image.PipelineVersion < model.ImagePipelineVersionV2 {
-		response.Error(c, errcode.New(4041, "固定图片变体不存在", 404))
+		response.Error(c, errcode.New(4041, "fixed image variant not found", 404))
 		return
 	}
 	variantName := strings.TrimSuffix(strings.ToLower(c.Param("variant")), ".webp")
 	switch variantName {
 	case model.ImageVariantKindMaster, model.ImageVariantKindGallery, model.ImageVariantKindAdmin, model.ImageVariantKindPublish:
 	default:
-		response.Error(c, errcode.New(4041, "固定图片变体不存在", 404))
+		response.Error(c, errcode.New(4041, "fixed image variant not found", 404))
 		return
 	}
 	restricted := isRestrictedV2Variant(variantName)
@@ -488,7 +488,7 @@ func (h *PublicHandler) ServeVariant(c *gin.Context) {
 		applyImageCacheHeaders(c, true)
 	}
 	if restricted && !h.isOwnerOrAdmin(c, image.UserID) {
-		response.Error(c, errcode.New(4031, "无权访问此图片变体", http.StatusForbidden))
+		response.Error(c, errcode.New(4031, "access to this image variant is forbidden", http.StatusForbidden))
 		return
 	}
 	if h.rdb != nil {
@@ -530,7 +530,7 @@ func (h *PublicHandler) serveV2Variant(c *gin.Context, image *model.Image, kind 
 	storedFile, err := openStorageFile(h.storageCfg.BasePath, variant.StoragePath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			response.Error(c, errcode.New(4041, "图片文件不存在", 404))
+			response.Error(c, errcode.New(4041, "image file not found", 404))
 		} else {
 			response.Error(c, errcode.ErrInternal)
 		}

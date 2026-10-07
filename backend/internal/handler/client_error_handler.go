@@ -23,7 +23,7 @@ func NewClientErrorHandler(clientErrorService *service.ClientErrorService) *Clie
 
 func (h *ClientErrorHandler) Report(c *gin.Context) {
 	var report service.ClientErrorReport
-	if appErr := bindBoundedJSON(c, &report, clientErrorMaximumBodyBytes, 3000, "无效的客户端错误上报"); appErr != nil {
+	if appErr := bindBoundedJSON(c, &report, clientErrorMaximumBodyBytes, 3000, "invalid client error report"); appErr != nil {
 		response.Error(c, appErr)
 		return
 	}

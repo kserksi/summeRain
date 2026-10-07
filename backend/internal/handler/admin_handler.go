@@ -27,7 +27,7 @@ func (h *AdminHandler) RequireAdmin(c *gin.Context) {
 		return
 	}
 	if middleware.GetRole(c) != "admin" {
-		response.Error(c, errcode.New(4030, "权限不足", 403))
+		response.Error(c, errcode.New(4030, "insufficient permission", 403))
 		return
 	}
 	c.Next()
@@ -52,19 +52,19 @@ type setUserStatusReq struct {
 func (h *AdminHandler) SetUserStatus(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		response.Error(c, errcode.New(3001, "无效的用户ID", 400))
+		response.Error(c, errcode.New(3001, "invalid user ID", 400))
 		return
 	}
 
 	callerID := middleware.GetUserID(c)
 	if callerID == id {
-		response.Error(c, errcode.New(1001, "不能操作自己的账号", 400))
+		response.Error(c, errcode.New(1001, "cannot operate on your own account", 400))
 		return
 	}
 
 	var req setUserStatusReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Error(c, errcode.New(3001, "参数验证失败", 400))
+		response.Error(c, errcode.New(3001, "parameter validation failed", 400))
 		return
 	}
 
@@ -91,7 +91,7 @@ type batchUpdateConfigsReq struct {
 func (h *AdminHandler) UpdateConfigs(c *gin.Context) {
 	var req batchUpdateConfigsReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Error(c, errcode.New(3001, "参数验证失败", 400))
+		response.Error(c, errcode.New(3001, "parameter validation failed", 400))
 		return
 	}
 
@@ -130,18 +130,18 @@ type requestDeletionReq struct {
 func (h *AdminHandler) RequestUserDeletion(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		response.Error(c, errcode.New(3001, "无效的用户ID", 400))
+		response.Error(c, errcode.New(3001, "invalid user ID", 400))
 		return
 	}
 
 	if middleware.GetUserID(c) == id {
-		response.Error(c, errcode.New(1001, "不能操作自己的账号", 400))
+		response.Error(c, errcode.New(1001, "cannot operate on your own account", 400))
 		return
 	}
 
 	var req requestDeletionReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Error(c, errcode.New(3001, "参数验证失败", 400))
+		response.Error(c, errcode.New(3001, "parameter validation failed", 400))
 		return
 	}
 
@@ -157,7 +157,7 @@ func (h *AdminHandler) RequestUserDeletion(c *gin.Context) {
 func (h *AdminHandler) CancelUserDeletion(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		response.Error(c, errcode.New(3001, "无效的用户ID", 400))
+		response.Error(c, errcode.New(3001, "invalid user ID", 400))
 		return
 	}
 
@@ -176,7 +176,7 @@ type updateQuotaReq struct {
 func (h *AdminHandler) DeleteImage(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		response.Error(c, errcode.New(3001, "无效的图片ID", 400))
+		response.Error(c, errcode.New(3001, "invalid image ID", 400))
 		return
 	}
 	result, appErr := h.adminService.AdminDeleteImage(id)
@@ -190,13 +190,13 @@ func (h *AdminHandler) DeleteImage(c *gin.Context) {
 func (h *AdminHandler) UpdateUserQuota(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		response.Error(c, errcode.New(3001, "无效的用户ID", 400))
+		response.Error(c, errcode.New(3001, "invalid user ID", 400))
 		return
 	}
 
 	var req updateQuotaReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Error(c, errcode.New(3001, "参数验证失败", 400))
+		response.Error(c, errcode.New(3001, "parameter validation failed", 400))
 		return
 	}
 

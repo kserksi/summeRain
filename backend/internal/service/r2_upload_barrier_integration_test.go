@@ -278,7 +278,7 @@ func TestRemoteDeleteIntentCommitFirstMakesAdminRejectTargetSwitchIncludingDead(
 
 	select {
 	case appErr := <-adminDone:
-		if appErr == nil || appErr.Code != 4094 || !strings.Contains(appErr.Message, "清理") {
+		if appErr == nil || appErr.Code != 4094 || !strings.Contains(appErr.Message, "cleanup") {
 			t.Fatalf("UpdateConfigs() error = %#v, want unfinished-cleanup conflict", appErr)
 		}
 	case <-time.After(5 * time.Second):

@@ -37,10 +37,10 @@ func validateAdminWritableSystemConfigKeys(items []ConfigUpdateItem) *errcode.Ap
 	for _, item := range items {
 		key := strings.TrimSpace(item.Key)
 		if key == "" {
-			return errcode.New(3001, "系统配置键不能为空", http.StatusBadRequest)
+			return errcode.New(3001, "system config key must not be empty", http.StatusBadRequest)
 		}
 		if _, ok := adminWritableSystemConfigKeys[key]; !ok {
-			return errcode.New(3006, "系统配置键不允许通过管理员 API 修改: "+key, http.StatusBadRequest)
+			return errcode.New(3006, "system config key cannot be modified through the admin API: "+key, http.StatusBadRequest)
 		}
 	}
 	return nil

@@ -43,7 +43,7 @@ func (s *UserService) GetProfile(userID uint64) (*UserProfile, *errcode.AppError
 	var user model.User
 	if err := s.db.First(&user, userID).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return nil, errcode.New(4041, "用户不存在", 404)
+			return nil, errcode.New(4041, "user not found", 404)
 		}
 		return nil, errcode.ErrDatabase
 	}
@@ -100,7 +100,7 @@ func (s *UserService) ChangePassword(userID uint64, oldPassword, newPassword, ip
 		IPAddress: ipAddress,
 	})
 
-	_ = s.notificationService.Create(userID, "auth.password_changed", "密码已修改", "您的密码已成功修改，所有会话已被终止")
+	_ = s.notificationService.Create(userID, "auth.password_changed", "Password changed", "Your password was changed. All sessions were terminated.")
 
 	return nil
 }

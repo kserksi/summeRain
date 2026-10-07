@@ -4,6 +4,8 @@
 package service
 
 import (
+	"encoding/json"
+
 	"github.com/kserksi/summerain/internal/model"
 	"github.com/kserksi/summerain/internal/pkg/errcode"
 	"github.com/kserksi/summerain/internal/repository"
@@ -93,11 +95,24 @@ func (s *NotificationService) ClearAll(userID uint64) *errcode.AppError {
 }
 
 func (s *NotificationService) Create(userID uint64, nType, title, message string) error {
+	return s.CreateWithMetadata(userID, nType, title, message, nil)
+}
+
+// CreateWithMetadata persists a notification with structured interpolation data
+// (for example the quota string or usage percent) so clients can localize it.
+func (s *NotificationService) CreateWithMetadata(userID uint64, nType, title, message string, metadata map[string]any) error {
 	n := &model.Notification{
 		UserID:  userID,
 		Type:    nType,
 		Title:   title,
 		Message: message,
+	}
+	if len(metadata) > 0 {
+		encoded, err := json.Marshal(metadata)
+		if err != nil {
+			return err
+		}
+		n.Metadata = string(encoded)
 	}
 	return s.repo.Create(n)
 }

@@ -54,7 +54,7 @@ func (m *AuthMiddleware) Required() gin.HandlerFunc {
 		if m.tryCookie(c) {
 			return
 		}
-		response.Error(c, errcode.New(4010, "未认证", 401))
+		response.Error(c, errcode.New(4010, "unauthenticated", 401))
 	}
 }
 
@@ -81,7 +81,7 @@ func (m *AuthMiddleware) tryBearer(c *gin.Context) bool {
 
 	session, err := m.sessionRepo.FindByTokenHash(tokenHash)
 	if err != nil {
-		response.Error(c, errcode.New(4010, "无效的令牌", 401))
+		response.Error(c, errcode.New(4010, "invalid token", 401))
 		return true
 	}
 
@@ -97,7 +97,7 @@ func (m *AuthMiddleware) tryBearer(c *gin.Context) bool {
 
 	user, err := m.userRepo.FindByID(session.UserID)
 	if err != nil || user == nil || !model.UserStatusAllowsAuthentication(user.Status) {
-		response.Error(c, errcode.New(4030, "账户已被禁用", 403))
+		response.Error(c, errcode.New(4030, "account disabled", 403))
 		return true
 	}
 	if user.Status == model.UserStatusPendingDeletion {
@@ -161,7 +161,7 @@ func (m *AuthMiddleware) tryCookie(c *gin.Context) bool {
 	tokenHash := token.SHA256(cookie)
 	session, err := m.sessionRepo.FindByTokenHash(tokenHash)
 	if err != nil || session.Platform != "web" {
-		response.Error(c, errcode.New(4010, "无效的会话", 401))
+		response.Error(c, errcode.New(4010, "invalid session", 401))
 		return true
 	}
 
@@ -172,7 +172,7 @@ func (m *AuthMiddleware) tryCookie(c *gin.Context) bool {
 
 	user, err := m.userRepo.FindByID(session.UserID)
 	if err != nil || user == nil || !model.UserStatusAllowsAuthentication(user.Status) {
-		response.Error(c, errcode.New(4030, "账户已被禁用", 403))
+		response.Error(c, errcode.New(4030, "account disabled", 403))
 		return true
 	}
 	if user.Status == model.UserStatusPendingDeletion {
@@ -203,7 +203,7 @@ func (m *AuthMiddleware) BootstrapAuth() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		auth := c.GetHeader("Authorization")
 		if !strings.HasPrefix(auth, "Bearer ") {
-			response.Error(c, errcode.New(4010, "未认证", 401))
+			response.Error(c, errcode.New(4010, "unauthenticated", 401))
 			return
 		}
 
@@ -212,7 +212,7 @@ func (m *AuthMiddleware) BootstrapAuth() gin.HandlerFunc {
 
 		session, err := m.sessionRepo.FindByTokenHashAndType(tokenHash, "identity")
 		if err != nil {
-			response.Error(c, errcode.New(4010, "无效的身份令牌", 401))
+			response.Error(c, errcode.New(4010, "invalid identity token", 401))
 			return
 		}
 
@@ -223,7 +223,7 @@ func (m *AuthMiddleware) BootstrapAuth() gin.HandlerFunc {
 
 		user, err := m.userRepo.FindByID(session.UserID)
 		if err != nil || user == nil || !model.UserStatusAllowsAuthentication(user.Status) {
-			response.Error(c, errcode.New(4030, "账户已被禁用", 403))
+			response.Error(c, errcode.New(4030, "account disabled", 403))
 			return
 		}
 		if user.Status == model.UserStatusPendingDeletion {

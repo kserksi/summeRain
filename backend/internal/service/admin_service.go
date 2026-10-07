@@ -87,7 +87,7 @@ func (s *AdminService) SetUserStatus(userID uint64, status string) *errcode.AppE
 	case model.UserStatusSuspended:
 		sourceStatus = model.UserStatusActive
 	default:
-		return errcode.New(3001, "用户状态参数无效", http.StatusBadRequest)
+		return errcode.New(3001, "invalid user status parameter", http.StatusBadRequest)
 	}
 
 	result := s.db.Model(&model.User{}).
@@ -100,18 +100,18 @@ func (s *AdminService) SetUserStatus(userID uint64, status string) *errcode.AppE
 		var user model.User
 		if err := s.db.Select("id", "status").First(&user, userID).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return errcode.New(4041, "用户不存在", http.StatusNotFound)
+				return errcode.New(4041, "user not found", http.StatusNotFound)
 			}
 			return errcode.ErrDatabase
 		}
 		if user.Status == status {
 			return nil
 		}
-		return errcode.New(4095, "用户当前状态不允许该操作", http.StatusConflict)
+		return errcode.New(4095, "the user's current state does not allow this operation", http.StatusConflict)
 	}
 
 	if status == model.UserStatusSuspended {
-		_ = s.notificationService.Create(userID, "admin.user_disabled", "账号已被禁用", "您的账号已被管理员禁用")
+		_ = s.notificationService.Create(userID, "admin.user_disabled", "Account disabled", "Your account was disabled by an administrator.")
 	}
 
 	return nil
@@ -233,7 +233,7 @@ func validateCaptchaConfigUpdate(items []ConfigUpdateItem, crossOriginIsolation 
 			continue
 		}
 		if err := config.ValidateCaptchaCrossOriginIsolation(item.Value, crossOriginIsolation); err != nil {
-			return errcode.New(3006, "启用跨源隔离时不能使用 geetest_v4 验证码", http.StatusBadRequest)
+			return errcode.New(3006, "geetest_v4 is incompatible with cross-origin isolation", http.StatusBadRequest)
 		}
 	}
 	return nil
@@ -256,19 +256,19 @@ func validateR2ConfigUpdate(currentConfigs []model.SystemConfig, items []ConfigU
 
 	if updated["r2_endpoint"] && strings.TrimSpace(proposed["r2_endpoint"]) != "" {
 		if _, err := normalizeR2BaseURL(proposed["r2_endpoint"]); err != nil {
-			return errcode.New(3006, "r2_endpoint 必须是无凭据、查询参数和片段的 HTTP(S) URL", http.StatusBadRequest)
+			return errcode.New(3006, "r2_endpoint must be an HTTP(S) URL without credentials, query parameters, or fragments", http.StatusBadRequest)
 		}
 	}
 	if updated["r2_public_url"] && strings.TrimSpace(proposed["r2_public_url"]) != "" {
 		if _, err := normalizeR2BaseURL(proposed["r2_public_url"]); err != nil {
-			return errcode.New(3006, "r2_public_url 必须是无凭据、查询参数和片段的 HTTP(S) URL", http.StatusBadRequest)
+			return errcode.New(3006, "r2_public_url must be an HTTP(S) URL without credentials, query parameters, or fragments", http.StatusBadRequest)
 		}
 	}
 
 	protectedHistory := len(lineages) > 0 || unclassifiedHistory > 0 || pendingRemoteDeletes > 0
 	for _, key := range []string{"r2_access_key", "r2_secret_key"} {
 		if protectedHistory && updated[key] && strings.TrimSpace(proposed[key]) == "" {
-			return errcode.New(3006, "已有 R2 图片，不能清空 "+key+"；停用 R2 时请保留凭据", http.StatusBadRequest)
+			return errcode.New(3006, "cannot clear "+key+" while R2 images exist; keep the credentials when disabling R2", http.StatusBadRequest)
 		}
 	}
 
@@ -280,10 +280,10 @@ func validateR2ConfigUpdate(currentConfigs []model.SystemConfig, items []ConfigU
 		return nil
 	}
 	if pendingRemoteDeletes > 0 {
-		return errcode.New(4094, "仍有未完成的 R2 对象清理，不能切换 endpoint/bucket", http.StatusConflict)
+		return errcode.New(4094, "pending R2 object cleanup remains; the endpoint/bucket cannot be changed", http.StatusConflict)
 	}
 	if unclassifiedHistory > 0 {
-		return errcode.New(4094, "仍有未分类的历史图片，不能切换 R2 endpoint/bucket", http.StatusConflict)
+		return errcode.New(4094, "unclassified historical images remain; the R2 endpoint/bucket cannot be changed", http.StatusConflict)
 	}
 	if len(lineages) == 0 {
 		return nil
@@ -291,7 +291,7 @@ func validateR2ConfigUpdate(currentConfigs []model.SystemConfig, items []ConfigU
 
 	for _, lineage := range lineages {
 		if normalizeR2Endpoint(lineage.RemoteEndpoint) != proposedEndpoint || strings.TrimSpace(lineage.RemoteBucket) != proposedBucket {
-			return errcode.New(4094, "已有 R2 图片引用不同的 endpoint/bucket，不能切换存储目标", http.StatusConflict)
+			return errcode.New(4094, "existing R2 images reference a different endpoint/bucket; the storage target cannot be changed", http.StatusConflict)
 		}
 	}
 	return nil
@@ -379,18 +379,18 @@ func (s *AdminService) RequestUserDeletion(targetID uint64, adminUsername, confi
 	var user model.User
 	if err := s.db.First(&user, targetID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return errcode.New(4041, "用户不存在", http.StatusNotFound)
+			return errcode.New(4041, "user not found", http.StatusNotFound)
 		}
 		return errcode.ErrDatabase
 	}
 	if user.Username != confirmUsername {
-		return errcode.New(3000, "用户名不匹配", 400)
+		return errcode.New(3000, "username mismatch", 400)
 	}
 	if user.Role == "admin" {
-		return errcode.New(4030, "不能注销管理员账户", 403)
+		return errcode.New(4030, "administrator accounts cannot be deleted", 403)
 	}
 	if user.Status != model.UserStatusActive {
-		return errcode.New(4095, "用户当前状态不允许该操作", http.StatusConflict)
+		return errcode.New(4095, "the user's current state does not allow this operation", http.StatusConflict)
 	}
 
 	deletionTime := time.Now().Add(DeletionLockHours * time.Hour)
@@ -408,15 +408,15 @@ func (s *AdminService) RequestUserDeletion(targetID uint64, adminUsername, confi
 		var current model.User
 		if err := s.db.Select("id", "status").First(&current, targetID).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return errcode.New(4041, "用户不存在", http.StatusNotFound)
+				return errcode.New(4041, "user not found", http.StatusNotFound)
 			}
 			return errcode.ErrDatabase
 		}
-		return errcode.New(4095, "用户当前状态不允许该操作", http.StatusConflict)
+		return errcode.New(4095, "the user's current state does not allow this operation", http.StatusConflict)
 	}
 
-	_ = s.notificationService.Create(targetID, "admin.deletion_requested", "账号注销通知",
-		"您的账号已被管理员标记注销，24小时后将永久删除所有数据。请在此期间下载您需要的数据。")
+	_ = s.notificationService.Create(targetID, "admin.deletion_requested", "Account deletion requested",
+		"Your account was marked for deletion by an administrator. All data will be permanently deleted after 24 hours. Download anything you need during this period.")
 
 	// Kill all sessions to force re-login with restricted status
 	s.db.Where("user_id = ?", targetID).Delete(&model.Session{})
@@ -430,13 +430,13 @@ func (s *AdminService) CancelUserDeletion(targetID uint64) *errcode.AppError {
 		var user model.User
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&user, targetID).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				appErr = errcode.New(4041, "用户不存在", 404)
+				appErr = errcode.New(4041, "user not found", 404)
 				return appErr
 			}
 			return err
 		}
 		if user.Status != model.UserStatusPendingDeletion {
-			appErr = errcode.New(3000, "该用户不在注销锁定中", 400)
+			appErr = errcode.New(3000, "the user is not in the deletion lock period", 400)
 			return appErr
 		}
 
@@ -463,15 +463,15 @@ func (s *AdminService) CancelUserDeletion(targetID uint64) *errcode.AppError {
 		return errcode.ErrDatabase
 	}
 
-	_ = s.notificationService.Create(targetID, "admin.deletion_cancelled", "注销已撤销",
-		"您的账号注销请求已被管理员撤销，账号恢复正常使用。")
+	_ = s.notificationService.Create(targetID, "admin.deletion_cancelled", "Deletion cancelled",
+		"Your account deletion request was cancelled by an administrator. Your account is active again.")
 
 	return nil
 }
 
 func (s *AdminService) UpdateUserQuota(targetID uint64, quotaBytes int64) *errcode.AppError {
 	if quotaBytes < MinQuota {
-		return errcode.New(3000, "配额不能小于 500MB", 400)
+		return errcode.New(3000, "quota cannot be less than 500MB", 400)
 	}
 
 	result := s.db.Model(&model.User{}).Where("id = ?", targetID).Update("storage_quota", quotaBytes)
@@ -479,15 +479,15 @@ func (s *AdminService) UpdateUserQuota(targetID uint64, quotaBytes int64) *errco
 		return errcode.ErrDatabase
 	}
 	if result.RowsAffected == 0 {
-		return errcode.New(4041, "用户不存在", 404)
+		return errcode.New(4041, "user not found", 404)
 	}
 
 	quotaDisplay := fmt.Sprintf("%.1f GB", float64(quotaBytes)/float64(1073741824))
 	if quotaBytes < 1073741824 {
 		quotaDisplay = fmt.Sprintf("%.0f MB", float64(quotaBytes)/float64(1048576))
 	}
-	_ = s.notificationService.Create(targetID, "admin.quota_updated", "存储配额已调整",
-		"管理员已将您的存储配额调整为 "+quotaDisplay+"。")
+	_ = s.notificationService.CreateWithMetadata(targetID, "admin.quota_updated", "Storage quota updated",
+		"An administrator set your storage quota to "+quotaDisplay+".", map[string]any{"quota": quotaDisplay})
 
 	return nil
 }

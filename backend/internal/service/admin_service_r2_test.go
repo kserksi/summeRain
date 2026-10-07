@@ -70,7 +70,7 @@ func TestValidateR2ConfigUpdate(t *testing.T) {
 			unclassifiedHistory: 1,
 			wantHTTP:            http.StatusConflict,
 			wantCode:            4094,
-			wantMessage:         "未分类",
+			wantMessage:         "unclassified",
 		},
 		{
 			name:                 "target change rejected with pending remote deletion",
@@ -78,7 +78,7 @@ func TestValidateR2ConfigUpdate(t *testing.T) {
 			pendingRemoteDeletes: 1,
 			wantHTTP:             http.StatusConflict,
 			wantCode:             4094,
-			wantMessage:          "清理",
+			wantMessage:          "cleanup",
 		},
 		{
 			name:                 "equivalent target allowed with pending remote deletion",
