@@ -14,6 +14,7 @@
 * [Release and Tag Management](docs/RELEASING.md)
 
 ## Release Notes
+* [V2.0.15](docs/releases/v2.0.15.md)
 * [V2.0.14](docs/releases/v2.0.14.md)
 * [V2.0.13](docs/releases/v2.0.13.md)
 * [V2.0.12](docs/releases/v2.0.12.md)
