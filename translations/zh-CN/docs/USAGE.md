@@ -337,7 +337,8 @@ FLUSH PRIVILEGES;
 5. Web 先读取 `/api/v1/uploads/recipe` 的 `v2_enabled` 能力位；只有
    `V2_UPLOAD_ENABLED=false` 时，才跳过客户端预处理，并通过
    `POST /api/v1/images/` 使用 V1 multipart 兼容上传。V1 任意尺寸等动态转码使用有界
-   临时文件，不会持久化为访问缓存。
+   临时文件，不会持久化为访问缓存。V1 动态转换在固定并发窗口与短队列内运行；饱和时
+   返回 `1003`(503) 与 `Retry-After`，不会无界排队。
 6. 相同内容按 SHA-256 去重存储，并通过 `reference_count` 管理物理文件生命周期。
 
 主服务不提供历史图片批量迁移接口。兼容期内，未分类 V1 图片优先读取安全的本地路径；

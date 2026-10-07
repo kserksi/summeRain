@@ -559,7 +559,7 @@ V2 默认启用。浏览器接受静态 JPG/JPEG、PNG、BMP、WebP、AVIF，拒
 
 - V2 发布图：`GET /i/<asset_link>.webp`。
 - V2 固定变体：`GET /i/<asset_link>/master.webp`、`gallery.webp`、`admin.webp`、`publish.webp`；查询参数不会触发新的尺寸生成。`master` 与 `admin` 只允许 owner/admin 访问。
-- V1 `link` 仍可写成 `<unique_link>` 或 `<unique_link>.<ext>`（ext ∈ webp/avif/jpg/jpeg/png/gif）。无扩展名返回原图；已有的无尺寸 WebP 与后台 AVIF 可直接读取，其余格式或 `w`/`h`（≤4096）/`q` 请求使用有界的 imgproxy 兼容路径。任意尺寸等动态结果只在请求期间使用临时文件，同参数并发请求会合并，最后一个响应释放后删除。
+- V1 `link` 仍可写成 `<unique_link>` 或 `<unique_link>.<ext>`（ext ∈ webp/avif/jpg/jpeg/png/gif）。无扩展名返回原图；已有的无尺寸 WebP 与后台 AVIF 可直接读取，其余格式或 `w`/`h`（≤4096）/`q` 请求使用有界的 imgproxy 兼容路径。任意尺寸等动态结果只在请求期间使用临时文件，同参数并发请求会合并，最后一个响应释放后删除。动态路径只允许固定数量的并发生成和很短队列；达到上限时返回 `1003`(503) 与 `Retry-After`，不会无界排队。
 - **私密图片**：
   - owner/admin（同源会话，`__Host-session_token` / `Bearer`）→ **直接放行**，无需令牌。
   - 第三方：query `?token=xxx`、头 `X-Image-Token` 或 `Authorization: Bearer xxx`。

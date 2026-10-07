@@ -641,7 +641,7 @@ JSON 文字列の `metadata`、`created_at` です。
 
 - V2 公開画像：`GET /i/<asset_link>.webp`。
 - V2 固定バリアント：`GET /i/<asset_link>/master.webp`、`gallery.webp`、`admin.webp`、`publish.webp`。クエリパラメーターから追加サイズは生成されません。`master` と `admin` にアクセスできるのは owner と admin だけです。
-- V1 `link` は引き続き `<unique_link>` または `<unique_link>.<ext>` を使用でき、`ext` は webp、avif、jpg、jpeg、png、gif のいずれかです。拡張子なしのリンクは元画像を返します。既存のサイズ指定なし WebP とバックグラウンド AVIF バリアントは直接読み取られ、その他の形式、または 4096 以下の `w`/`h` と `q` を伴うリクエストは上限付き imgproxy 互換経路を使用します。任意サイズの動的結果はリクエスト中だけ一時ファイルを使用します。同一の同時リクエストは集約され、最後のレスポンスが解放した後にファイルを削除します。
+- V1 `link` は引き続き `<unique_link>` または `<unique_link>.<ext>` を使用でき、`ext` は webp、avif、jpg、jpeg、png、gif のいずれかです。拡張子なしのリンクは元画像を返します。既存のサイズ指定なし WebP とバックグラウンド AVIF バリアントは直接読み取られ、その他の形式、または 4096 以下の `w`/`h` と `q` を伴うリクエストは上限付き imgproxy 互換経路を使用します。任意サイズの動的結果はリクエスト中だけ一時ファイルを使用します。同一の同時リクエストは集約され、最後のレスポンスが解放した後にファイルを削除します。動的経路は固定数の同時生成と短いキューの範囲で動作し、上限に達したリクエストは無制限に待たされず `1003`(503) と `Retry-After` で拒否されます。
 - **非公開画像：**
   - `__Host-session_token` または `Bearer` による同一オリジンセッションを持つ owner または admin は、画像トークンなしで直接許可されます。
   - 第三者はクエリパラメーター `?token=xxx`、ヘッダー `X-Image-Token`、または `Authorization: Bearer xxx` を使用できます。

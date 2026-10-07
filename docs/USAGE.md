@@ -379,7 +379,10 @@ hold database-wide root privileges.
    `/api/v1/uploads/recipe`. Only when `V2_UPLOAD_ENABLED=false` does it skip
    client preprocessing and use V1-compatible multipart upload through
    `POST /api/v1/images/`. Dynamic V1 transcoding, including arbitrary sizes,
-   uses bounded temporary files and is not persisted as an access cache.
+   uses bounded temporary files and is not persisted as an access cache. The
+   V1 dynamic path runs within a fixed concurrency window and a short queue;
+   when saturated it rejects requests with `1003` (503) and `Retry-After`
+   instead of queueing without bound.
 6. Identical content is deduplicated by SHA-256, with `reference_count`
    controlling the physical-file lifecycle.
 
