@@ -191,6 +191,31 @@ func TestDeployComposeRequiresExplicitApplicationImage(t *testing.T) {
 	}
 }
 
+func TestComposeMountsRecipeOverride(t *testing.T) {
+	for _, path := range []string{"docker-compose.yml", "docker-compose.deploy.yml"} {
+		compose := readTestFile(t, path)
+		backendBlock := serviceBlock(t, compose, "backend", "mysql")
+		for _, want := range []string{
+			"source: ./config/image-recipe.json",
+			"target: /app/config/image-recipe.json",
+			"read_only: true",
+			"create_host_path: false",
+		} {
+			if !strings.Contains(backendBlock, want) {
+				t.Fatalf("%s backend service must mount the recipe override (%q missing)", path, want)
+			}
+		}
+	}
+}
+
+func TestDeployRecipeMatchesEmbeddedDefault(t *testing.T) {
+	embedded := readTestFile(t, "internal/config/image-recipe.json")
+	deploy := readTestFile(t, "config/image-recipe.json")
+	if embedded != deploy {
+		t.Fatal("config/image-recipe.json must stay byte-identical to the embedded default until an operator edits it")
+	}
+}
+
 func readRequirementsLock(t *testing.T) requirementsLock {
 	t.Helper()
 	content, err := os.ReadFile("../requirements.lock")

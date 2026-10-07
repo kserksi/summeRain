@@ -1,0 +1,19 @@
+{
+  "pipeline_version": 2,
+  "recipe_version": "2.0.0",
+  "max_pixels": 50000000,
+  "max_part_bytes": 67108864,
+  "supported_source_mime_types": [
+    "image/jpeg",
+    "image/png",
+    "image/bmp",
+    "image/webp",
+    "image/avif"
+  ],
+  "variants": [
+    { "kind": "master", "quality": 80, "fit": "original" },
+    { "kind": "gallery", "width": 400, "height": 400, "quality": 60, "fit": "cover" },
+    { "kind": "admin", "width": 120, "height": 160, "quality": 60, "fit": "cover" },
+    { "kind": "publish_source", "long_edge": 2048, "quality": 80, "fit": "contain" }
+  ]
+}

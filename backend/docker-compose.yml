@@ -28,6 +28,12 @@ services:
       TEMP_PATH: /data/images/.staging
     volumes:
       - image_storage:/data/images
+      - type: bind
+        source: ./config/image-recipe.json
+        target: /app/config/image-recipe.json
+        read_only: true
+        bind:
+          create_host_path: false
     depends_on:
       storage-init:
         condition: service_completed_successfully
