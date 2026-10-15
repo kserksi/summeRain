@@ -279,6 +279,6 @@ summeRain/
 
 ## 许可证
 
-Copyright 2026 The summeRain Authors
+Copyright 2026 kserksi
 
 本项目根据 [Apache License 2.0](https://github.com/kserksi/summeRain/blob/main/LICENSE) 授权。
