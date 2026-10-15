@@ -279,6 +279,6 @@ Pull Request を作成する前に [CONTRIBUTING.md](./CONTRIBUTING.md) を読�
 
 ## ライセンス
 
-Copyright 2026 The summeRain Authors
+Copyright 2026 kserksi
 
 [Apache License 2.0](https://github.com/kserksi/summeRain/blob/main/LICENSE) に基づいてライセンスされています。
